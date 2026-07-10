@@ -7,8 +7,12 @@ kind: Job
 metadata:
   name: db-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    # Sync hook at wave 1: runs during sync AFTER wave-0 infra (postgres/redis/
+    # restate) is healthy, and before the wave-2 app rollout. hook-delete-policy
+    # recreates it each sync (handles image changes; Jobs are immutable).
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   backoffLimit: 5
   template:
