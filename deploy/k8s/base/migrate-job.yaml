@@ -25,8 +25,20 @@ spec:
           image: ghcr.io/shopnexus/server:main
           imagePullPolicy: Always
           command: ["/app/migrate"]
-          envFrom:
-            - configMapRef:
-                name: shopnexus-config
-            - secretRef:
-                name: shopnexus-secret
+          # PreSync hook runs before the generated ConfigMap exists, so the
+          # Postgres connection is set explicitly here; only the (out-of-band)
+          # Secret is referenced. migrate needs just the DB connection.
+          env:
+            - name: APP_POSTGRES_HOST
+              value: postgres
+            - name: APP_POSTGRES_PORT
+              value: "5432"
+            - name: APP_POSTGRES_USERNAME
+              value: shopnexus
+            - name: APP_POSTGRES_DATABASE
+              value: shopnexus
+            - name: APP_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopnexus-secret
+                  key: APP_POSTGRES_PASSWORD
