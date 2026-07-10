@@ -1,0 +1,38 @@
+# Argo CD Application — the single source of truth for what runs in the cluster.
+# Argo watches this repo's deploy/k8s/base and keeps the cluster in sync.
+#
+# Auto-redeploy on every push (incl. force-push): the build workflows push a
+# mutable tag `:main`; Argo CD Image Updater tracks it by DIGEST, so a rebuild
+# with a new digest is detected and rolled out even if the tag string is
+# unchanged. Write-back is via the argocd API (no git write credentials needed).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopnexus
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: >-
+      server=ghcr.io/shopnexus/server,
+      website=ghcr.io/shopnexus/website
+    argocd-image-updater.argoproj.io/server.update-strategy: digest
+    argocd-image-updater.argoproj.io/server.allow-tags: regexp:^main$
+    argocd-image-updater.argoproj.io/website.update-strategy: digest
+    argocd-image-updater.argoproj.io/website.allow-tags: regexp:^main$
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+    argocd-image-updater.argoproj.io/pull-secret: pullsecret:argocd/ghcr
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/shopnexus.git
+    targetRevision: main
+    path: deploy/k8s/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopnexus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

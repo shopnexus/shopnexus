@@ -1,0 +1,95 @@
+# Restate durable-execution engine, single node (dev/local sizing).
+# Snapshots-to-S3/MinIO are intentionally omitted for a single node; add MinIO
+# + RESTATE_WORKER__SNAPSHOTS__* if you scale to a multi-node cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restate-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restate
+  labels:
+    app.kubernetes.io/name: restate
+    app.kubernetes.io/part-of: shopnexus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: restate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: restate
+        app.kubernetes.io/part-of: shopnexus
+    spec:
+      containers:
+        - name: restate
+          image: docker.restate.dev/restatedev/restate:latest
+          env:
+            - name: RESTATE_CLUSTER_NAME
+              value: "restate-cluster"
+            - name: RESTATE_NODE_NAME
+              value: "restate-1"
+            - name: RESTATE_FORCE_NODE_ID
+              value: "1"
+            - name: RESTATE_ADVERTISED_ADDRESS
+              value: "http://restate:5122"
+            - name: RESTATE_AUTO_PROVISION
+              value: "true"
+            - name: RESTATE_DEFAULT_REPLICATION
+              value: "1"
+            - name: RESTATE_LOG_FILTER
+              value: "restate=info"
+          ports:
+            - name: ingress
+              containerPort: 8080
+            - name: admin
+              containerPort: 9070
+            - name: node
+              containerPort: 5122
+          readinessProbe:
+            tcpSocket:
+              port: 9070
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: restate-data
+              mountPath: /restate-data
+      volumes:
+        - name: restate-data
+          persistentVolumeClaim:
+            claimName: restate-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: restate
+spec:
+  selector:
+    app.kubernetes.io/name: restate
+  ports:
+    - name: ingress
+      port: 8080
+      targetPort: 8080
+    - name: admin
+      port: 9070
+      targetPort: 9070
+    - name: node
+      port: 5122
+      targetPort: 5122

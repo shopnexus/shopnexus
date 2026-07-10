@@ -1,0 +1,35 @@
+# Local overlay: run the whole stack on k3d using locally-built images
+# (no GHCR needed). Import images first:
+#   docker build -t shopnexus/server:local  ./server
+#   docker build -t shopnexus/website:local ./website
+#   k3d image import shopnexus/server:local shopnexus/website:local -c main
+#   kubectl apply -k deploy/k8s/overlays/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/shopnexus/server
+    newName: shopnexus/server
+    newTag: local
+  - name: ghcr.io/shopnexus/website
+    newName: shopnexus/website
+    newTag: local
+
+patches:
+  - target:
+      kind: Deployment
+      name: server
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: website
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
