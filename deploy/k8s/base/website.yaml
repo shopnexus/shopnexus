@@ -36,6 +36,13 @@ spec:
               value: "0.0.0.0"
             - name: NODE_ENV
               value: "production"
+            # Public origin for server-side SEO/canonical (runtime, from the
+            # generated ConfigMap — change domain without rebuilding the image).
+            - name: SITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopnexus-config
+                  key: SITE_URL
           ports:
             - name: http
               containerPort: 3000
