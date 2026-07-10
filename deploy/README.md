@@ -6,19 +6,112 @@ repos; CD (Argo CD) here keeps the cluster in sync with `deploy/k8s`.
 
 ## Architecture
 
+### Design principle
+
+**The umbrella repo owns orchestration; each submodule owns only how to build and
+run itself.** A submodule (`server`, `website`) ships a `Dockerfile` + a dev
+`docker-compose.yml` and a CI workflow that builds its image — nothing about the
+cluster, ingress, or secrets. The umbrella owns the whole-system view: k8s
+manifests, sync ordering, GitOps, ingress. This keeps each component
+contributor-friendly (clone, `docker compose up`) and keeps infra out of
+reusable components.
+
+### Repo topology
+
 ```
-push server repo ─► [server CI]  build ─► ghcr.io/shopnexus/server:main
-push website repo ─► [website CI] build ─► ghcr.io/shopnexus/website:main
-                                                   │
-                              Argo CD Image Updater tracks :main by DIGEST
-                                                   ▼
-   deploy/k8s/base (this repo) ── Argo CD sync ──► k3d cluster `main`
-                                                   ▼
-                     Traefik ingress ─► shopnexus.hopto.org
+shopnexus (umbrella, PUBLIC)            ← this repo: orchestration + GitOps
+├── deploy/k8s/base/                       kustomize: the whole cluster topology
+│   ├── postgres · redis · restate         wave 0  (stateful infra)
+│   ├── migrate-job.yaml                    wave 1  (Argo Sync hook)
+│   ├── server · website · ingress         wave 2  (apps)
+│   ├── config.env  → ConfigMap (generated) non-secret APP_* config
+│   └── kustomization.yaml                  images pinned here (Image Updater edits)
+├── deploy/k8s/overlays/local/             run locally-built images on k3d
+├── deploy/argocd/application.yaml          the Argo CD Application (+ Image Updater)
+└── deploy/monitoring/                      prometheus/grafana config (not yet wired)
+
+server  (submodule)   Go backend   — Dockerfile, docker-compose.yml, .github/workflows/build.yml
+website (submodule)   Next.js      — Dockerfile, docker-compose.yml, .github/workflows/build.yml
 ```
 
-Force-push safe: images use the mutable tag `:main` tracked **by digest**, so a
-rebuilt `:main` (new digest) is rolled out even when the tag string is unchanged.
+### Two planes: CI (build) vs CD (deploy)
+
+They are decoupled and live in different repos — this is the core of the design.
+
+```
+ ── CI (in each submodule repo) ─────────────────────────────────────────────
+  git push main ─► GitHub Actions (build.yml)
+                     • docker buildx build
+                     • push ghcr.io/shopnexus/<comp>:main  +  :sha-<commit>
+                   (website bakes NEXT_PUBLIC_* at build time via --build-arg)
+
+ ── CD (in the cluster, pull-based) ─────────────────────────────────────────
+  Argo CD  ── watches ──► umbrella repo  deploy/k8s/base   (manifests)
+  Image Updater ── watches ──► GHCR :main by DIGEST         (image versions)
+        │
+        │ new commit OR new image digest
+        ▼
+  Argo sync (wave-ordered) ─► k3d cluster `main`
+```
+
+CI never touches the cluster (GitHub can't reach a home k3d). CD is **pull-based**:
+Argo + Image Updater run *inside* the cluster and pull from GitHub/GHCR, so no
+inbound access to the machine is needed.
+
+### End-to-end flow (code change → live)
+
+```
+ dev ──git push──► server/website repo
+                        │ Actions build.yml
+                        ▼
+               ghcr.io/shopnexus/<comp>:main  (new digest)   ◄── PUBLIC packages
+                        │
+        Argo CD Image Updater (polls every ~2m, digest strategy)
+        writes the new @sha256 into the Application's kustomize images
+                        │
+                 Argo CD detects drift → sync
+                        ▼
+     ┌──────────────── k3d cluster `main` (namespace: shopnexus) ───────────────┐
+     │  wave 0:  postgres     redis     restate      (become Healthy first)      │
+     │  wave 1:  db-migrate Job  → go:embed migrations, per-module, idempotent   │
+     │  wave 2:  server (5005)   website (3000)      (rolling update)            │
+     │                        │                                                  │
+     │                Traefik Ingress  (host shopnexus.hopto.org)                │
+     │                   /api → server:5005    / → website:3000                  │
+     └───────────────────────────────┬──────────────────────────────────────────┘
+                                      │ k3d loadbalancer  -p 8080:80
+                                      ▼
+                     Caddy (host, TLS/:443)  reverse_proxy localhost:8080
+                                      ▼
+                              https://shopnexus.hopto.org  ─► user
+```
+
+**Edge:** Caddy stays the public TLS terminator (auto-HTTPS for hopto.org) and
+forwards to the cluster's Traefik on `localhost:8080`; Traefik/Ingress does the
+`/api` vs `/` split. No cert-manager needed.
+
+**Force-push safe:** images use the mutable tag `:main`, tracked **by digest** —
+a rebuilt `:main` (new digest) rolls out even though the tag string is unchanged.
+
+### Config & secrets model
+
+The single contract is **`APP_*` environment variables** (server uses viper
+`AutomaticEnv`, prefix `APP`), the same interface docker-compose and k8s both
+speak. Any YAML config key is overridable, e.g. `postgres.host` ← `APP_POSTGRES_HOST`.
+
+- **Non-secret** config → `deploy/k8s/base/config.env` → generated `ConfigMap`
+  (kustomize `configMapGenerator`; hash suffix ⇒ a config change auto-rolls pods).
+- **Secret** config → `shopnexus-secret` `Secret`, created out-of-band, never in
+  git (`secret.example.yaml` is the template).
+- Service DNS names in compose and k8s are identical (`postgres`, `redis`,
+  `restate`), so `APP_*_HOST` values match across both environments.
+
+### Sync-wave ordering (why it matters)
+
+Argo applies resources in wave order, waiting for each wave to be Healthy:
+`0` infra (postgres/redis/restate) → `1` `db-migrate` (a Sync hook, so it can
+re-run each sync and can't run before the DB exists) → `2` server/website. This
+guarantees migrations run against a live DB, and apps start against a migrated DB.
 
 ## What runs (`deploy/k8s/base`)
 
@@ -31,8 +124,8 @@ rebuilt `:main` (new digest) is rolled out even when the tag string is unchanged
 | restate   | restatedev/restate        | 8080 ingress · 9070 admin · 5122 node |
 
 Server config: the Go app bakes YAML config into the image and lets `APP_*` env
-vars override any key (see `config.yaml`). Connection details are injected there;
-passwords come from the `shopnexus-secret` Secret (created out-of-band).
+vars override any key (non-secret in `config.env` → ConfigMap; passwords in the
+`shopnexus-secret` Secret, created out-of-band). See "Config & secrets model".
 
 Out of scope for now: `embedding` (Python, needed for catalog search), MinIO +
 restate snapshots (only needed for a multi-node restate cluster), and
