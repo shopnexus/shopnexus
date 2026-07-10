@@ -23,7 +23,8 @@ shopnexus (umbrella, PUBLIC)            ← this repo: orchestration + GitOps
 ├── deploy/k8s/base/                       kustomize: the whole cluster topology
 │   ├── postgres · redis · restate         wave 0  (stateful infra)
 │   ├── migrate-job.yaml                    wave 1  (Argo Sync hook)
-│   ├── server · website · ingress         wave 2  (apps)
+│   ├── server · website · ingress         wave 2  (apps, via Traefik ingress)
+│   ├── docs.yaml                            wave 2  (Mintlify static, NodePort :5000)
 │   ├── config.env  → ConfigMap (generated) non-secret APP_* config
 │   └── kustomization.yaml                  images pinned here (Image Updater edits)
 ├── deploy/k8s/overlays/local/             run locally-built images on k3d
@@ -119,9 +120,16 @@ guarantees migrations run against a live DB, and apps start against a migrated D
 |-----------|-------|-------|
 | server    | ghcr.io/shopnexus/server  | 5005 http · 8082 restate-svc · 8083 best-effort |
 | website   | ghcr.io/shopnexus/website | 3000 |
+| docs      | ghcr.io/shopnexus/docs    | 80 (NodePort 30500 → host :5000) |
 | postgres  | pgvector/pgvector:pg17    | 5432 |
 | redis     | redis:8-alpine            | 6379 |
 | restate   | restatedev/restate        | 8080 ingress · 9070 admin · 5122 node |
+
+`docs` is the Mintlify site built to a static bundle (`mint export`) served by
+nginx. It runs on its **own host port 5000** (not the shared ingress) because the
+export uses root-absolute paths (`/_next`, `/api`, …) that would collide with the
+app under one host. nginx uses `absolute_redirect off` so the trailing-slash
+redirect keeps the `:5000` port.
 
 Server config: the Go app bakes YAML config into the image and lets `APP_*` env
 vars override any key (non-secret in `config.env` → ConfigMap; passwords in the
@@ -184,8 +192,14 @@ kubectl -n shopnexus create secret generic ghcr \
 #    (If you make it private: create an argocd repository secret with a token.)
 
 # 5. Register the app — Argo takes over (wave 0 infra -> wave 1 db-migrate hook
-#    -> wave 2 server/website; Image Updater then tracks :main by digest).
+#    -> wave 2 server/website/docs; Image Updater then tracks :main by digest).
 kubectl apply -f deploy/argocd/application.yaml
+
+# 6. Docs on its own host port 5000 (Mintlify static via NodePort 30500).
+#    --port-add works on the running cluster (only the loadbalancer is recreated).
+k3d cluster edit main --port-add '5000:30500@server:0'
+sudo fw allow 5000        # open it (your firewall)
+# → docs at http://<host>:5000  (optional: Caddy `docs.<domain> { reverse_proxy localhost:5000 }`)
 ```
 
 ## Day-to-day
