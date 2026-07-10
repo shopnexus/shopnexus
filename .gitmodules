@@ -3,7 +3,7 @@
 	url = git@github.com:shopnexus/app
 [submodule "docs"]
 	path = docs
-	url = git@github.com:shopnexus/shopnexus-docs
+	url = git@github.com:shopnexus/docs
 [submodule "embedding"]
 	path = embedding
 	url = git@github.com:shopnexus/embedding

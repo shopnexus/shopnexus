@@ -17,6 +17,9 @@ images:
   - name: ghcr.io/shopnexus/website
     newName: shopnexus/website
     newTag: local
+  - name: ghcr.io/shopnexus/docs
+    newName: shopnexus/docs
+    newTag: local
 
 patches:
   - target:
@@ -36,6 +39,13 @@ patches:
   - target:
       kind: Job
       name: db-migrate
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target:
+      kind: Deployment
+      name: docs
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy

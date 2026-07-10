@@ -13,9 +13,11 @@ metadata:
   annotations:
     argocd-image-updater.argoproj.io/image-list: >-
       server=ghcr.io/shopnexus/server:main,
-      website=ghcr.io/shopnexus/website:main
+      website=ghcr.io/shopnexus/website:main,
+      docs=ghcr.io/shopnexus/docs:main
     argocd-image-updater.argoproj.io/server.update-strategy: digest
     argocd-image-updater.argoproj.io/website.update-strategy: digest
+    argocd-image-updater.argoproj.io/docs.update-strategy: digest
     argocd-image-updater.argoproj.io/write-back-method: argocd
 spec:
   project: default
