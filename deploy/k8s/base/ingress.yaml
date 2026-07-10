@@ -1,0 +1,29 @@
+# Traefik ingress (k3s ships Traefik as the default IngressController).
+#   /api  -> server (5005)
+#   /     -> website (3000)
+# Adjust the /api prefix if the server does not serve its API under /api.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopnexus
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: shopnexus.hopto.org
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  number: 5005
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: website
+                port:
+                  number: 3000

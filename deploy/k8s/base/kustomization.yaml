@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: shopnexus
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - redis.yaml
+  - restate.yaml
+  - server.yaml
+  - website.yaml
+  - ingress.yaml
+
+# ConfigMap generated from the same .env-format file compose uses. Kustomize
+# appends a content hash to the name and rewrites references, so a config change
+# triggers a rollout automatically.
+configMapGenerator:
+  - name: shopnexus-config
+    envs:
+      - config.env
+
+# The Secret is created out-of-band by default (see README + secret.env.example).
+# To manage it from a git-ignored secret.env instead, uncomment:
+# secretGenerator:
+#   - name: shopnexus-secret
+#     envs:
+#       - secret.env   # git-ignored — never commit real secrets
+
+# Image tags are managed here so Argo CD Image Updater can bump them on new
+# pushes (digest-tracked -> force-push rebuilds also trigger a redeploy).
+images:
+  - name: ghcr.io/shopnexus/server
+    newTag: main
+  - name: ghcr.io/shopnexus/website
+    newTag: main

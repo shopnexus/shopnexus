@@ -1,0 +1,78 @@
+# Go backend. Listens on 5005 (HTTP/API), 8082 (restate service endpoint that
+# restate calls back into), 8083 (best-effort). Image is built + pushed to GHCR
+# by the server repo's build workflow; the tag is managed by Argo Image Updater.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/part-of: shopnexus
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: server
+        app.kubernetes.io/part-of: shopnexus
+    spec:
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: server
+          image: ghcr.io/shopnexus/server:main
+          imagePullPolicy: Always
+          # Non-secret APP_* from the ConfigMap, secret APP_* from the Secret.
+          # Any APP_*-prefixed key in either is picked up by the app (viper).
+          envFrom:
+            - configMapRef:
+                name: shopnexus-config
+            - secretRef:
+                name: shopnexus-secret
+          ports:
+            - name: http
+              containerPort: 5005
+            - name: restate-svc
+              containerPort: 8082
+            - name: best-effort
+              containerPort: 8083
+          readinessProbe:
+            tcpSocket:
+              port: 5005
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5005
+            initialDelaySeconds: 45
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  selector:
+    app.kubernetes.io/name: server
+  ports:
+    - name: http
+      port: 5005
+      targetPort: 5005
+    - name: restate-svc
+      port: 8082
+      targetPort: 8082
+    - name: best-effort
+      port: 8083
+      targetPort: 8083

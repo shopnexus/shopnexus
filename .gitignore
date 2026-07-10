@@ -30,3 +30,7 @@ dist/
 build/
 .cache/
 tmp/
+
+# k8s secret env (never commit)
+secret.env
+deploy/k8s/base/secret.env
