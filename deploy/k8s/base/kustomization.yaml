@@ -11,6 +11,7 @@ resources:
   - server.yaml
   - website.yaml
   - ingress.yaml
+  - migrate-job.yaml
 
 # ConfigMap generated from the same .env-format file compose uses. Kustomize
 # appends a content hash to the name and rewrites references, so a config change
