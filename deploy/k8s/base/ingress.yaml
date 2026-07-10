@@ -9,9 +9,11 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
+  # No host match: Caddy is the edge that decides which hostname reaches :8080
+  # (e.g. shop.toanehihi.io.vn), so Traefik only needs to route by path. This
+  # avoids re-editing the Ingress whenever the public domain changes.
   rules:
-    - host: shopnexus.hopto.org
-      http:
+    - http:
         paths:
           - path: /api
             pathType: Prefix
