@@ -1,0 +1,15 @@
+[submodule "app"]
+	path = app
+	url = git@github.com:shopnexus/app
+[submodule "docs"]
+	path = docs
+	url = git@github.com:shopnexus/shopnexus-docs
+[submodule "embedding"]
+	path = embedding
+	url = git@github.com:shopnexus/embedding
+[submodule "server"]
+	path = server
+	url = git@github.com:shopnexus/server
+[submodule "website"]
+	path = website
+	url = git@github.com:shopnexus/website
