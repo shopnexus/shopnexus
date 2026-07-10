@@ -50,12 +50,21 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
 
 # 2. App secrets (NEVER commit these — see secret.example.yaml)
+#    Required by the server's config validation (each APP_* overrides a YAML
+#    key). Provide REAL values — the server refuses to start without them.
 kubectl create namespace shopnexus
 kubectl -n shopnexus create secret generic shopnexus-secret \
   --from-literal=POSTGRES_PASSWORD='<pg>' \
   --from-literal=REDIS_PASSWORD='<redis>' \
   --from-literal=APP_POSTGRES_PASSWORD='<pg>' \
-  --from-literal=APP_REDIS_PASSWORD='<redis>'
+  --from-literal=APP_REDIS_PASSWORD='<redis>' \
+  --from-literal=APP_JWT_SECRET='<jwt-signing-secret>' \
+  --from-literal=APP_EXCHANGE_APIKEY='<exchange-rate-api-key>' \
+  --from-literal=APP_VNPAY_TMNCODE='<vnpay-tmn-code>' \
+  --from-literal=APP_VNPAY_HASHSECRET='<vnpay-hash-secret>'
+# Non-secret required config (e.g. APP_ORDER_RETURNURL) lives in config.env.
+# If the server crash-loops on "validate ... Error ... required", add the named
+# APP_* key here (secret) or in config.env (non-secret).
 
 # 3. GHCR pull secret (private images) — in BOTH namespaces
 #    (shopnexus: pods pull; argocd: Image Updater reads the registry)
