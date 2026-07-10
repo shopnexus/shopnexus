@@ -40,18 +40,30 @@ restate snapshots (only needed for a multi-node restate cluster), and
 
 ## Bootstrap (one-time)
 
+This is the verified, working sequence (the commented gotchas are real — each
+cost a debugging cycle the first time).
+
 ```bash
 # kube context for the k3d cluster
 k3d kubeconfig merge main --kubeconfig-switch-context
 
-# 1. Install Argo CD + Image Updater
+# 1. Install Argo CD — MUST be --server-side (the applicationsets CRD exceeds
+#    the client-side apply annotation size limit).
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# 2. App secrets (NEVER commit these — see secret.example.yaml)
-#    Required by the server's config validation (each APP_* overrides a YAML
-#    key). Provide REAL values — the server refuses to start without them.
+# 1b. This umbrella repo has git submodules with SSH URLs. Argo would try to
+#     `git submodule update --init` them over SSH and fail. deploy/ needs no
+#     submodule, so disable submodule fetching on the repo-server.
+kubectl -n argocd set env deploy/argocd-repo-server ARGOCD_GIT_MODULES_ENABLED=false
+
+# 1c. Image Updater — use a versioned tag ('stable' 404s).
+kubectl apply -n argocd \
+  -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.16.0/manifests/install.yaml
+
+# 2. App secrets (NEVER commit these — see secret.example.yaml). Each APP_*
+#    overrides a YAML key; the server refuses to start without the required ones.
 kubectl create namespace shopnexus
 kubectl -n shopnexus create secret generic shopnexus-secret \
   --from-literal=POSTGRES_PASSWORD='<pg>' \
@@ -63,28 +75,23 @@ kubectl -n shopnexus create secret generic shopnexus-secret \
   --from-literal=APP_VNPAY_TMNCODE='<vnpay-tmn-code>' \
   --from-literal=APP_VNPAY_HASHSECRET='<vnpay-hash-secret>'
 # Non-secret required config (e.g. APP_ORDER_RETURNURL) lives in config.env.
-# If the server crash-loops on "validate ... Error ... required", add the named
-# APP_* key here (secret) or in config.env (non-secret).
+# Crash-loop on "validate ... Error ... required" -> add that APP_* key here
+# (secret) or in config.env (non-secret).
 
-# 3. GHCR pull secret (private images) — in BOTH namespaces
-#    (shopnexus: pods pull; argocd: Image Updater reads the registry)
-GHCR_USER=<github-user>; GHCR_PAT=<PAT with read:packages>
-for ns in shopnexus argocd; do
-  kubectl -n $ns create secret docker-registry ghcr \
-    --docker-server=ghcr.io \
-    --docker-username="$GHCR_USER" \
-    --docker-password="$GHCR_PAT"
-done
+# 3. GHCR pull. For PUBLIC packages, no PAT: an empty docker-config secret makes
+#    kubelet pull anonymously (satisfies the deployments' imagePullSecrets: ghcr).
+kubectl -n shopnexus create secret generic ghcr \
+  --type=kubernetes.io/dockerconfigjson --from-literal=.dockerconfigjson='{"auths":{}}'
+#    For PRIVATE packages instead: a real docker-registry secret in BOTH
+#    shopnexus (pods) and argocd (Image Updater), + re-add the
+#    `argocd-image-updater.argoproj.io/pull-secret: pullsecret:argocd/ghcr`
+#    annotation to application.yaml.
 
-# 4. Private repo access for Argo (if the umbrella repo is private)
-kubectl -n argocd create secret generic repo-shopnexus \
-  --from-literal=type=git \
-  --from-literal=url=https://github.com/shopnexus/shopnexus.git \
-  --from-literal=username=<github-user> \
-  --from-literal=password=<PAT with repo read>
-kubectl -n argocd label secret repo-shopnexus argocd.argoproj.io/secret-type=repository
+# 4. Repo access: the umbrella repo is PUBLIC, so Argo needs no repo creds.
+#    (If you make it private: create an argocd repository secret with a token.)
 
-# 5. Register the app — Argo takes over from here
+# 5. Register the app — Argo takes over (wave 0 infra -> wave 1 db-migrate hook
+#    -> wave 2 server/website; Image Updater then tracks :main by digest).
 kubectl apply -f deploy/argocd/application.yaml
 ```
 
