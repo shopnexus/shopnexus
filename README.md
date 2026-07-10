@@ -7,7 +7,7 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 | Path        | Repository                                | Description        |
 | ----------- | ----------------------------------------- | ------------------ |
 | `app`       | `shopnexus/app`                           | Mobile app (Flutter) |
-| `docs`      | `shopnexus/shopnexus-docs`                | Documentation      |
+| `docs`      | `shopnexus/docs`                | Documentation      |
 | `embedding` | `shopnexus/embedding`                     | Embedding service (Python) |
 | `server`    | `shopnexus/server`                        | Backend (Go)       |
 | `website`   | `shopnexus/website`                       | Web frontend (Next.js) |

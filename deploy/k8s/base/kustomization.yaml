@@ -10,6 +10,7 @@ resources:
   - restate.yaml
   - server.yaml
   - website.yaml
+  - docs.yaml
   - ingress.yaml
   - migrate-job.yaml
 
@@ -34,4 +35,6 @@ images:
   - name: ghcr.io/shopnexus/server
     newTag: main
   - name: ghcr.io/shopnexus/website
+    newTag: main
+  - name: ghcr.io/shopnexus/docs
     newTag: main
