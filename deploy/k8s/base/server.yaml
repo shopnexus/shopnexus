@@ -5,6 +5,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: server
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # after DB migration (wave 1)
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/part-of: shopnexus
