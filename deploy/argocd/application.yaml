@@ -12,12 +12,10 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: >-
-      server=ghcr.io/shopnexus/server,
-      website=ghcr.io/shopnexus/website
+      server=ghcr.io/shopnexus/server:main,
+      website=ghcr.io/shopnexus/website:main
     argocd-image-updater.argoproj.io/server.update-strategy: digest
-    argocd-image-updater.argoproj.io/server.allow-tags: regexp:^main$
     argocd-image-updater.argoproj.io/website.update-strategy: digest
-    argocd-image-updater.argoproj.io/website.allow-tags: regexp:^main$
     argocd-image-updater.argoproj.io/write-back-method: argocd
 spec:
   project: default
