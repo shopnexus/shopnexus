@@ -29,3 +29,31 @@ spec:
                 name: website
                 port:
                   number: 3000
+---
+# Docs on its own host. Docs uses root-absolute asset paths, so it needs a
+# dedicated host rather than a path on the app. The host here is a STABLE
+# INTERNAL ALIAS (`docs.internal`), NOT the public domain — Caddy owns the public
+# domain and rewrites the upstream Host to this alias:
+#   docs.<public-domain> { reverse_proxy localhost:8080 { header_up Host docs.internal } }
+# So the public domain lives in exactly one place (Caddy); changing it never
+# touches this manifest. A host-specific rule out-prioritises the host-agnostic
+# app ingress above, so `docs.internal` reaches docs while every real hostname
+# still falls through to the app.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopnexus-docs
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: docs.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: docs
+                port:
+                  number: 80

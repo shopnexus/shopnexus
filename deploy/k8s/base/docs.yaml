@@ -1,8 +1,10 @@
 # Mintlify docs, exported to a static site (`mint export`) and served by nginx.
-# Exposed on its OWN host port (5000) at root — the export uses root-absolute
-# asset paths (/_next, /api...) so it can't share the / + /api host with the
-# app. Service is NodePort 30500; k3d maps host 5000 -> node 30500:
-#   k3d cluster edit main --port-add '5000:30500@server:0'
+# Served on its OWN subdomain via the ingress — the export uses root-absolute
+# asset paths (/_next, /api...) so it needs a host to itself, but a subdomain
+# keeps it a normal ingress citizen (no bespoke NodePort/host port). Caddy owns
+# the public domain and rewrites Host to the internal alias `docs.internal` that
+# the docs Ingress matches (see ingress.yaml):
+#   docs.<domain> { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -53,10 +55,8 @@ kind: Service
 metadata:
   name: docs
 spec:
-  type: NodePort
   selector:
     app.kubernetes.io/name: docs
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30500

@@ -42,7 +42,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: shopnexus-secret
-                  key: REDIS_PASSWORD
+                  key: APP_REDIS_PASSWORD   # single source key (shared with the app)
           ports:
             - containerPort: 6379
           readinessProbe:
