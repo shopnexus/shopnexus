@@ -159,8 +159,8 @@ guarantees migrations run against a live DB, and apps start against a migrated D
 nginx. Its export uses root-absolute paths (`/_next`, `/api`, …) that would
 collide with the app under one host, so it gets its **own subdomain**
 (`docs.<domain>`) via the docs Ingress — a normal ClusterIP service behind the
-same Caddy→Traefik edge, no bespoke host port. Set the host in `ingress.yaml`
-(and `DOCS_URL` in `config.env`) and add a Caddy block for the subdomain.
+same Caddy→Traefik edge. Set the host in `ingress.yaml` (and `DOCS_URL` in
+`config.env`) and add a Caddy block for the subdomain.
 
 Server config: the Go app bakes YAML config into the image and lets `APP_*` env
 vars override any key (non-secret in `config.env` → ConfigMap; passwords in the
@@ -232,10 +232,10 @@ kubectl -n shopnexus create secret generic ghcr \
 #    -> wave 2 server/website/docs; Image Updater then tracks :main by digest).
 kubectl apply -f deploy/argocd/application.yaml
 
-# 6. Docs on its own subdomain (Mintlify static, via the docs Ingress). No k3d
-#    port-add / firewall hole — it rides the same :8080 edge as the app. In Caddy,
-#    route the public docs domain to :8080 and rewrite Host to the internal alias
-#    the docs ingress matches (the public domain stays only in Caddy):
+# 6. Docs on its own subdomain (Mintlify static, via the docs Ingress). It rides
+#    the same :8080 edge as the app. In Caddy, route the public docs domain to
+#    :8080 and rewrite Host to the internal alias the docs ingress matches (the
+#    public domain stays only in Caddy):
 #      docs.toanehihi.io.vn { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 # → docs at https://docs.<domain>
 
