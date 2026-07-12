@@ -1,0 +1,152 @@
+# Local DEV stack for the whole monorepo.
+#
+#   docker compose up --build
+#
+# Both app services bind-mount their source from the host, so edits apply live:
+#   - server:  `air` rebuilds the Go binary on save (see server/.air.toml)
+#   - website: `next dev` hot-reloads on save
+#
+# Production is Kubernetes — see ./deploy. This file is dev-only.
+name: shopnexus-dev
+
+networks:
+  default:
+    name: shopnexus-dev
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  restate-data:
+  go-mod-cache:
+  go-build-cache:
+  website-node-modules:
+  website-next:
+
+# Shared env for the Go binary (server) and the migration one-shot. Env vars
+# prefixed APP_ override the YAML config (viper AutomaticEnv), so a single set
+# here repoints every module at the compose network — no config edits needed.
+x-server-env: &server-env
+  APP_ENV: development
+  APP_POSTGRES_URL: postgres://shopnexus:peakshopnexuspassword@postgres:5432/shopnexus?sslmode=disable
+  APP_REDIS_HOST: redis
+  APP_REDIS_PORT: "6379"
+  APP_REDIS_PASSWORD: peaksehopnexuspassword
+  APP_RESTATE_INGRESSADDRESS: http://restate:8080
+  APP_RESTATE_ADMINADDRESS: http://restate:9070
+  APP_RESTATE_SERVICEHOST: http://server
+  APP_RESTATE_SERVICEPORT: "8082"
+  APP_RESTATE_BESTEFFORTADDRESS: http://localhost:8083
+  APP_PUBLIC_SITEURL: ${SITE_URL:-http://host.docker.internal}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: shopnexus
+      POSTGRES_PASSWORD: peakshopnexuspassword
+      POSTGRES_DB: shopnexus
+    ports:
+      - "5002:5432"  # DB, reachable from host at localhost:5002
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopnexus -d shopnexus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "peaksehopnexuspassword"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio
+    entrypoint: "/bin/sh"
+    command: "-c 'mkdir -p /data/restate && /usr/bin/minio server --quiet /data'"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  restate:
+    image: docker.restate.dev/restatedev/restate:latest
+    volumes:
+      - restate-data:/restate-data
+    environment:
+      RESTATE_CLUSTER_NAME: restate-cluster
+      RESTATE_NODE_NAME: restate-1
+      RESTATE_FORCE_NODE_ID: 1
+      RESTATE_ADVERTISED_ADDRESS: http://restate:5122
+      RESTATE_AUTO_PROVISION: "true"
+      RESTATE_DEFAULT_REPLICATION: 1
+    restart: unless-stopped
+
+  # One-shot: apply DB migrations before the server starts (mirrors the k8s
+  # migration Job). Exits 0 when done; the server waits on it.
+  migrate:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    command: ["go", "run", "./cmd/migrate/"]
+    environment: *server-env
+    volumes:
+      - ./server:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    # Caddy routes /api/* to localhost:5000. 8082 (restate endpoint) / 8083
+    # (best-effort) stay internal — restate reaches them over the bridge via
+    # the `server` hostname.
+    ports:
+      - "5000:5005"  # HTTP/API on host :5000
+    environment: *server-env
+    volumes:
+      - ./server:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      restate:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  website:
+    image: oven/bun:1
+    working_dir: /app
+    command: sh -c "bun install --frozen-lockfile && bun run dev --hostname 0.0.0.0"
+    # Published to the host — the host's Caddy routes non-/api traffic to
+    # localhost:5001, and /api/* to the server on localhost:5000.
+    # SITE_URL is the Caddy origin (SSR fetches + SEO canonicals).
+    ports:
+      - "5001:5006"  # website on host :5001
+    environment:
+      SITE_URL: ${SITE_URL:-http://host.docker.internal}
+      NEXT_TELEMETRY_DISABLED: "1"
+    # Let SSR reach the host's Caddy via host.docker.internal on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./website:/app
+      - website-node-modules:/app/node_modules
+      - website-next:/app/.next
+    depends_on:
+      - server
+    restart: unless-stopped
