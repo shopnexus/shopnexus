@@ -24,12 +24,13 @@ shopnexus (umbrella, PUBLIC)            ← this repo: orchestration + GitOps
 │   ├── postgres · redis · restate         wave 0  (stateful infra)
 │   ├── migrate-job.yaml                    wave 1  (Argo Sync hook)
 │   ├── server · website · ingress         wave 2  (apps, via Traefik ingress)
-│   ├── docs.yaml                            wave 2  (Mintlify static, NodePort :5000)
+│   ├── docs.yaml                            wave 2  (Mintlify static, docs.<domain> subdomain)
 │   ├── config.env  → ConfigMap (generated) non-secret APP_* config
 │   └── kustomization.yaml                  images pinned here (Image Updater edits)
 ├── deploy/k8s/overlays/local/             run locally-built images on k3d
 ├── deploy/argocd/application.yaml          the Argo CD Application (+ Image Updater)
-└── deploy/monitoring/                      prometheus/grafana config (not yet wired)
+├── deploy/argocd/monitoring.yaml           2nd Argo App → deploy/monitoring
+└── deploy/monitoring/                      prometheus + grafana (own kustomize + Argo App)
 
 server  (submodule)   Go backend   — Dockerfile, docker-compose.yml, .github/workflows/build.yml
 website (submodule)   Next.js      — Dockerfile, docker-compose.yml, .github/workflows/build.yml
@@ -77,19 +78,35 @@ inbound access to the machine is needed.
      │  wave 1:  db-migrate Job  → go:embed migrations, per-module, idempotent   │
      │  wave 2:  server (5005)   website (3000)      (rolling update)            │
      │                        │                                                  │
-     │                Traefik Ingress  (host shopnexus.hopto.org)                │
-     │                   /api → server:5005    / → website:3000                  │
+     │            Traefik Ingress  (host-agnostic app + docs.internal alias)     │
+     │              /api → server:5005   / → website:3000                        │
+     │              host docs.internal   → docs:80                               │
      └───────────────────────────────┬──────────────────────────────────────────┘
                                       │ k3d loadbalancer  -p 8080:80
                                       ▼
                      Caddy (host, TLS/:443)  reverse_proxy localhost:8080
                                       ▼
-                              https://shopnexus.hopto.org  ─► user
+              https://shop.toanehihi.io.vn · https://docs.toanehihi.io.vn ─► user
 ```
 
-**Edge:** Caddy stays the public TLS terminator (auto-HTTPS for hopto.org) and
-forwards to the cluster's Traefik on `localhost:8080`; Traefik/Ingress does the
-`/api` vs `/` split. No cert-manager needed.
+**Edge:** Caddy is the public TLS terminator (auto-HTTPS) and forwards to the
+cluster's Traefik on `localhost:8080`. **The public domains live only in Caddy.**
+The app ingress is **host-agnostic** — Caddy passes the real storefront Host
+through and Traefik just splits `/api` vs `/`. Docs needs a host of its own (its
+assets are root-absolute), so Caddy rewrites the docs Host to a **stable internal
+alias** `docs.internal` that the docs ingress matches — the public docs domain
+never appears in a manifest. No cert-manager needed.
+
+```caddyfile
+shop.toanehihi.io.vn {
+  reverse_proxy localhost:8080                          # Host preserved → app
+}
+docs.toanehihi.io.vn {
+  reverse_proxy localhost:8080 {
+    header_up Host docs.internal                        # → docs ingress
+  }
+}
+```
 
 **Force-push safe:** images use the mutable tag `:main`, tracked **by digest** —
 a rebuilt `:main` (new digest) rolls out even though the tag string is unchanged.
@@ -107,6 +124,19 @@ speak. Any YAML config key is overridable, e.g. `postgres.host` ← `APP_POSTGRE
 - Service DNS names in compose and k8s are identical (`postgres`, `redis`,
   `restate`), so `APP_*_HOST` values match across both environments.
 
+**One value, one place (no derived duplicates):**
+
+- **Public domain → `SITE_URL` only.** The server reads it as `APP_PUBLIC_SITEURL`
+  (mapped from `SITE_URL` via `configMapKeyRef` in `server.yaml`) and **derives**
+  the payment return URL (`…/payment/result`) and the SePay base *in code* — there
+  is no `APP_ORDER_RETURNURL` / `publicBaseUrl` to keep in sync. The website reads
+  `SITE_URL` for SEO; browser API calls are **same-origin `/api/v1`**, so they need
+  no URL config at all. Change the domain in one line and re-sync.
+- **Passwords → one key each.** `APP_POSTGRES_PASSWORD` / `APP_REDIS_PASSWORD` are
+  the single source; the postgres/redis containers map their image env names
+  (`POSTGRES_PASSWORD` / `REDIS_PASSWORD`) from those keys, so there is no duplicate
+  password value to keep matched.
+
 ### Sync-wave ordering (why it matters)
 
 Argo applies resources in wave order, waiting for each wave to be Healthy:
@@ -120,24 +150,30 @@ guarantees migrations run against a live DB, and apps start against a migrated D
 |-----------|-------|-------|
 | server    | ghcr.io/shopnexus/server  | 5005 http · 8082 restate-svc · 8083 best-effort |
 | website   | ghcr.io/shopnexus/website | 3000 |
-| docs      | ghcr.io/shopnexus/docs    | 80 (NodePort 30500 → host :5000) |
+| docs      | ghcr.io/shopnexus/docs    | 80 (ingress host `docs.<domain>`) |
 | postgres  | pgvector/pgvector:pg17    | 5432 |
 | redis     | redis:8-alpine            | 6379 |
 | restate   | restatedev/restate        | 8080 ingress · 9070 admin · 5122 node |
 
 `docs` is the Mintlify site built to a static bundle (`mint export`) served by
-nginx. It runs on its **own host port 5000** (not the shared ingress) because the
-export uses root-absolute paths (`/_next`, `/api`, …) that would collide with the
-app under one host. nginx uses `absolute_redirect off` so the trailing-slash
-redirect keeps the `:5000` port.
+nginx. Its export uses root-absolute paths (`/_next`, `/api`, …) that would
+collide with the app under one host, so it gets its **own subdomain**
+(`docs.<domain>`) via the docs Ingress — a normal ClusterIP service behind the
+same Caddy→Traefik edge, no bespoke host port. Set the host in `ingress.yaml`
+(and `DOCS_URL` in `config.env`) and add a Caddy block for the subdomain.
 
 Server config: the Go app bakes YAML config into the image and lets `APP_*` env
 vars override any key (non-secret in `config.env` → ConfigMap; passwords in the
 `shopnexus-secret` Secret, created out-of-band). See "Config & secrets model".
 
-Out of scope for now: `embedding` (Python, needed for catalog search), MinIO +
-restate snapshots (only needed for a multi-node restate cluster), and
-`deploy/monitoring` (Prometheus/Grafana config, not yet converted to k8s).
+**Monitoring** (`deploy/monitoring`) runs Prometheus + Grafana as a *separate*
+Argo CD Application (`deploy/argocd/monitoring.yaml`) in the same namespace, so
+it's optional and never gates the app rollout. Prometheus scrapes
+`server:5005/metrics`; Grafana auto-provisions the Prometheus datasource. Reach
+both by port-forward (see Day-to-day). Details: `deploy/monitoring/README.md`.
+
+Out of scope for now: `embedding` (Python, needed for catalog search), and MinIO +
+restate snapshots (only needed for a multi-node restate cluster).
 
 ## Bootstrap (one-time)
 
@@ -167,15 +203,16 @@ kubectl apply -n argocd \
 #    overrides a YAML key; the server refuses to start without the required ones.
 kubectl create namespace shopnexus
 kubectl -n shopnexus create secret generic shopnexus-secret \
-  --from-literal=POSTGRES_PASSWORD='<pg>' \
-  --from-literal=REDIS_PASSWORD='<redis>' \
   --from-literal=APP_POSTGRES_PASSWORD='<pg>' \
   --from-literal=APP_REDIS_PASSWORD='<redis>' \
   --from-literal=APP_JWT_SECRET='<jwt-signing-secret>' \
   --from-literal=APP_EXCHANGE_APIKEY='<exchange-rate-api-key>' \
   --from-literal=APP_VNPAY_TMNCODE='<vnpay-tmn-code>' \
   --from-literal=APP_VNPAY_HASHSECRET='<vnpay-hash-secret>'
-# Non-secret required config (e.g. APP_ORDER_RETURNURL) lives in config.env.
+#    postgres/redis read APP_POSTGRES_PASSWORD / APP_REDIS_PASSWORD directly
+#    (their image env names are mapped from these) — no duplicate keys.
+# Non-secret required config (e.g. SITE_URL) lives in config.env; the payment
+# return URL is derived from SITE_URL in code (no separate key).
 # Crash-loop on "validate ... Error ... required" -> add that APP_* key here
 # (secret) or in config.env (non-secret).
 
@@ -195,11 +232,17 @@ kubectl -n shopnexus create secret generic ghcr \
 #    -> wave 2 server/website/docs; Image Updater then tracks :main by digest).
 kubectl apply -f deploy/argocd/application.yaml
 
-# 6. Docs on its own host port 5000 (Mintlify static via NodePort 30500).
-#    --port-add works on the running cluster (only the loadbalancer is recreated).
-k3d cluster edit main --port-add '5000:30500@server:0'
-sudo fw allow 5000        # open it (your firewall)
-# → docs at http://<host>:5000  (optional: Caddy `docs.<domain> { reverse_proxy localhost:5000 }`)
+# 6. Docs on its own subdomain (Mintlify static, via the docs Ingress). No k3d
+#    port-add / firewall hole — it rides the same :8080 edge as the app. In Caddy,
+#    route the public docs domain to :8080 and rewrite Host to the internal alias
+#    the docs ingress matches (the public domain stays only in Caddy):
+#      docs.toanehihi.io.vn { reverse_proxy localhost:8080 { header_up Host docs.internal } }
+# → docs at https://docs.<domain>
+
+# 7. Monitoring (optional) — Prometheus + Grafana as a separate Argo App.
+#    No secret needed to start (Grafana defaults to admin/admin); see
+#    deploy/monitoring/README.md to set GRAFANA_ADMIN_PASSWORD.
+kubectl apply -f deploy/argocd/monitoring.yaml
 ```
 
 ## Day-to-day
@@ -213,6 +256,8 @@ sudo fw allow 5000        # open it (your firewall)
   https://localhost:8081 (admin password: `kubectl -n argocd get secret
   argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
 - **Rollback:** in the Argo UI, or pin a digest in `deploy/k8s/base/kustomization.yaml`.
+- **Metrics/dashboards:** `kubectl -n shopnexus port-forward svc/grafana 3000:3000`
+  (→ http://localhost:3000, admin/admin by default) and `svc/prometheus 9090:9090`.
 
 ## Prerequisite: the k3d cluster itself
 

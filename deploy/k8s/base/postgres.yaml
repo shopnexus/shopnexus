@@ -38,11 +38,11 @@ spec:
               value: shopnexus
             - name: POSTGRES_DB
               value: shopnexus
-            - name: POSTGRES_PASSWORD
+            - name: POSTGRES_PASSWORD          # env name the image requires
               valueFrom:
                 secretKeyRef:
                   name: shopnexus-secret
-                  key: POSTGRES_PASSWORD
+                  key: APP_POSTGRES_PASSWORD   # single source key (shared with the app)
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:

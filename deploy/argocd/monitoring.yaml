@@ -1,0 +1,27 @@
+# Argo CD Application for the monitoring stack (Prometheus + Grafana).
+#
+# Kept as a SEPARATE Application from the main `shopnexus` app so monitoring is
+# optional and its health never gates the app rollout. No Image Updater: the
+# images are pinned upstream tags (prom/prometheus, grafana/grafana), bumped by
+# editing deploy/monitoring and pushing.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopnexus-monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/shopnexus.git
+    targetRevision: main
+    path: deploy/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopnexus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

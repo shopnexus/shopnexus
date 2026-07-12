@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Monitoring runs in the same namespace as the apps so Prometheus can scrape
+# `server:5005` and Grafana can reach `prometheus:9090` by short DNS name.
+namespace: shopnexus
+
+resources:
+  - prometheus.yaml
+  - grafana.yaml
+
+# Configs kept in .yml files (readable, reusable) and mounted as ConfigMaps.
+# The hash suffix means editing a config auto-rolls the pod; kustomize rewrites
+# the volume `configMap.name` references to the hashed names.
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=prometheus/prometheus.yml
+  - name: grafana-datasources
+    files:
+      - prometheus.yml=grafana/provisioning/datasources/prometheus.yml

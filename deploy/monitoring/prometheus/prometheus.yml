@@ -1,25 +1,26 @@
-# Prometheus config for ShopNexus server.
-# Scrapes the Go server's /metrics endpoint every 15s.
+# Prometheus scrape config (in-cluster). Mounted at /etc/prometheus/prometheus.yml
+# via the `prometheus-config` ConfigMap (kustomize configMapGenerator, hashed name
+# ⇒ a config edit rolls the pod). Static targets by in-cluster DNS — no k8s
+# service-discovery, so Prometheus needs no RBAC/ServiceAccount.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: shopnexus-dev
+    cluster: shopnexus
 
 scrape_configs:
-  # Server metrics — the Go backend exposes /metrics on its HTTP port.
-  # In dev, server runs on the host (make dev) at port 50051; we reach it via
-  # host.docker.internal (added to /etc/hosts via extra_hosts in compose).
+  # Go backend — /metrics on its HTTP port (Echo, baked default port 5005). Same
+  # namespace as Prometheus, so the Service short name `server` resolves.
   - job_name: shopnexus-server
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:50051
+          - server:5005
         labels:
           service: shopnexus-server
-          env: dev
+          env: production
 
-  # Scrape Prometheus itself for self-monitoring
+  # Prometheus self-monitoring.
   - job_name: prometheus
     static_configs:
       - targets:

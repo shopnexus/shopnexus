@@ -36,6 +36,15 @@ spec:
                 name: shopnexus-config
             - secretRef:
                 name: shopnexus-secret
+          env:
+            # The public origin lives once as SITE_URL (shared with the website).
+            # viper needs the APP_ prefix, so expose the same value under the
+            # name the server expects — one source, no duplicated literal.
+            - name: APP_PUBLIC_SITEURL
+              valueFrom:
+                configMapKeyRef:
+                  name: shopnexus-config
+                  key: SITE_URL
           ports:
             - name: http
               containerPort: 5005
