@@ -1,9 +1,9 @@
 # Mintlify docs, exported to a static site (`mint export`) and served by nginx.
 # Served on its OWN subdomain via the ingress — the export uses root-absolute
-# asset paths (/_next, /api...) so it needs a host to itself, but a subdomain
-# keeps it a normal ingress citizen (no bespoke NodePort/host port). Caddy owns
-# the public domain and rewrites Host to the internal alias `docs.internal` that
-# the docs Ingress matches (see ingress.yaml):
+# asset paths (/_next, /api...) so it needs a host to itself; a subdomain keeps
+# it a normal ClusterIP ingress citizen. Caddy owns the public domain and
+# rewrites Host to the internal alias `docs.internal` that the docs Ingress
+# matches (see ingress.yaml):
 #   docs.<domain> { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 apiVersion: apps/v1
 kind: Deployment
