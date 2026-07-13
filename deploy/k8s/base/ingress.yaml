@@ -1,12 +1,12 @@
 # Traefik ingress. Every host here is a STABLE INTERNAL ALIAS (`*.internal`),
 # NOT a public domain — Caddy owns the public domains and rewrites the upstream
 # Host to these aliases, so a domain change never touches these manifests:
-#   shop.<domain>    { reverse_proxy localhost:8080 { header_up Host main.internal   } }
-#   api.<domain>     { reverse_proxy localhost:8080 { header_up Host server.internal } }
-#   docs.<domain>    { reverse_proxy localhost:8080 { header_up Host docs.internal   } }
+#   shop.<domain>    { reverse_proxy localhost:8080 { header_up Host main.internal } }
+#   docs.<domain>    { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 #
 # main.internal = the storefront: /api -> server (so the website's same-origin
-# /api/v1 calls work), / -> website.
+# /api/v1 calls work), / -> website. The API is NOT on a separate subdomain —
+# first-party browser calls stay same-origin (no CORS).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -32,27 +32,6 @@ spec:
                 name: website
                 port:
                   number: 3000
----
-# server.internal = the API on its own subdomain (api.<domain>), for external
-# API consumers. Routes everything to the server; clients hit api.<domain>/api/v1/…
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: shopnexus-api
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-spec:
-  rules:
-    - host: server.internal
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: server
-                port:
-                  number: 5005
 ---
 # Docs on its own host (docs.internal). Its export uses root-absolute asset paths
 # so it needs a dedicated host rather than a path on the app.
