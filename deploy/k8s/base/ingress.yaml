@@ -1,7 +1,12 @@
-# Traefik ingress (k3s ships Traefik as the default IngressController).
-#   /api  -> server (5005)
-#   /     -> website (3000)
-# Adjust the /api prefix if the server does not serve its API under /api.
+# Traefik ingress. Every host here is a STABLE INTERNAL ALIAS (`*.internal`),
+# NOT a public domain — Caddy owns the public domains and rewrites the upstream
+# Host to these aliases, so a domain change never touches these manifests:
+#   shop.<domain>    { reverse_proxy localhost:8080 { header_up Host main.internal   } }
+#   api.<domain>     { reverse_proxy localhost:8080 { header_up Host server.internal } }
+#   docs.<domain>    { reverse_proxy localhost:8080 { header_up Host docs.internal   } }
+#
+# main.internal = the storefront: /api -> server (so the website's same-origin
+# /api/v1 calls work), / -> website.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,11 +14,9 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
-  # No host match: Caddy is the edge that decides which hostname reaches :8080
-  # (e.g. shop.toanehihi.io.vn), so Traefik only needs to route by path. This
-  # avoids re-editing the Ingress whenever the public domain changes.
   rules:
-    - http:
+    - host: main.internal
+      http:
         paths:
           - path: /api
             pathType: Prefix
@@ -30,15 +33,29 @@ spec:
                 port:
                   number: 3000
 ---
-# Docs on its own host. Docs uses root-absolute asset paths, so it needs a
-# dedicated host rather than a path on the app. The host here is a STABLE
-# INTERNAL ALIAS (`docs.internal`), NOT the public domain — Caddy owns the public
-# domain and rewrites the upstream Host to this alias:
-#   docs.<public-domain> { reverse_proxy localhost:8080 { header_up Host docs.internal } }
-# So the public domain lives in exactly one place (Caddy); changing it never
-# touches this manifest. A host-specific rule out-prioritises the host-agnostic
-# app ingress above, so `docs.internal` reaches docs while every real hostname
-# still falls through to the app.
+# server.internal = the API on its own subdomain (api.<domain>), for external
+# API consumers. Routes everything to the server; clients hit api.<domain>/api/v1/…
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopnexus-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: server.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  number: 5005
+---
+# Docs on its own host (docs.internal). Its export uses root-absolute asset paths
+# so it needs a dedicated host rather than a path on the app.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
