@@ -53,6 +53,10 @@ spec:
                   optional: true   # absent ⇒ Grafana default admin/admin
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            # Public origin (Caddy edge). Grafana builds absolute links/redirects
+            # from this; must match the domain the ingress serves.
+            - name: GF_SERVER_ROOT_URL
+              value: https://grafana.toanehihi.io.vn
           ports:
             - name: http
               containerPort: 3000

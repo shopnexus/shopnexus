@@ -1,0 +1,24 @@
+# Grafana on its own subdomain via the ingress. Caddy (host) terminates TLS for
+# grafana.toanehihi.io.vn and reverse_proxies to :8080 (Traefik), Host preserved;
+# Traefik matches this host rule → grafana:3000. Grafana has its own login, so
+# public exposure is gated by GRAFANA_ADMIN_PASSWORD (set in the Secret).
+# Prometheus is intentionally NOT exposed (no auth) — port-forward when needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: shopnexus
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: grafana.toanehihi.io.vn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
