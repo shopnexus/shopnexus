@@ -1,0 +1,32 @@
+# Argo CD UI on its own subdomain. Caddy (host) terminates TLS for
+# argocd.toanehihi.io.vn and reverse_proxies to :8080 (Traefik), Host preserved.
+#
+# argocd-server is run with `server.insecure: "true"` (argocd-cmd-params-cm) so
+# it serves plain HTTP — no double-TLS behind the Caddy edge. Traefik routes to
+# the `http` port (80 → 8080).
+#
+# NOTE: applied out-of-band (kubectl), NOT synced by Argo — Argo doesn't manage
+# its own namespace. Kept here for record. Bootstrap:
+#   kubectl -n argocd patch cm argocd-cmd-params-cm --type merge -p '{"data":{"server.insecure":"true"}}'
+#   kubectl -n argocd patch cm argocd-cm --type merge -p '{"data":{"url":"https://argocd.toanehihi.io.vn"}}'
+#   kubectl -n argocd rollout restart deploy/argocd-server
+#   kubectl apply -f deploy/argocd/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  rules:
+    - host: argocd.toanehihi.io.vn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

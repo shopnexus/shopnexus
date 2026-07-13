@@ -8,6 +8,7 @@ namespace: shopnexus
 resources:
   - prometheus.yaml
   - grafana.yaml
+  - ingress.yaml
 
 # Configs kept in .yml files (readable, reusable) and mounted as ConfigMaps.
 # The hash suffix means editing a config auto-rolls the pod; kustomize rewrites
