@@ -369,13 +369,22 @@ git push origin main
 
 - [ ] **Step 5: Verify the workflow published the image**
 
+Check the artifact, not just the workflow's exit status — a green run that pushed
+to the wrong tag still leaves the deployment broken. GHCR packages for these repos
+are public, so this needs no credentials:
+
 ```bash
-gh run list --repo shopnexus/website --limit 3
+docker manifest inspect ghcr.io/shopnexus/website:main >/dev/null \
+  && echo "IMAGE-PUBLISHED" || echo "NOT-YET — wait for CI or check the run"
 ```
 
-Expected: the `Build & Push image` run concludes `success`. Do not proceed to
-Phase 3 until it does — the umbrella's `website.yaml` will otherwise reference a
-tag that does not exist and the pod will sit in `ImagePullBackOff`.
+Expected: `IMAGE-PUBLISHED`. Do not proceed to Phase 3 until it appears — the
+umbrella's `website.yaml` will otherwise reference a tag that does not exist and
+the pod will sit in `ImagePullBackOff`.
+
+`gh` is not authenticated in this environment, so `gh run list` will fail. If you
+need the run log, authenticate first by typing `! gh auth login` in the session,
+or read it in the browser.
 
 ---
 
@@ -767,6 +776,32 @@ git config --get submodule.server.url
 ```
 
 Expected: `https://github.com/shopnexus/server.git`.
+
+- [ ] **Step 4b: Keep pushing over SSH**
+
+`git submodule sync` just rewrote the local submodule remotes to HTTPS, which is
+what Argo CD and fresh clones need — but HTTPS **pushes** require a token, and
+this machine authenticates to GitHub with an SSH key
+(`~/.ssh/id_ed25519`). Without this, the next `git push` from inside a submodule
+prompts for a password and fails.
+
+`pushInsteadOf` rewrites only the push URL, so fetches stay HTTPS:
+
+```bash
+git config --global url."git@github.com:".pushInsteadOf "https://github.com/"
+```
+
+Verify fetch and push resolve differently:
+
+```bash
+cd server && git remote -v
+```
+
+Expected: the `(fetch)` line shows `https://github.com/shopnexus/server.git` and
+the `(push)` line shows `git@github.com:shopnexus/server.git`.
+
+This is a global git setting, not a repo change — mention it in the commit message
+body so the next person on a different machine knows they need it too.
 
 - [ ] **Step 5: Verify the embedding directory and its changes survived**
 
