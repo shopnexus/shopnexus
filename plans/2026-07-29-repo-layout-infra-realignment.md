@@ -36,6 +36,11 @@
   umbrella records the new pointer.
 - **Never delete the `embedding/` working directory** — it holds uncommitted
   changes to `main.py`, `pyproject.toml` and `uv.lock`.
+- **Language in the `docs` submodule.** `docs/CLAUDE.md` says content is written
+  in Vietnamese — that applies to the **typst reports** (`manual/`, `typst/`),
+  which this plan does not touch. The **Mintlify developer site** (`docs/docs/`)
+  is written in English (verified: `introduction.mdx`, `operations/deployment.mdx`),
+  so Tasks 3 and 3b write English. Do not translate existing pages.
 
 ---
 
