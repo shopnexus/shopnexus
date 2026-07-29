@@ -180,11 +180,25 @@ Grafana dashboards and datasources *are* shared, because they query the
 ConfigMap generated from the submodule path (`server/dev/grafana/…`) rather than
 keeping a copy.
 
-That cross-repo reference needs one accommodation: kustomize refuses to read
-files outside its kustomization root by default, so the Argo CD Application must
-set `kustomize.buildOptions: --load-restrictor LoadRestrictionsNone`. The
-alternative — copying the dashboards into the umbrella — reintroduces exactly the
-drift this design exists to remove, so the flag is the better trade.
+That cross-repo reference needs one accommodation: kustomize refuses to read files
+outside its kustomization root by default, so the relaxed load restrictor must be
+enabled.
+
+**Correction found during implementation:** this is not a per-Application field.
+`buildOptions` does not exist on `Application.spec.source.kustomize` (verified
+against the CRD on the cluster). It is a **global** setting in the `argocd-cm`
+ConfigMap, applied out-of-band:
+
+```bash
+kubectl -n argocd patch cm argocd-cm --type merge \
+  -p '{"data":{"kustomize.buildOptions":"--load-restrictor LoadRestrictionsNone"}}'
+kubectl -n argocd rollout restart deploy/argocd-repo-server
+```
+
+That relaxes the restriction for every Application on the cluster — a real widening
+of a safety boundary, acceptable here only because the cluster is single-tenant.
+The alternative, copying the dashboard into the umbrella, reintroduces exactly the
+drift this design exists to remove.
 
 Prometheus is removed. Metrics now live in TimescaleDB hypertables written by the
 `observability` module, so there is no `/metrics` endpoint left to scrape.

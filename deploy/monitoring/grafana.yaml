@@ -1,7 +1,9 @@
-# Grafana — dashboards over the Prometheus datasource (auto-provisioned from the
-# `grafana-datasources` ConfigMap, see grafana/provisioning/). Single replica /
-# one PVC (Recreate) holding its SQLite state; fsGroup 472 (the grafana user) so
-# the local-path PVC is writable.
+# Grafana — the single pane over both signals: backend telemetry from the
+# TimescaleDB hypertables (schema `observability`) and container logs from Loki.
+# Datasources and the dashboard provider are auto-provisioned from ConfigMaps (see
+# grafana/provisioning/ and kustomization.yaml). Single replica / one PVC
+# (Recreate) holding its SQLite state; fsGroup 472 (the grafana user) so the
+# local-path PVC is writable. No Prometheus — there is no /metrics to scrape.
 #
 # Admin password: optional key GRAFANA_ADMIN_PASSWORD in shopnexus-secret. If the
 # key is absent the pod still starts and Grafana falls back to admin/admin (fine
@@ -41,7 +43,7 @@ spec:
         fsGroup: 472   # grafana user — owns the mounted PVC
       containers:
         - name: grafana
-          image: grafana/grafana:11.3.1   # bump as needed
+          image: grafana/grafana:11.3.0   # pinned to match the dev stack (server/docker-compose.yml)
           env:
             - name: GF_SECURITY_ADMIN_USER
               value: admin
@@ -53,6 +55,13 @@ spec:
                   optional: true   # absent ⇒ Grafana default admin/admin
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            # Expanded into the TimescaleDB datasource's secureJsonData at
+            # provisioning time (see grafana/provisioning/datasources).
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopnexus-secret
+                  key: POSTGRES_PASSWORD
             # Public origin (Caddy edge). Grafana builds absolute links/redirects
             # from this; must match the domain the ingress serves.
             - name: GF_SERVER_ROOT_URL
@@ -82,12 +91,22 @@ spec:
           volumeMounts:
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
             - name: data
               mountPath: /var/lib/grafana
       volumes:
         - name: datasources
           configMap:
             name: grafana-datasources   # kustomize rewrites to the hashed name
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
         - name: data
           persistentVolumeClaim:
             claimName: grafana-data

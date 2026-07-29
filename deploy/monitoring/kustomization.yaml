@@ -1,22 +1,33 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Monitoring runs in the same namespace as the apps so Prometheus can scrape
-# `server:5005` and Grafana can reach `prometheus:9090` by short DNS name.
+# Monitoring runs in the same namespace as the apps so Grafana can reach
+# `postgres:5432` and `loki:3100` by short DNS name.
 namespace: shopnexus
 
 resources:
-  - prometheus.yaml
+  - loki.yaml
+  - alloy.yaml
   - grafana.yaml
   - ingress.yaml
 
-# Configs kept in .yml files (readable, reusable) and mounted as ConfigMaps.
-# The hash suffix means editing a config auto-rolls the pod; kustomize rewrites
-# the volume `configMap.name` references to the hashed names.
+# Configs kept in files (readable, reusable) and mounted as ConfigMaps. The hash
+# suffix means editing a config auto-rolls the pod; kustomize rewrites the volume
+# `configMap.name` references to the hashed names.
 configMapGenerator:
-  - name: prometheus-config
-    files:
-      - prometheus.yml=prometheus/prometheus.yml
   - name: grafana-datasources
     files:
-      - prometheus.yml=grafana/provisioning/datasources/prometheus.yml
+      - timescaledb.yml=grafana/provisioning/datasources/timescaledb.yml
+      - loki.yml=grafana/provisioning/datasources/loki.yml
+  - name: grafana-dashboard-provider
+    files:
+      - dashboards.yml=grafana/provisioning/dashboards/dashboards.yml
+  # Read from the server submodule on purpose: the dashboard queries the
+  # observability schema, so the two must change in one commit. Requires
+  # --load-restrictor LoadRestrictionsNone (set on the Argo CD Application).
+  - name: grafana-dashboards
+    files:
+      - observability.json=../../server/dev/grafana/dashboards/observability.json
+  - name: alloy-config
+    files:
+      - config.alloy=alloy/config.alloy

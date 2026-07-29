@@ -1,0 +1,22 @@
+# Backend operational telemetry — HTTP RED, Go runtime and bus events, written as
+# TimescaleDB hypertables by the observability module (schema: observability).
+# The uid must stay `timescaledb`: the dashboard JSON references it by uid.
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    uid: timescaledb
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: shopnexus
+    isDefault: true
+    jsonData:
+      database: shopnexus
+      sslmode: disable
+      postgresVersion: 1800
+      timescaledb: true
+    secureJsonData:
+      # Expanded by Grafana from the container env (see grafana.yaml), which reads
+      # it from shopnexus-secret. No credential is committed here.
+      password: $POSTGRES_PASSWORD

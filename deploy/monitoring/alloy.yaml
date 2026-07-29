@@ -1,0 +1,91 @@
+# Grafana Alloy — discovers pods via the Kubernetes API and ships their logs to
+# Loki. DaemonSet so each node's pods are collected locally.
+#
+# The ClusterRole is not optional: discovery.kubernetes calls the API server and
+# loki.source.kubernetes reads pods/log. Without it the pod starts and silently
+# ships nothing.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shopnexus-alloy
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "namespaces", "pods", "pods/log", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shopnexus-alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shopnexus-alloy
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: shopnexus
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: shopnexus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/part-of: shopnexus
+    spec:
+      serviceAccountName: alloy
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.5.1
+          args:
+            - "run"
+            - "--server.http.listen-addr=0.0.0.0:12345"
+            - "--storage.path=/var/lib/alloy/data"
+            - "/etc/alloy/config.alloy"
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: http
+              containerPort: 12345
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 12345
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+            - name: data
+              mountPath: /var/lib/alloy/data
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config   # kustomize rewrites to the hashed name
+        - name: data
+          emptyDir: {}

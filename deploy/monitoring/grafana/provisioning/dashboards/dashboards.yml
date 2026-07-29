@@ -1,0 +1,14 @@
+# Loads dashboards from /var/lib/grafana/dashboards, mounted from a ConfigMap
+# generated out of the server submodule (see kustomization.yaml) so the dashboard
+# and the schema it queries stay in one repo.
+apiVersion: 1
+
+providers:
+  - name: observability
+    orgId: 1
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
