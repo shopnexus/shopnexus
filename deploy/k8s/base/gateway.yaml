@@ -1,0 +1,81 @@
+# Go backend gateway (cmd/gateway). Listens on 8080; the image's ENTRYPOINT is
+# /gateway. Built and pushed to GHCR by the server repo's build workflow; the tag
+# is managed by Argo CD Image Updater.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # after DB migration (wave 1)
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/part-of: shopnexus
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gateway
+        app.kubernetes.io/part-of: shopnexus
+    spec:
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: gateway
+          image: ghcr.io/shopnexus/server:main
+          imagePullPolicy: Always
+          # Non-secret config from the ConfigMap, DSNs and keys from the Secret.
+          # Every field is `required` — a missing key crashes at startup.
+          envFrom:
+            - configMapRef:
+                name: shopnexus-config
+            - secretRef:
+                name: shopnexus-secret
+          env:
+            # Tags every telemetry row with the pod that produced it. Without a
+            # per-pod value, replicas collapse into one meaningless series, which
+            # is why config.go makes this required rather than defaulting it.
+            - name: INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - name: http
+              containerPort: 8080
+          # tcpSocket, not httpGet: the router exposes no /healthz yet — it serves
+          # only /openapi.yaml and /docs. Switch both probes to httpGet once the
+          # backend adds a health endpoint.
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app.kubernetes.io/name: gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

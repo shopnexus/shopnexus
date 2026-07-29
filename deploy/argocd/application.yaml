@@ -11,11 +11,13 @@ metadata:
   name: shopnexus
   namespace: argocd
   annotations:
+    # Alias `gateway` matches the k8s workload; the image repo is still
+    # `shopnexus/server` (the repo name did not change).
     argocd-image-updater.argoproj.io/image-list: >-
-      server=ghcr.io/shopnexus/server:main,
+      gateway=ghcr.io/shopnexus/server:main,
       website=ghcr.io/shopnexus/website:main,
       docs=ghcr.io/shopnexus/docs:main
-    argocd-image-updater.argoproj.io/server.update-strategy: digest
+    argocd-image-updater.argoproj.io/gateway.update-strategy: digest
     argocd-image-updater.argoproj.io/website.update-strategy: digest
     argocd-image-updater.argoproj.io/docs.update-strategy: digest
     argocd-image-updater.argoproj.io/write-back-method: argocd

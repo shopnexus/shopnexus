@@ -1,15 +1,18 @@
-# DB bootstrap: runs `/app/migrate` (embedded migrations) before the app rolls
-# out. As an Argo CD PreSync hook it runs on every sync, before server/website
-# are updated; migrations are idempotent (golang-migrate tracks applied versions
-# per module in schema_migrations_<module>).
+# DB bootstrap: runs `/migrate` (embedded migrations) before the app rolls out.
+# As an Argo CD Sync hook at wave 1 it runs after wave-0 infra (postgres/redis/
+# nats) is healthy and before the wave-2 app rollout; migrations are idempotent
+# (applied versions are tracked per module in its own schema).
+#
+# It creates one Postgres schema per module (account, catalog, chat, common,
+# order, finance, observability, trust) and applies that module's migrations with
+# search_path pointed at it.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: db-migrate
   annotations:
-    # Sync hook at wave 1: runs during sync AFTER wave-0 infra (postgres/redis/
-    # restate) is healthy, and before the wave-2 app rollout. hook-delete-policy
-    # recreates it each sync (handles image changes; Jobs are immutable).
+    # hook-delete-policy recreates it each sync (handles image changes; Jobs are
+    # immutable).
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "1"
@@ -28,21 +31,19 @@ spec:
         - name: migrate
           image: ghcr.io/shopnexus/server:main
           imagePullPolicy: Always
-          command: ["/app/migrate"]
-          # PreSync hook runs before the generated ConfigMap exists, so the
-          # Postgres connection is set explicitly here; only the (out-of-band)
-          # Secret is referenced. migrate needs just the DB connection.
+          command: ["/migrate"]
+          # cmd/migrate calls the same config.Load as the gateway, which validates
+          # EVERY field — so it needs the full environment, not just the DSNs.
+          # Supplying only the database connection fails validation on
+          # GATEWAY_ADDR, JWT_SECRET, ID_CIPHER_KEY, NATS_URL and the rest.
+          # The hook runs at wave 1, after the generated ConfigMap (wave 0) exists.
+          envFrom:
+            - configMapRef:
+                name: shopnexus-config
+            - secretRef:
+                name: shopnexus-secret
           env:
-            - name: APP_POSTGRES_HOST
-              value: postgres
-            - name: APP_POSTGRES_PORT
-              value: "5432"
-            - name: APP_POSTGRES_USERNAME
-              value: shopnexus
-            - name: APP_POSTGRES_DATABASE
-              value: shopnexus
-            - name: APP_POSTGRES_PASSWORD
+            - name: INSTANCE_ID
               valueFrom:
-                secretKeyRef:
-                  name: shopnexus-secret
-                  key: APP_POSTGRES_PASSWORD
+                fieldRef:
+                  fieldPath: metadata.name
