@@ -2047,11 +2047,6 @@ spec:
     repoURL: https://github.com/shopnexus/shopnexus.git
     targetRevision: main
     path: deploy/monitoring
-    kustomize:
-      # The Grafana dashboard ConfigMap is generated from the server submodule
-      # (deploy/monitoring/kustomization.yaml), which kustomize treats as outside
-      # its root. Argo initialises submodules on checkout, so the path resolves.
-      buildOptions: --load-restrictor LoadRestrictionsNone
   destination:
     server: https://kubernetes.default.svc
     namespace: shopnexus
@@ -2063,6 +2058,25 @@ spec:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
 ```
+
+**Correction found during implementation:** the load restrictor is **not** an
+Application field. `buildOptions` does not exist on
+`Application.spec.source.kustomize` — verified with
+`kubectl explain application.spec.source.kustomize.buildOptions`, which returns
+`field "buildOptions" does not exist`. Putting it there would be silently dropped
+by the CRD schema and the sync would fail on the submodule path.
+
+It is a **global** `argocd-cm` setting, applied out-of-band once (the same pattern
+as the existing bootstrap patches recorded in `deploy/argocd/ingress.yaml`):
+
+```bash
+kubectl -n argocd patch cm argocd-cm --type merge \
+  -p '{"data":{"kustomize.buildOptions":"--load-restrictor LoadRestrictionsNone"}}'
+kubectl -n argocd rollout restart deploy/argocd-repo-server
+```
+
+This relaxes the restriction for every Application on the cluster. Record it in the
+Application's header comment so the coupling is discoverable from the manifest.
 
 **Verify this assumption before trusting the sync:** Argo CD initialises git
 submodules on checkout by default (disabled only when
