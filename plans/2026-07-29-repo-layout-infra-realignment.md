@@ -921,32 +921,31 @@ because `docs/docker-compose.yml` declares `name: docs` and the including file's
 project name must win. If `docs` wins instead, remove the `name:` key from the
 docs submodule's compose file and re-verify.
 
-- [ ] **Step 4: Verify gateway and migrate are in the default profile**
+- [ ] **Step 4: Verify gateway and migrate are reachable**
 
-Compose's merge semantics for sequence fields are not uniform — an override list
-sometimes replaces and sometimes appends — so whether `profiles: []` actually
-clears the inherited `["app"]` must be measured, not assumed.
+**Measured outcome (2026-07-29): `profiles: []` does NOT clear the inherited
+`["app"]`.** The override is ignored and both services stay gated, so the root
+compose is a pure `include:` and the profile flag is required. This step records
+how that was established, because the obvious check gives a false pass.
 
 ```bash
 cd /home/beanbocchi/shopnexus
-docker compose config | grep -n 'profiles' || echo "NO-PROFILES (override worked)"
-docker compose config --services | grep -E '^(gateway|migrate)$'
+docker compose config --services | sort | tr '\n' ' '
+docker compose --profile app config --services | sort | tr '\n' ' '
 ```
 
-Expected: `NO-PROFILES (override worked)`, and both `gateway` and `migrate` listed.
+Expected: the first line omits `gateway` and `migrate`; the second includes them.
 
-**If `profiles` survives in the rendered output**, the override did not clear it.
-Do not fight it — remove the `services:` block from the root compose file
-entirely, leaving a pure `include:`, and document the profile flag instead:
+Do **not** verify this with `docker compose config | grep profiles`. Compose omits
+profile-gated services from the rendered output entirely, so the `profiles:` key
+is absent whether the override worked or not — the grep reports success in both
+cases. Read the service list instead, or inspect the merged service directly:
 
 ```bash
-docker compose --profile app up --build
+docker compose --profile app config | grep -A3 '^  gateway:'
 ```
 
-Then update the root compose header comment and the README command in Task 9,
-Step 2 to use `--profile app`. Record which of the two outcomes occurred in the
-commit message, so the next reader knows the flag is deliberate rather than
-forgotten.
+Expected: `profiles:` followed by `- app`, proving the inherited value survived.
 
 - [ ] **Step 5: Commit**
 
