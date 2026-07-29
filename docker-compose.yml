@@ -22,6 +22,8 @@ volumes:
   go-build-cache:
   website-node-modules:
   website-next:
+  embedding-venv:
+  embedding-cache:
 
 # Shared env for the Go binary (server) and the migration one-shot. Env vars
 # prefixed APP_ override the YAML config (viper AutomaticEnv), so a single set
@@ -38,10 +40,11 @@ x-server-env: &server-env
   APP_RESTATE_SERVICEPORT: "8082"
   APP_RESTATE_BESTEFFORTADDRESS: http://localhost:8083
   APP_PUBLIC_SITEURL: ${SITE_URL:-http://host.docker.internal}
+  APP_LLM_PYTHON_URL: http://embedding:5007
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg18-trixie
     environment:
       POSTGRES_USER: shopnexus
       POSTGRES_PASSWORD: peakshopnexuspassword
@@ -74,6 +77,8 @@ services:
 
   restate:
     image: docker.restate.dev/restatedev/restate:latest
+    ports:
+      - "5003:9070" # admin API + Web UI on host :5003 (8080=ingress, 5122=node stay internal)
     volumes:
       - restate-data:/restate-data
     environment:
@@ -83,6 +88,36 @@ services:
       RESTATE_ADVERTISED_ADDRESS: http://restate:5122
       RESTATE_AUTO_PROVISION: "true"
       RESTATE_DEFAULT_REPLICATION: 1
+    restart: unless-stopped
+
+  # Embedding microservice (Flask + BGE-M3/MGTE on CPU). Catalog calls it for
+  # hybrid-search embeddings (server reaches it via APP_LLM_PYTHON_URL above).
+  # No Dockerfile — the source runs on the official uv image. FIRST START IS SLOW:
+  # it installs torch and downloads the model; both are cached in volumes so
+  # subsequent starts are fast. Not a hard dep of the server — the catalog
+  # embedding worker calls it lazily and retries if it isn't ready yet.
+  embedding:
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    working_dir: /app
+    command: ["uv", "run", "python", "main.py"]
+    environment:
+      # Build the venv OUTSIDE the bind mount — the host's ./embedding/.venv is
+      # host-arch and would break inside the container.
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_CACHE_DIR: /cache/uv
+      HF_HOME: /cache/huggingface # persist the downloaded model across restarts
+    ports:
+      - "5007:5007" # optional: reach it from the host for testing
+    volumes:
+      - ./embedding:/app
+      - embedding-venv:/opt/venv
+      - embedding-cache:/cache
+    healthcheck:
+      test: ["CMD", "/opt/venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5007/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 600s # model download + load can take several minutes
     restart: unless-stopped
 
   # One-shot: apply DB migrations before the server starts (mirrors the k8s
