@@ -4,18 +4,19 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 
 ## Components
 
-| Path        | Repository                                | Description        |
-| ----------- | ----------------------------------------- | ------------------ |
-| `app`       | `shopnexus/app`                           | Mobile app (Flutter) |
-| `docs`      | `shopnexus/docs`                | Documentation      |
-| `embedding` | `shopnexus/embedding`                     | Embedding service (Python) |
-| `server`    | `shopnexus/server`                        | Backend (Go)       |
-| `website`   | `shopnexus/website`                       | Web frontend (Next.js) |
+| Path      | Repository         | Description            |
+| --------- | ------------------ | ---------------------- |
+| `app`     | `shopnexus/app`     | Mobile app (Flutter)   |
+| `docs`    | `shopnexus/docs`    | Documentation          |
+| `server`  | `shopnexus/server`  | Backend (Go)           |
+| `website` | `shopnexus/website` | Web frontend (Next.js) |
 
 ## Clone
 
+Submodules use HTTPS URLs, so this needs no SSH key:
+
 ```bash
-git clone --recurse-submodules git@github.com:shopnexus/shopnexus.git
+git clone --recurse-submodules https://github.com/shopnexus/shopnexus.git
 ```
 
 If you already cloned without submodules:
