@@ -225,6 +225,20 @@ becomes a build artifact, fetched by the docs Dockerfile and git-ignored.
 Note: the Swagger UI page in `api/api.go` loads its JS and CSS from the unpkg
 CDN, so `/docs` breaks in an environment without outbound internet access.
 
+### Correction: fetch in CI, not in a `RUN` layer
+
+The first implementation put `curl` in a Dockerfile `RUN`. That is wrong and was
+caught in production: Docker caches a `RUN` by its **instruction text**, so with
+`cache-from: type=gha` the layer is reused forever and the spec freezes at whatever
+the first build fetched. The docs site kept serving `baseUrlOptions: ["/"]` through
+a successful rebuild, which looks identical to a working build.
+
+The spec is now fetched by a **CI step** and arrives through the existing
+`COPY docs/`. A COPY layer is content-addressed, so it invalidates exactly when the
+spec changes — no cache-busting argument needed. The Dockerfile keeps a guard that
+fails loudly if the file is absent, since it is git-ignored and a missing spec would
+otherwise render an API reference with no operations.
+
 ### Gap in this design: nothing rebuilds docs when the spec changes
 
 Fetching at build time removes drift *within* a build but introduces staleness
