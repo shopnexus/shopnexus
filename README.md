@@ -33,11 +33,27 @@ git submodule update --remote --merge
 
 ## Development
 
-Each component runs itself locally from its own repo:
+The whole system, from here. The root `docker-compose.yml` defines no services of
+its own — it `include:`s each submodule's compose file, so infra versions have one
+source of truth:
 
 ```bash
-cd server  && docker compose up   # backend + postgres + redis + restate + minio
-cd website && docker compose up    # frontend (or `bun dev` for hot reload)
+docker compose --profile app up --build   # infra + gateway + storefront + docs
+docker compose up -d                      # infra only (db, redis, nats, grafana, loki, alloy)
+```
+
+`--profile app` is required because the server's compose keeps `gateway` and
+`migrate` behind that profile, and Compose does not let an including file clear an
+inherited profile list.
+
+A single component, from its own repo — this is how each submodule is meant to be
+worked on, and needs nothing from the umbrella:
+
+```bash
+cd server  && docker compose up -d                          # infra only; run `go run ./cmd/gateway` on the host
+cd server  && docker compose --profile app up -d --build    # infra + gateway + migrations
+cd website && docker compose up                             # storefront, hot reload
+cd docs    && docker compose up --build                     # docs site (nginx)
 ```
 
 ## Deployment (CI/CD)
@@ -47,7 +63,7 @@ in its submodule repo; Argo CD in the cluster syncs `deploy/k8s`. Full
 architecture, flow diagram, and bootstrap steps: **[`deploy/README.md`](deploy/README.md)**.
 
 ```
-git push (server/website) → GitHub Actions → GHCR :main
+git push (server/website/docs) → GitHub Actions → GHCR :main
    → Argo CD Image Updater (digest) → Argo CD sync (wave-ordered)
-   → k3d → Traefik ingress → Caddy (TLS) → shopnexus.hopto.org
+   → k3d → Traefik ingress → Caddy (TLS) → shop.toanehihi.io.vn
 ```
