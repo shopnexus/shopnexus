@@ -1,12 +1,6 @@
-// Discover pods in the shopnexus namespace via the Kubernetes API and ship their
-// logs to Loki, labelled so Grafana can filter e.g. {service="gateway"}.
-//
-// This is the KUBERNETES config. The server repo has its own dev config
-// (server/dev/alloy/config.alloy) that tails Docker containers over docker.sock —
-// the two mechanisms are not interchangeable, which is why these are two files
-// rather than one shared one.
-//
-// App logs are JSON (slog); parse them at query time in Grafana with `| json`.
+// Kubernetes log collection: discover pods via the API, ship to Loki labelled so
+// Grafana can filter e.g. {service="gateway"} | json.
+// The dev equivalent (server/dev/alloy/config.alloy) uses docker.sock instead.
 
 discovery.kubernetes "pods" {
 	role = "pod"
@@ -24,8 +18,7 @@ discovery.relabel "pods" {
 		target_label  = "namespace"
 	}
 
-	// app.kubernetes.io/name is set on every workload in deploy/k8s/base, so this
-	// yields gateway / website / docs / postgres / redis / nats.
+	// Every workload sets app.kubernetes.io/name, so this yields gateway/website/etc.
 	rule {
 		source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
 		target_label  = "service"

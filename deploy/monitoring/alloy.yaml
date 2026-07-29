@@ -1,9 +1,5 @@
-# Grafana Alloy — discovers pods via the Kubernetes API and ships their logs to
-# Loki. DaemonSet so each node's pods are collected locally.
-#
-# The ClusterRole is not optional: discovery.kubernetes calls the API server and
-# loki.source.kubernetes reads pods/log. Without it the pod starts and silently
-# ships nothing.
+# Alloy ships pod logs to Loki; DaemonSet so each node is collected locally.
+# The ClusterRole is required — without it Alloy starts and silently ships nothing.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

@@ -1,24 +1,12 @@
 # Argo CD Application for the monitoring stack (Loki + Alloy + Grafana over
 # TimescaleDB). No Prometheus — metrics go straight into hypertables.
 #
-# Kept as a SEPARATE Application from the main `shopnexus` app so monitoring is
-# optional and its health never gates the app rollout. No Image Updater: the
-# images are pinned upstream tags (grafana/grafana, grafana/loki, grafana/alloy),
-# bumped by editing deploy/monitoring and pushing.
+# Separate from the main app so monitoring never gates the app rollout. Images are
+# pinned upstream tags — no Image Updater.
 #
-# REQUIRES an out-of-band cluster setting. This kustomization generates the Grafana
-# dashboard ConfigMap from the server submodule, which kustomize treats as outside
-# its root. `--load-restrictor` is NOT a field on Application.spec.source.kustomize
-# (verified against the CRD) — it is global, in the argocd-cm ConfigMap:
-#
-#   kubectl -n argocd patch cm argocd-cm --type merge \
-#     -p '{"data":{"kustomize.buildOptions":"--load-restrictor LoadRestrictionsNone"}}'
-#   kubectl -n argocd rollout restart deploy/argocd-repo-server
-#
-# Note this relaxes the restriction for EVERY Application on the cluster, not just
-# this one. Acceptable on a single-tenant cluster; on a shared one, prefer copying
-# the dashboard into this directory and adding CI that diffs it against the
-# submodule.
+# Needs two out-of-band cluster settings, since the dashboard ConfigMap is generated
+# from the server submodule — see deploy/monitoring/README.md "The dashboard comes
+# from the server submodule".
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
