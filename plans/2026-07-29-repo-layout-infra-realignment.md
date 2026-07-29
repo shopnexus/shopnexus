@@ -1431,6 +1431,58 @@ Add in their place:
           # SITE_URL below is the documented contract for SEO/canonical work.
 ```
 
+- [ ] **Step 7c: Strip the `/api` prefix at Traefik**
+
+Repointing the ingress backend is not enough, and this was missed on the first
+pass — every `/api/*` call returned 404 after the sync.
+
+The old server served under `/api/v1`. The new gateway mounts all 168 routes at the
+**root** (`POST /login`, `GET /openapi.yaml`) and its OpenAPI document declares
+`servers: url: /`. So `/api/openapi.yaml` arrives at the gateway unchanged and
+matches nothing.
+
+Keep `/api` as the *public* path — that is what makes browser calls same-origin
+with no CORS — and strip it before the request reaches the gateway:
+
+```yaml
+# API group is traefik.containo.us, NOT traefik.io: k3s ships Traefik 2.11, which
+# reads the containo.us group. Creating this under traefik.io succeeds (the CRD
+# exists) but Traefik never sees it and logs
+# `middleware "shopnexus-strip-api-prefix@kubernetescrd" does not exist`.
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-prefix
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+```
+
+and reference it from the Ingress:
+
+```yaml
+    traefik.ingress.kubernetes.io/router.middlewares: shopnexus-strip-api-prefix@kubernetescrd
+```
+
+The annotation attaches to **every** router the Ingress produces, including
+`/` → website. That is harmless — `stripPrefix` only strips a prefix that matches,
+and `/api/*` is claimed by the higher-priority `/api` router — but verify the
+storefront still serves after applying, rather than assuming it.
+
+Verify all four routes through the k3d edge:
+
+```bash
+for r in "main.internal /api/openapi.yaml" "main.internal /" "main.internal /cart" "docs.internal /"; do
+  set -- $r; echo "$2 -> $(curl -sS -o /dev/null -w '%{http_code}' -H "Host: $1" "http://localhost:8080$2")"
+done
+```
+
+Expected: `200` for all four. Measured after the fix: `/api/openapi.yaml` 200,
+`/` 200, `/cart` 200, docs 200. `POST /api/login` returns `501` — the route is
+reached and the handler is a backend stub, which is a backend implementation state,
+not a routing failure.
+
 - [ ] **Step 8: Repoint the ingress at the gateway**
 
 In `deploy/k8s/base/ingress.yaml`, the `/api` path backend becomes:
