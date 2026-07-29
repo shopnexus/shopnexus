@@ -29,17 +29,15 @@ spec:
         - name: gateway
           image: ghcr.io/shopnexus/server:main
           imagePullPolicy: Always
-          # Non-secret config from the ConfigMap, DSNs and keys from the Secret.
-          # Every field is `required` — a missing key crashes at startup.
+          # Non-secret from the ConfigMap, DSNs and keys from the Secret. Every field
+          # is `required` — a missing key crashes at startup.
           envFrom:
             - configMapRef:
                 name: shopnexus-config
             - secretRef:
                 name: shopnexus-secret
           env:
-            # Tags every telemetry row with the pod that produced it. Without a
-            # per-pod value, replicas collapse into one meaningless series, which
-            # is why config.go makes this required rather than defaulting it.
+            # Per-pod, else replicas collapse into one telemetry series.
             - name: INSTANCE_ID
               valueFrom:
                 fieldRef:
@@ -47,9 +45,7 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          # tcpSocket, not httpGet: the router exposes no /healthz yet — it serves
-          # only /openapi.yaml and /docs. Switch both probes to httpGet once the
-          # backend adds a health endpoint.
+          # tcpSocket, not httpGet: the router has no /healthz yet.
           readinessProbe:
             tcpSocket:
               port: 8080

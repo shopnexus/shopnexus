@@ -1,18 +1,11 @@
-# DB bootstrap: runs `/migrate` (embedded migrations) before the app rolls out.
-# As an Argo CD Sync hook at wave 1 it runs after wave-0 infra (postgres/redis/
-# nats) is healthy and before the wave-2 app rollout; migrations are idempotent
-# (applied versions are tracked per module in its own schema).
-#
-# It creates one Postgres schema per module (account, catalog, chat, common,
-# order, finance, observability, trust) and applies that module's migrations with
-# search_path pointed at it.
+# Runs `/migrate` (embedded, idempotent) as a wave-1 Sync hook: after wave-0 infra is
+# healthy, before the wave-2 app rollout. Creates one Postgres schema per module.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: db-migrate
   annotations:
-    # hook-delete-policy recreates it each sync (handles image changes; Jobs are
-    # immutable).
+    # hook-delete-policy recreates it each sync — Jobs are immutable.
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "1"
@@ -32,11 +25,8 @@ spec:
           image: ghcr.io/shopnexus/server:main
           imagePullPolicy: Always
           command: ["/migrate"]
-          # cmd/migrate calls the same config.Load as the gateway, which validates
-          # EVERY field — so it needs the full environment, not just the DSNs.
-          # Supplying only the database connection fails validation on
-          # GATEWAY_ADDR, JWT_SECRET, ID_CIPHER_KEY, NATS_URL and the rest.
-          # The hook runs at wave 1, after the generated ConfigMap (wave 0) exists.
+          # Full env, not just the DSNs: cmd/migrate calls the same config.Load as the
+          # gateway, so it validates every field.
           envFrom:
             - configMapRef:
                 name: shopnexus-config

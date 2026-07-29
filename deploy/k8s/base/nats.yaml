@@ -1,10 +1,6 @@
-# NATS with JetStream — buffers observability telemetry between the Sink
-# (publisher) and the batching writer (consumer), so a slow or down database
-# never blocks a request and queued samples survive a restart.
-#
-# StatefulSet, not Deployment: the JetStream store is durable state, and a stable
-# volume identity matters. `-m 8222` serves the monitoring endpoint used by the
-# probes. Domain events do NOT go through here — those are Redis Streams.
+# NATS/JetStream buffers observability telemetry so a slow database never blocks a
+# request and queued samples survive a restart. StatefulSet because that store is
+# durable state. Domain events do NOT go through here — those are Redis Streams.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
