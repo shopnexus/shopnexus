@@ -225,6 +225,25 @@ becomes a build artifact, fetched by the docs Dockerfile and git-ignored.
 Note: the Swagger UI page in `api/api.go` loads its JS and CSS from the unpkg
 CDN, so `/docs` breaks in an environment without outbound internet access.
 
+### Gap in this design: nothing rebuilds docs when the spec changes
+
+Fetching at build time removes drift *within* a build but introduces staleness
+*between* builds: the docs image only picks up a new spec when something pushes to
+the docs repo. A server-side spec change leaves the published API reference stale
+indefinitely, and it looks correct — which is worse than an obviously broken page.
+
+Observed on 2026-07-29: the `/api/v1` change landed on `server` at ~03:56 while the
+last docs build was 03:12, so the published reference kept advertising
+`servers: url: /`.
+
+Two ways to close it, neither yet implemented:
+
+- **`repository_dispatch` from server CI** → docs rebuild on every spec change.
+  Accurate, but cross-repo dispatch cannot use `GITHUB_TOKEN`; it needs a PAT
+  stored as a secret in the server repo.
+- **Scheduled rebuild** in the docs workflow (for example daily `cron`). No secret
+  and no coupling, but the reference can lag by the schedule interval.
+
 ## Decisions
 
 - **`embedding` is removed from the umbrella.** The server reaches LLMs through
