@@ -2214,6 +2214,42 @@ git commit -m "docs: describe new topology; bump submodule pointers"
 git push origin main
 ```
 
+- [ ] **Step 6b: Clear the two resources Argo CD cannot patch in place**
+
+A server-side dry-run against the live cluster (2026-07-29) surfaced two
+apply-time conflicts. Neither is a manifest defect — the same manifests validate
+cleanly with exit 0 in a fresh namespace — but both block a sync against the
+*existing* objects:
+
+1. **`persistentvolumeclaim/postgres-data` cannot be resized.** k3d's `local-path`
+   StorageClass does not support expansion, so raising 5Gi → 20Gi is rejected with
+   "only dynamically provisioned pvc can be resized". The volume has to be
+   recreated. This is safe here only because the owner explicitly accepted losing
+   the dev data — and the data was unreadable anyway, since the TimescaleDB image
+   moves `PGDATA` from `/var/lib/postgresql/data` to `/home/postgres/pgdata/data`.
+
+2. **`job.batch/db-migrate` has an immutable `spec.template`.** `kubectl apply`
+   cannot patch it. Argo CD does not hit this: `hook-delete-policy:
+   BeforeHookCreation` deletes the Job before recreating it. No action needed —
+   recorded so the dry-run error is not mistaken for a defect later.
+
+Before the sync, remove the old Postgres objects so they are recreated from the
+new spec:
+
+```bash
+kubectl -n shopnexus delete deploy/postgres --ignore-not-found
+kubectl -n shopnexus delete pvc/postgres-data --ignore-not-found
+```
+
+The PVC delete blocks until no pod mounts it, which is why the Deployment goes
+first. Also delete the workloads being renamed away, so Argo CD's prune has
+nothing to race with:
+
+```bash
+kubectl -n shopnexus delete deploy/server svc/server --ignore-not-found
+kubectl -n shopnexus delete deploy/restate svc/restate pvc/restate-data --ignore-not-found
+```
+
 - [ ] **Step 7: Watch the first Argo CD sync**
 
 The commit above is what the cluster reacts to. Confirm it converges rather than

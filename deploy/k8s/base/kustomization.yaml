@@ -7,8 +7,8 @@ resources:
   - namespace.yaml
   - postgres.yaml
   - redis.yaml
-  - restate.yaml
-  - server.yaml
+  - nats.yaml
+  - gateway.yaml
   - website.yaml
   - docs.yaml
   - ingress.yaml

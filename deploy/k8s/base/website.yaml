@@ -27,8 +27,8 @@ spec:
         - name: website
           image: ghcr.io/shopnexus/website:main
           imagePullPolicy: Always
-          # NEXT_PUBLIC_API_URL / NEXT_PUBLIC_SITE_URL are inlined at BUILD time
-          # (baked by the website CI build-args), not set here at runtime.
+          # The storefront reads no env vars today (no process.env references).
+          # SITE_URL below is the documented contract for SEO/canonical work.
           env:
             - name: PORT
               value: "3000"

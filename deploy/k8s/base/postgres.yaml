@@ -6,7 +6,10 @@ spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 5Gi
+      # 20Gi: telemetry hypertables grow faster than the old relational-only
+      # schema. k3d's local-path class cannot expand in place — this applies to a
+      # fresh volume, not an existing one.
+      storage: 20Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,7 +33,10 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: pgvector/pgvector:pg17
+          # timescaledb-ha, not plain postgres or pgvector: the migrations need
+          # timescaledb, timescaledb_toolkit, vector, postgis, pg_trgm and
+          # unaccent. Only the -ha image bundles all six.
+          image: timescale/timescaledb-ha:pg18
           ports:
             - containerPort: 5432
           env:
@@ -42,9 +48,9 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: shopnexus-secret
-                  key: APP_POSTGRES_PASSWORD   # single source key (shared with the app)
+                  key: POSTGRES_PASSWORD       # single source key (shared with the app)
             - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
+              value: /home/postgres/pgdata/data
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U shopnexus -d shopnexus"]
@@ -64,7 +70,7 @@ spec:
               memory: 2Gi
           volumeMounts:
             - name: postgres-data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /home/postgres/pgdata
       volumes:
         - name: postgres-data
           persistentVolumeClaim:

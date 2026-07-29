@@ -4,7 +4,7 @@
 #   shop.<domain>    { reverse_proxy localhost:8080 { header_up Host main.internal } }
 #   docs.<domain>    { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 #
-# main.internal = the storefront: /api -> server (so the website's same-origin
+# main.internal = the storefront: /api -> gateway (so the website's same-origin
 # /api/v1 calls work), / -> website. The API is NOT on a separate subdomain —
 # first-party browser calls stay same-origin (no CORS).
 apiVersion: networking.k8s.io/v1
@@ -22,9 +22,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: server
+                name: gateway
                 port:
-                  number: 5005
+                  number: 8080
           - path: /
             pathType: Prefix
             backend:

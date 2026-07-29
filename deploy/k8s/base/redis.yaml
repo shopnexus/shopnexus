@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:8-alpine
+          image: redis:7
           args:
             - "redis-server"
             - "--appendonly"
@@ -42,7 +42,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: shopnexus-secret
-                  key: APP_REDIS_PASSWORD   # single source key (shared with the app)
+                  key: REDIS_PASSWORD   # single source key (shared with the app)
           ports:
             - containerPort: 6379
           readinessProbe:

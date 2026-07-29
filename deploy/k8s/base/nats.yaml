@@ -1,0 +1,80 @@
+# NATS with JetStream — buffers observability telemetry between the Sink
+# (publisher) and the batching writer (consumer), so a slow or down database
+# never blocks a request and queued samples survive a restart.
+#
+# StatefulSet, not Deployment: the JetStream store is durable state, and a stable
+# volume identity matters. `-m 8222` serves the monitoring endpoint used by the
+# probes. Domain events do NOT go through here — those are Redis Streams.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/part-of: shopnexus
+spec:
+  replicas: 1
+  serviceName: nats
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nats
+        app.kubernetes.io/part-of: shopnexus
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.10-alpine
+          args: ["-js", "-sd", "/data", "-m", "8222"]
+          ports:
+            - name: client
+              containerPort: 4222
+            - name: monitor
+              containerPort: 8222
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8222
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8222
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: nats-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: nats-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+spec:
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: 4222
+    - name: monitor
+      port: 8222
+      targetPort: 8222
