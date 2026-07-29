@@ -1389,6 +1389,27 @@ Replace the container block's `command` and `env` with:
 Also update the file's header comment: it says `/app/migrate` and lists
 `postgres/redis/restate` as wave-0 infra. Restate is gone; NATS replaces it.
 
+- [ ] **Step 7b: Remove the stale build-arg comment from `website.yaml`**
+
+`deploy/k8s/base/website.yaml` claims:
+
+```yaml
+          # NEXT_PUBLIC_API_URL / NEXT_PUBLIC_SITE_URL are inlined at BUILD time
+          # (baked by the website CI build-args), not set here at runtime.
+```
+
+This is false for the rewritten storefront: it contains no `NEXT_PUBLIC_*`
+reference and no `process.env` at all, and the CI workflow added in Task 2 passes
+no build args. Delete those two comment lines. Leave the `SITE_URL` env wiring
+below them in place — it is unread today but is the documented contract.
+
+Add in their place:
+
+```yaml
+          # The storefront reads no env vars today (no process.env references).
+          # SITE_URL below is the documented contract for SEO/canonical work.
+```
+
 - [ ] **Step 8: Repoint the ingress at the gateway**
 
 In `deploy/k8s/base/ingress.yaml`, the `/api` path backend becomes:
