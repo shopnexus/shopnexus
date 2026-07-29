@@ -100,8 +100,15 @@ series.
 **Removed from the umbrella:** `APP_ENV`, `APP_PUBLIC_SITEURL`,
 `APP_LLM_PYTHON_URL`, `APP_RESTATE_*`, `APP_EXCHANGE_APIKEY`, `APP_VNPAY_*`.
 
-`SITE_URL` and `DOCS_URL` stay, but now only `website` and `docs` consume them —
-the server no longer reads any public URL.
+`SITE_URL` and `DOCS_URL` stay, but the server no longer reads any public URL.
+
+One correction found while planning: the rewritten `website` contains no
+`process.env` reference at all, so it does not consume `SITE_URL` either — the
+codebase has not reached SEO/canonical work yet. The variable stays in the
+ConfigMap and stays wired into the website Deployment, because that is the
+documented contract and the rewrite will need it, but it is currently unread.
+Nothing in the system reads `DOCS_URL` either; it is documentation of the Caddy
+edge, not an application input.
 
 ## Dev stack
 
@@ -194,6 +201,12 @@ docs build → fetch raw.githubusercontent.com/shopnexus/server/main/api/openapi
 
 No cross-repo token, and drift is structurally impossible. A copy in `docs` would
 go stale the first time anyone edited a handler.
+
+This is not hypothetical: `docs/docs/api/openapi.yaml` is **already a committed
+copy**, wired into `docs.json` as the "HTTP Gateway" group. It happens to be
+byte-identical to the server's generated file today, which means someone copied it
+by hand recently — the mechanism is manual, so drift is a matter of time. The file
+becomes a build artifact, fetched by the docs Dockerfile and git-ignored.
 
 Note: the Swagger UI page in `api/api.go` loads its JS and CSS from the unpkg
 CDN, so `/docs` breaks in an environment without outbound internet access.
