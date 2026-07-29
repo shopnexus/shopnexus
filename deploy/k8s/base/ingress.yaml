@@ -4,37 +4,17 @@
 #   shop.<domain>    { reverse_proxy localhost:8080 { header_up Host main.internal } }
 #   docs.<domain>    { reverse_proxy localhost:8080 { header_up Host docs.internal } }
 #
-# main.internal = the storefront: /api -> gateway (so the website's same-origin
-# /api/v1 calls work), / -> website. The API is NOT on a separate subdomain —
-# first-party browser calls stay same-origin (no CORS).
+# main.internal = the storefront: /api -> gateway, / -> website. The API is NOT on
+# a separate subdomain — first-party browser calls stay same-origin (no CORS).
 #
-# `/api` is a PUBLIC path only. The gateway mounts every route at the ROOT
-# (`POST /login`, `GET /openapi.yaml`, …) and its OpenAPI document declares
-# `servers: url: /`, so the prefix must be stripped before the request reaches it —
-# otherwise every /api/* call 404s. That is this middleware's whole job. Keeping
-# the public prefix is what makes browser calls same-origin (no CORS) while the
-# backend stays mounted at root.
-# API group is traefik.containo.us, NOT traefik.io: k3s ships Traefik 2.11, which
-# reads the containo.us group. Creating this under traefik.io succeeds (the CRD
-# exists) but Traefik never sees it and logs
-# `middleware "shopnexus-strip-api-prefix@kubernetescrd" does not exist`.
-apiVersion: traefik.containo.us/v1alpha1
-kind: Middleware
-metadata:
-  name: strip-api-prefix
-spec:
-  stripPrefix:
-    prefixes:
-      - /api
----
+# No prefix rewriting: the gateway serves under /api/v1 itself (api.BasePath), so
+# the path passes through untouched.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: shopnexus
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    # <namespace>-<middleware>@kubernetescrd is Traefik's reference format.
-    traefik.ingress.kubernetes.io/router.middlewares: shopnexus-strip-api-prefix@kubernetescrd
 spec:
   rules:
     - host: main.internal
