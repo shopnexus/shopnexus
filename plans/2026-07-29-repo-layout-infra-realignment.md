@@ -371,16 +371,35 @@ git push origin main
 
 Check the artifact, not just the workflow's exit status — a green run that pushed
 to the wrong tag still leaves the deployment broken. GHCR packages for these repos
-are public, so this needs no credentials:
+are public, so this needs no credentials.
+
+**`docker manifest inspect` alone is not a valid check here.** A
+`ghcr.io/shopnexus/website:main` tag already exists, built 2026-07-12 by the CI
+that the rewrite deleted — and its `CMD` and `PORT`/`HOSTNAME` env are identical
+to the new image's, so nothing about its shape reveals that it is stale. A
+tag-exists check passes instantly against that stale image and would wave Phase 3
+through onto a 17-day-old storefront.
+
+Verify **freshness**, by reading the image's build timestamp:
 
 ```bash
-docker manifest inspect ghcr.io/shopnexus/website:main >/dev/null \
-  && echo "IMAGE-PUBLISHED" || echo "NOT-YET — wait for CI or check the run"
+T=$(curl -s "https://ghcr.io/token?scope=repository:shopnexus/website:pull&service=ghcr.io" \
+      | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+IDX=$(curl -s -H "Authorization: Bearer $T" \
+      -H "Accept: application/vnd.oci.image.index.v1+json" \
+      https://ghcr.io/v2/shopnexus/website/manifests/main)
+PM=$(python3 -c "import json,sys;print(json.loads(sys.argv[1])['manifests'][0]['digest'])" "$IDX")
+CFGD=$(curl -s -H "Authorization: Bearer $T" \
+      -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+      "https://ghcr.io/v2/shopnexus/website/manifests/$PM" \
+      | python3 -c 'import sys,json;print(json.load(sys.stdin)["config"]["digest"])')
+curl -s -L -H "Authorization: Bearer $T" \
+      "https://ghcr.io/v2/shopnexus/website/blobs/$CFGD" \
+      | python3 -c 'import sys,json;print("image created:",json.load(sys.stdin)["created"])'
 ```
 
-Expected: `IMAGE-PUBLISHED`. Do not proceed to Phase 3 until it appears — the
-umbrella's `website.yaml` will otherwise reference a tag that does not exist and
-the pod will sit in `ImagePullBackOff`.
+Expected: a `created` timestamp from **after** the Task 2 push, not `2026-07-12`.
+Do not proceed to Phase 3 until it is fresh.
 
 `gh` is not authenticated in this environment, so `gh run list` will fail. If you
 need the run log, authenticate first by typing `! gh auth login` in the session,
@@ -654,11 +673,14 @@ And insert, immediately after `WORKDIR /build/docs`:
 # -f so a 404 fails the build instead of writing an HTML error page into the spec.
 ARG OPENAPI_URL=https://raw.githubusercontent.com/shopnexus/server/main/api/openapi.gen.yaml
 RUN curl -fsSL "$OPENAPI_URL" -o api/openapi.yaml \
- && head -1 api/openapi.yaml | grep -q '^openapi:' \
+ && grep -q '^openapi: ' api/openapi.yaml \
  && echo "openapi spec fetched: $(wc -c < api/openapi.yaml) bytes"
 ```
 
-The `head -1 | grep` guard catches a 200 response that is not actually a spec.
+The `grep` guard catches a 200 response that is not actually a spec. It scans the
+whole file, not the first line: `specgen` emits root keys alphabetically, so the
+document opens with `components:` and `openapi: 3.0.3` sits around line 3939. A
+`head -1` guard would fail on a perfectly good spec.
 
 - [ ] **Step 5: Build the docs image and verify the spec was fetched**
 

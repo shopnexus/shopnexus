@@ -37,3 +37,8 @@ tmp/
 # k8s secret env (never commit)
 secret.env
 deploy/k8s/base/secret.env
+
+# Former submodule: the backend now reaches LLMs via internal/provider/llm/litellm,
+# so `embedding` is no longer a component of the system. The directory may still be
+# present in an older working tree — it is not tracked here.
+embedding/
