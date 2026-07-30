@@ -52,7 +52,7 @@ This resolves each open question consistently rather than case by case.
 
 | Artifact | Owner | Reason |
 |---|---|---|
-| `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml` | server | the code decides which infra versions it needs |
+| `Dockerfile` (stages `build`/`dev`/`runtime`), `docker-compose.yml`, `docker-compose.dev.yml`, `.air.toml` | server | the code decides which infra versions it needs |
 | Embedded migrations | server | schema is code |
 | `api/openapi.gen.yaml` + drift-check CI | server | generated from handlers |
 | Grafana dashboards + datasource provisioning | server | queries target the `observability` schema; schema change and dashboard change belong in one commit |
@@ -111,6 +111,38 @@ Nothing in the system reads `DOCS_URL` either; it is documentation of the Caddy
 edge, not an application input.
 
 ## Dev stack
+
+### One Dockerfile, named stages
+
+Dev tooling lives in the **same** Dockerfile as production, as a `dev` stage, not in
+a separate `Dockerfile.dev`. Two files describing one toolchain is the drift pattern
+this whole design exists to remove — and it is the pattern that produced every real
+bug found while implementing it.
+
+- `build` — deps + static binaries.
+- `dev` — Go toolchain + `air`. Deliberately not derived from `build`: source
+  arrives as a bind mount, so a `COPY` would be shadowed.
+- `runtime` — distroless, last stage.
+
+**CI builds `runtime` explicitly.** Relying on "the last stage is the default" means
+a stage appended later silently ships the Go toolchain in the production image.
+Measured: `runtime` 39 MB with no shell, `dev` 388 MB.
+
+Three dev modes, chosen by task rather than by preference. `--profile dev` and
+`--profile app` both publish host port 5000, so they are alternatives:
+
+| Mode | Use when | Cost |
+|---|---|---|
+| infra only + `go run ./cmd/gateway` on the host | normal Go iteration | fastest — native build cache; logs go to the terminal, not Loki |
+| `--profile dev` (air in the `dev` stage) | logs must reach Loki, or observability is under test | ~4s rebuild on save, measured |
+| `--profile app` | final check before pushing | builds the real `runtime` image; no hot reload |
+
+Dev deliberately stays **outside** the k3d cluster — no Skaffold or Tilt. Compose
+already covers iteration; k3d's job is to verify the deploy. Iterating inside the
+cluster invites editing manifests for dev convenience, which is where dev and prod
+start to diverge.
+
+### The root compose file
 
 The root compose file stops redefining infrastructure and composes the submodule
 files instead, so infra versions have exactly one source of truth:
@@ -239,6 +271,27 @@ spec changes — no cache-busting argument needed. The Dockerfile keeps a guard 
 fails loudly if the file is absent, since it is git-ignored and a missing spec would
 otherwise render an API reference with no operations.
 
+### Two API doc surfaces, split by purpose
+
+The gateway serves its own Swagger UI at `/api/v1/docs`, embedded from the same
+spec the router serves. The Mintlify site renders that spec too. Rather than pick
+one, they split by what each is good at:
+
+- **Gateway `/api/v1/docs` — trying.** Same-origin with the API, so live requests
+  need no CORS, no proxy and no absolute URL in the spec. Embedded in the binary,
+  so it cannot drift from the routes.
+- **Mintlify `api-reference/*` — reading.** Indexed, browsable without a running
+  backend, sits next to the architecture prose. `api.playground.display: "simple"`
+  turns off the Send button.
+
+That last setting is not cosmetic. Mintlify's playground proxies requests through
+`/_mintlify/api/request`, which exists only on their hosted platform — a static
+`mint export` behind nginx 404s on it. Turning the proxy off instead would need
+three further changes: an absolute server URL in the spec (putting the public
+domain into a document the design keeps domain-free), CORS on the gateway (which
+has none today), and accepting `Authorization` cross-origin. Not worth it while
+most handlers still answer 501.
+
 ### Gap in this design: nothing rebuilds docs when the spec changes
 
 Fetching at build time removes drift *within* a build but introduces staleness
@@ -250,13 +303,43 @@ Observed on 2026-07-29: the `/api/v1` change landed on `server` at ~03:56 while 
 last docs build was 03:12, so the published reference kept advertising
 `servers: url: /`.
 
-Two ways to close it, neither yet implemented:
+Two ways to close it:
 
 - **`repository_dispatch` from server CI** → docs rebuild on every spec change.
   Accurate, but cross-repo dispatch cannot use `GITHUB_TOKEN`; it needs a PAT
   stored as a secret in the server repo.
 - **Scheduled rebuild** in the docs workflow (for example daily `cron`). No secret
   and no coupling, but the reference can lag by the schedule interval.
+
+**Resolved: dispatch.** The server's `build.yml` gained a `notify-docs` job that
+POSTs `spec-updated` to `shopnexus/docs`, which already listened for it. The
+scheduled option was not taken — a cron rebuild trades a correct trigger for a
+lag window, and the lag is the thing being fixed.
+
+The job degrades rather than fails when `DOCS_DISPATCH_TOKEN` is unset: it warns and
+exits 0, so a missing secret cannot block shipping the server. That is the right
+default here but it is worth naming, because the failure mode it leaves is silent
+staleness — the same one this section is about — and the only signal is a warning
+annotation on a green run.
+
+### Correction: the dispatch had to carry a sha
+
+The first version dispatched a bare event and let docs fetch `main`. That reproduced
+the staleness it was meant to fix, inside a five-minute window:
+`raw.githubusercontent` serves a branch ref with `cache-control: max-age=300`
+(verified: `curl -sI` on the `main` URL returns exactly that), while the dispatch
+arrives seconds after the push. The docs build could therefore fetch the *previous*
+spec, publish it, and never be triggered again — indistinguishable from success.
+
+The event now carries `client_payload.sha` and the docs build fetches that exact
+commit, falling back to `main` only for a build `docs` started itself. A sha URL is
+immutable content, so the CDN caching it is correct instead of a hazard.
+
+Not added, deliberately: gating `notify-docs` on the spec drift-check workflow. If
+someone pushes a fragment edit without running `go generate`, the committed spec is
+stale — but that is also the spec the *server* embeds and serves, so docs and server
+stay consistent with each other, and `openapi.yml` is already red. A guard would buy
+no additional guarantee.
 
 ## Decisions
 
