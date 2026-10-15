@@ -59,7 +59,9 @@ states. The app follows the deal model and `design-system.md`:
    yesterday at 18:00, which keeps "Gửi trước 18:00 thứ Sáu" on Đơn hàng,
    Đơn bán and Thông báo; its timeline reads "Hôm qua · 18:00" where the
    mockup says "Hôm nay · 09:12", and the countdown is live ("còn 26 giờ"
-   at 15:10 where the mockup says 31).
+   at 15:10 where the mockup says 31). Its Thông báo row moves with it to
+   "Hôm qua" at 18:00, so Thông báo holds 2 rows today, 3 yesterday and 2
+   earlier this week.
 6. Each listing keeps one id, one title and one seller (stage 2 ruling 3).
    The bike is `p-fixed` from Ngọc Hân and the iPhone X is `p-iphonex` from
    Hoàng Nam, with the pool's longer titles. The headphones are `p-xm4`,
