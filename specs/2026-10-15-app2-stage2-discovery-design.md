@@ -41,8 +41,9 @@ behaviour that `design-system.md` describes:
 3. One listing has one id, one title and one price everywhere. The pool in
    `common.py` and the stage 1 Home fixture describe the same items with
    different ids and, on Search results and Người bán, longer titles. The
-   pool keeps stage 1's ids (`l-<photo id>`, and `p-iphone13`) and the
-   longest title the mockups give an item.
+   pool uses `POOL`'s names (`p-iphonex`, `p-fixed`, …), which the iPhone 13
+   Pro's similar listings already used in stage 1, and the longest title the
+   mockups give an item; Home's fixtures move to those ids.
 4. Search is real over the pool. The mockups return results only for "xe
    đạp đi làm dưới 3 triệu" and show a preview notice for anything else.
    The fake reads every query with the same keyword tables and filters the
