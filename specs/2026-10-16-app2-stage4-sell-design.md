@@ -192,8 +192,8 @@ follows the deal model and `design-system.md`:
 | `:feature:listings` (new) | Tin của bạn and its sheets, Gói người bán | `:core:*` |
 | `:feature:orders` | grows Đơn bán for in-person orders and the code sheet | `:core:*` |
 | `:feature:deal` | Chat's seller console states and the counter sheet | `:core:*` |
-| `:core:ui` | the camera package grows a frame grabber, a torch and a lens switch; the listing card takes a meta line for previews; the step pill moves here from Home's hero | `:core:designsystem`, `:core:data`, `:core:navigation` |
-| `:core:designsystem` | grows the filled field with label, counter and error, the switch row, the checkbox row and the empty pane | |
+| `:core:ui` | the camera package grows a frame grabber, a torch and a lens switch | `:core:designsystem`, `:core:data`, `:core:navigation` |
+| `:core:designsystem` | grows the filled field with label, counter and error, the switch row, the checkbox row, the empty pane and the step pill; the listing card takes a meta line for previews | |
 
 New Material Symbols join `symbols.txt` and the generated font.
 
@@ -427,8 +427,9 @@ phá" (Kiểm tra tin).
 
 ### Step pill and camera
 
-The step pill of Home's hero moves to `:core:ui`: "Bước 1 trên 3: Quay" on
-Quay video (on black), "Bước 2 trên 3: Kiểm tra" on Kiểm tra tin. The camera
+The step pill is the mockups' row of three dots, the current one 24 dp wide
+and the others 8 dp, read as an image: "Bước 1 trên 3: Quay" on Quay video
+(on black), "Bước 2 trên 3: Kiểm tra" on Kiểm tra tin. The camera
 package keeps stage 3's binding and permission view and adds the frame
 grabber (an analyzer that saves one JPEG every 1.5 s to the cache), the torch
 and the lens switch.
