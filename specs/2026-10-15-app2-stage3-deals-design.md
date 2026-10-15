@@ -136,8 +136,8 @@ states. The app follows the deal model and `design-system.md`:
 | `:feature:inbox` (new) | Tin nhắn, the scam sheet | `:core:*` |
 | `:feature:orders` (new) | Đơn hàng, Chi tiết đơn, Giao COD, Đơn COD, Đơn bán, the order router | `:core:*` |
 | `:feature:deal` | Chat | `:core:*` |
-| `:core:ui` | grows a `deal` package shared by Chat and the order pages: the record sheet, the scanner, the check dialog, the "Hẹn gặp" sheet, the rating row, the order hero and timeline, the item and person rows | `:core:designsystem`, `:core:data`, `:core:navigation` |
-| `:core:designsystem` | grows the QR code drawing, the swipe row, the connected toggle group and a neutral milestone tone | |
+| `:core:ui` | grows a `deal` package shared by Chat and the order pages: the record sheet, the scanner, the check dialog, the "Hẹn gặp" sheet, the rating row, the order lines and actions, the item and person rows, the QR code drawing | `:core:designsystem`, `:core:data`, `:core:navigation` |
+| `:core:designsystem` | grows the status hero, the timeline, the swipe row, the connected toggle group, the status tag and a neutral milestone tone | |
 
 CameraX (`camera-camera2`, `camera-lifecycle`, `camera-compose`), ML Kit
 barcode scanning (bundled model) and ZXing core (encoding only) join the
