@@ -127,10 +127,27 @@ submodule after it runs.
 
 ## Code organisation
 
-A module is one Go package. A file holds one use case: its input and output
-types, the use case method, and the HTTP handler at the bottom. File names put
-the noun first (`auth_otp_send.go`, `auth_otp_verify.go`) so files about one
-entity sort together. `routes.go` lists every route of the package.
+A module is one Go package. A file holds one use case: a struct whose fields
+are the dependencies that use case needs, its input and output types, an
+`Execute` method, and a `Handler` method at the bottom when the use case has a
+route. File names put the noun first (`account_create.go`,
+`account_status.go`) so files about one entity sort together.
+
+```go
+type AccountRename struct {
+    Store Store
+    Tx    postgres.TxRunner
+    Now   func() time.Time
+}
+
+func (uc AccountRename) Execute(ctx context.Context, id uuid.UUID, in AccountRenameInput) (AccountView, error)
+func (uc AccountRename) Handler(log *slog.Logger) http.Handler
+```
+
+`routes.go` holds the module's `Deps` struct and `Routes(r, d)`, which builds
+every HTTP use case from `Deps`. Only `Routes` and `app.go` read `Deps`. A test
+fills only the fields of the use case under test, so a dependency added to one
+use case changes only that use case's tests.
 
 Each module has entity files (`account.go`), small store interfaces per
 aggregate (`account_store.go`), a Postgres adapter (`account_store_pg.go`) and,
@@ -147,10 +164,39 @@ it early for a better error, and the constraint is what holds.
 Entities keep fields unexported when an invariant protects them. The store
 lives in the same package and can still read and write them.
 
-A feature inside a module moves to a subpackage when the module passes about
-30 files. A subpackage owns its own tables and use cases. It imports its
-parent; the parent never imports a child, and siblings do not import each
-other.
+### Feature subpackages
+
+A module moves its features into subpackages when it passes about 30 files,
+not counting tests. `auth` starts with them: its endpoints alone come to 16
+use cases.
+
+A subpackage holds one aggregate: the entity, its store, the Postgres adapter,
+the rules that need only that aggregate, and a `<feature>test/` package with
+the fake and the contract suite. It has no HTTP handlers and does not open
+transactions; its methods take a `postgres.Querier`. It imports `platform` and
+nothing else from its module, so no subpackage imports a sibling.
+
+The parent package holds every use case. A use case opens the transaction,
+calls the subpackages in order and ends with its HTTP handler, so the sign-in
+flow (check the code, find or create the identity, create the account, issue a
+session) is read top to bottom in `auth/otp_verify.go`.
+
+```
+auth/
+  otp_send.go  otp_verify.go  password_login.go  ...  routes.go  middleware.go
+  otp/         OTP challenges
+  identity/    identities and the count behind the last-identity rule
+  password/    argon2id hashing, the passwords table
+  session/     sessions, refresh rotation, JWT signing and parsing
+  google/      ID token verification, nonces
+  throttle/    auth_throttle counters
+```
+
+`platform/contact` normalises phone numbers and email addresses.
+`contact.ParsePhone` and `contact.ParseEmail` return types that hold only
+normalised values, and `otp` and `identity` accept only those types.
+`UNIQUE (kind, value)` on identities depends on both packages normalising the
+same way.
 
 ## Module boundaries
 
@@ -162,14 +208,22 @@ sessions, Google sign-in, and the rule that an account keeps at least one
 identity.
 
 `auth` imports `account`; `account` never imports `auth`. Go rejects import
-cycles at compile time. `auth` declares the small interface it needs:
+cycles at compile time. `auth` declares one small interface for each
+`account` use case it calls, and `app.go` passes the use case in:
 
 ```go
-type accounts interface {
-    Create(ctx context.Context, q postgres.Querier, displayName string) (uuid.UUID, error)
-    Status(ctx context.Context, q postgres.Querier, id uuid.UUID) (account.Status, error)
+// auth/accounts.go
+type accountCreator interface {
+    Execute(ctx context.Context, q postgres.Querier, displayName string) (uuid.UUID, error)
+}
+
+type accountStatus interface {
+    Execute(ctx context.Context, q postgres.Querier, id uuid.UUID) (account.Status, error)
 }
 ```
+
+`account.AccountCreate` and `account.AccountStatus` satisfy these without
+naming them. Tests in `auth` pass fakes and never build an `account` store.
 
 Suspending an account changes `accounts.status` and calls nothing in `auth`.
 `auth` reads the status at login and at refresh.
@@ -198,6 +252,11 @@ Store methods take a `Querier`. Use cases take a `TxRunner`. A transaction is
 passed as an argument, never through `context`. A use case test passes a fake
 `TxRunner` that calls `fn(nil)`, and fake stores ignore the `Querier`.
 Rollback behaviour is tested in the Postgres adapter tests.
+
+A use case that reads a row, changes it and writes it back reads with the
+store's `GetForUpdate`, which adds `FOR UPDATE`. With a plain `Get`, a write
+committed between the read and the `Update` is lost: a rename that read the
+account before an admin suspended it would write `status = active` back.
 
 A transaction that spans modules (first sign-in creates an `accounts` row and
 an `identities` row) is opened by `auth` and the same `Querier` is passed to
@@ -795,7 +854,9 @@ Each step ends with a review by Claude before the next starts.
 | Who types the code | the user | wants to understand and control the backend |
 | Libraries | standard library first; pgx, go-oidc, kin-openapi, jwt, argon2, OTel, nats.go | Go needs few libraries |
 | SQL | hand-written | easier to control performance with AI help |
-| Layout | one file per use case, modules split into feature subpackages when large | `server`'s account module had 43 use cases |
+| Layout | one file per use case; large modules keep use cases in the parent and one aggregate per subpackage | `server`'s account module had 43 use cases |
+| Use case shape | a struct per use case holding only its dependencies, `Execute` plus `Handler` | each test builds only what its use case uses; close to the NestJS style the user knows |
+| Store transactions | stores take a `Querier` argument, no tx in `context`, no unit of work | the handle a statement runs on is visible at the call |
 | `account` and `auth` | two modules, `auth` imports `account` | identities and passwords belong to authentication |
 | Sessions | JWT access 15 min plus refresh tokens in Postgres, no revocation list | write use cases check status; reads may lag 15 min |
 | OTP concurrency | `SELECT ... FOR UPDATE`, no `version` column | `version` is for entities several people edit |
