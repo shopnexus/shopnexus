@@ -4,12 +4,12 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 
 ## Components
 
-| Path      | Repository         | Description            |
-| --------- | ------------------ | ---------------------- |
-| `app`     | `shopnexus/app`     | Mobile app (Flutter)   |
-| `docs`    | `shopnexus/docs`    | Documentation          |
-| `server`  | `shopnexus/server`  | Backend (Go)           |
-| `website` | `shopnexus/website` | Web frontend (Next.js) |
+| Path      | Repository              | Description            |
+| --------- | ----------------------- | ---------------------- |
+| `app`     | `shopnexus/app-android` | Android app (Kotlin)   |
+| `docs`    | `shopnexus/docs`        | Documentation          |
+| `server`  | `shopnexus/server`      | Backend (Go)           |
+| `website` | `shopnexus/website`     | Web frontend (Next.js) |
 
 ## Clone
 
