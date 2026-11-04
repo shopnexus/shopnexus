@@ -1,3 +1,16 @@
+# CNPG reads the major version from the image tag, and ParadeDB's tags
+# (0.26.4-pg18) do not parse, so a catalog states the major.
+apiVersion: postgresql.cnpg.io/v1
+kind: ImageCatalog
+metadata:
+  name: postgres
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  images:
+    - major: 18
+      image: {{ include "sn.image" .Values.images.postgres }}
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -6,7 +19,14 @@ metadata:
   annotations: {{- include "sn.wave" "0" | nindent 4 }}
 spec:
   instances: {{ .Values.postgres.instances }}
-  imageName: {{ include "sn.image" .Values.images.postgres }}
+  # The ParadeDB image's postgres user; CNPG assumes 26, its own images' uid.
+  postgresUID: 999
+  postgresGID: 999
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ImageCatalog
+    name: postgres
+    major: 18
   postgresql:
     shared_preload_libraries: [pg_search]
   bootstrap:

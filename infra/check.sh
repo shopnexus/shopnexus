@@ -39,6 +39,10 @@ eq "$(q "$prod" 'select(.kind=="Ingress") | .spec | has("tls")')" false "ingress
 eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.instances')" 2 "prod postgres instances"
 eq "$(q "$dev" 'select(.kind=="Cluster") | .spec.instances')" 1 "dev postgres instances"
 eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.postgresql.shared_preload_libraries[0]')" pg_search "pg_search preloaded"
+# CNPG reads the major version from a tag like 18.1; ParadeDB's 0.26.4-pg18 needs a catalog entry.
+eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.imageCatalogRef.major')" 18 "postgres major from the catalog"
+eq "$(q "$prod" 'select(.kind=="ImageCatalog") | .spec.images[0].image')" paradedb/paradedb:0.26.4-pg18 "catalog image"
+eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.postgresUID')" 999 "postgres runs as the image's postgres user"
 eq "$(q "$prod" 'select(.kind=="Cluster") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 0 "postgres in wave 0"
 eq "$(q "$prod" 'select(.kind=="StatefulSet" and .metadata.name=="rustfs") | .spec.replicas')" 1 "one rustfs"
 eq "$(q "$prod" 'select(.kind=="Job") | .metadata.name' | sort | tr '\n' ' ')" "migrate objectstore-init objectstore-init-snapshots " "jobs"
@@ -113,6 +117,20 @@ eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
 ok $(! grep -rq 'from Step 1\|from Task 12' platform cluster 2>/dev/null; echo $?) "chart versions pinned"
+
+# ── edge ──
+# k3s v1.37.1 (cluster/k3d.yaml) bundles Traefik chart 41.4.0, whose schema
+# refuses unknown keys; k3s then runs Traefik with its defaults.
+edge() { yq '.spec.valuesContent' "cluster/edge-$1.yaml" | sed -e 's|${ACME_EMAIL}|a@b.c|' -e 's|${ACME_SERVER}|https://x|' \
+  | helm template t traefik --repo https://traefik.github.io/charts --version 41.4.0 -f - 2>&1; }
+direct=$(edge direct); proxy=$(edge behind-proxy)
+eq "$(yq ea -N 'select(.kind=="Service") | .spec.externalTrafficPolicy' <<<"$direct")" Local "direct edge keeps the client address"
+for f in -- '--entryPoints.websecure.http.tls.certResolver=le' '--entryPoints.web.http.redirections.entryPoint.to=:443' '--certificatesresolvers.le.acme.tlsChallenge=true' '--accesslog=true'; do
+  [[ $f == -- ]] && continue; grep -qF -- "$f" <<<"$direct" || { echo "FAIL: direct edge lacks $f" >&2; fails=$((fails + 1)); }
+done
+grep -qF -- '--entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks trusted IPs" >&2; fails=$((fails + 1)); }
+grep -qF -- 'redirections' <<<"$proxy" && { echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
+eq "$(yq '.image' cluster/k3d.yaml)" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

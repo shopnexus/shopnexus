@@ -37,7 +37,7 @@ fi
 server_keys=(JWT_KEY_ID JWT_PRIVATE_KEY STAFF_KEY RESTATE_IDENTITY_KEY OBJECT_STORE_ACCESS_KEY OBJECT_STORE_SECRET_KEY LLM_API_KEY FCM_CREDENTIALS)
 args=(); for k in "${server_keys[@]}"; do args+=(--from-literal="$k=$(get "$k")"); done
 
-out() { if [[ $dry == --dry-run ]]; then cat; else kubeseal --format yaml > "$1"; fi; }
+out() { if [[ $dry == --dry-run ]]; then echo ---; cat; else kubeseal --format yaml > "$1"; fi; }
 mkdir -p "$here/../stack/secrets/$stack"
 kubectl create secret generic server-secrets -n "shopnexus-$stack" "${args[@]}" --dry-run=client -o yaml \
   | out "$here/../stack/secrets/$stack/server-secrets.yaml"

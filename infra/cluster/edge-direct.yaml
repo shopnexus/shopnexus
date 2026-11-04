@@ -1,0 +1,47 @@
+# Traefik holds 80/443 and gets certificates from Let's Encrypt with the
+# TLS-ALPN-01 challenge. up.sh fills ${ACME_EMAIL} and ${ACME_SERVER}.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      replicas: 1
+    updateStrategy:
+      type: Recreate
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    tolerations:
+      - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
+    accessLog:
+      enabled: true
+    # With up.sh mapping 80/443 onto server-0 (not k3d's serverlb), Local
+    # keeps the client's address through klipper-lb to Traefik.
+    service:
+      spec:
+        externalTrafficPolicy: Local
+    persistence:
+      enabled: true
+      size: 128Mi
+      path: /data
+    podSecurityContext:
+      fsGroup: 65532
+    certificatesResolvers:
+      le:
+        acme:
+          email: ${ACME_EMAIL}
+          storage: /data/acme.json
+          caServer: ${ACME_SERVER}
+          tlsChallenge: true
+    ports:
+      web:
+        http:
+          redirections:
+            entryPoint: { to: websecure, scheme: https, permanent: true }
+      websecure:
+        http:
+          tls:
+            enabled: true
+            certResolver: le

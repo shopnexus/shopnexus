@@ -1,0 +1,20 @@
+# Another proxy on the host terminates TLS and sends HTTP to 127.0.0.1:18080,
+# which k3d maps to Traefik's web entrypoint. Traefik believes the
+# X-Forwarded-* headers coming through the k3d network.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      replicas: 1
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    tolerations:
+      - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
+    ports:
+      web:
+        forwardedHeaders:
+          trustedIPs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
