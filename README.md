@@ -68,9 +68,8 @@ three agents, and two stacks of ShopNexus in it.
 | dev | `dev.shopnexus.id.vn` | `shopnexus-dev` | `:main`, by digest |
 | prod | `shopnexus.id.vn` | `shopnexus-prod` | the newest `X.Y.Z` tag |
 
-Each stack serves the website on its domain and `api.`, `media.` and
-`docs.` below it; `ops.` follows when the staff console has an image
-(`ops.enabled`). Argo CD syncs the Helm chart in `infra/stack` once per
+Each stack serves the website on its domain and `api.`, `media.`,
+`docs.` and `console.` (the staff console) below it. Argo CD syncs the Helm chart in `infra/stack` once per
 stack, and Argo CD Image Updater moves the image tags. Postgres runs on
 CloudNativePG, Restate on restate-operator; prod runs two Postgres instances
 and three Restate nodes.

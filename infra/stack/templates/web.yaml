@@ -2,8 +2,8 @@
 {{- $apps := list
   (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website)
   (dict "name" "docs" "port" 80 "image" .Values.images.docs "replicas" .Values.replicas.docs) }}
-{{- if .Values.ops.enabled }}
-{{- $apps = append $apps (dict "name" "ops" "port" .Values.ops.port "image" .Values.images.ops "replicas" .Values.replicas.ops) }}
+{{- if .Values.console.enabled }}
+{{- $apps = append $apps (dict "name" "console" "port" .Values.console.port "image" .Values.images.console "replicas" .Values.replicas.console) }}
 {{- end }}
 {{- range $apps }}
 ---

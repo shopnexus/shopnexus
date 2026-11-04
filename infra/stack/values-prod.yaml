@@ -5,11 +5,12 @@ images:
   server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }
   website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }
   docs: { repository: ghcr.io/shopnexus/docs, tag: 0.1.0 }
+  console: { repository: ghcr.io/shopnexus/console, tag: 0.1.0 }
 replicas:
   server: 3
   website: 2
   docs: 1
-  ops: 2
+  console: 2
 postgres:
   instances: 2
   storage: 10Gi

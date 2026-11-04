@@ -30,7 +30,7 @@ JWT_ISSUER: shopnexus
 JWT_AUDIENCE: shopnexus-app
 JWT_PREVIOUS_KEY_ID: ""
 JWT_PREVIOUS_PUBLIC_KEY: ""
-STAFF_CONSOLE_ORIGIN: https://{{ include "sn.host" (dict "root" . "sub" "ops") }}
+STAFF_CONSOLE_ORIGIN: https://{{ include "sn.host" (dict "root" . "sub" "console") }}
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 OBJECT_STORE_REGION: us-east-1

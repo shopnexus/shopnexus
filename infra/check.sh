@@ -31,10 +31,12 @@ if helm template x stack -f stack/values-dev.yaml --set stack=qa >/dev/null 2>&1
 
 # ── web apps and ingress ──
 hosts() { q "$1" 'select(.kind=="Ingress") | .spec.rules[].host' | sort | tr '\n' ' '; }
-eq "$(hosts "$prod")" "api.shopnexus.id.vn docs.shopnexus.id.vn media.shopnexus.id.vn shopnexus.id.vn " "prod hosts"
-eq "$(hosts "$dev")" "api.dev.shopnexus.id.vn dev.shopnexus.id.vn docs.dev.shopnexus.id.vn media.dev.shopnexus.id.vn " "dev hosts"
-withops=$(render prod --set ops.enabled=true --set images.ops.repository=ghcr.io/shopnexus/ops --set images.ops.tag=0.1.0)
-eq "$(q "$withops" 'select(.kind=="Ingress") | .spec.rules[] | select(.host=="ops.shopnexus.id.vn") | .http.paths[0].backend.service.name')" ops "ops host when enabled"
+eq "$(hosts "$prod")" "api.shopnexus.id.vn console.shopnexus.id.vn docs.shopnexus.id.vn media.shopnexus.id.vn shopnexus.id.vn " "prod hosts"
+eq "$(hosts "$dev")" "api.dev.shopnexus.id.vn console.dev.shopnexus.id.vn dev.shopnexus.id.vn docs.dev.shopnexus.id.vn media.dev.shopnexus.id.vn " "dev hosts"
+eq "$(q "$prod" 'select(.kind=="Deployment" and .metadata.name=="console") | .spec.template.spec.containers[0].image')" ghcr.io/shopnexus/console:0.1.0 "prod console image"
+eq "$(q "$dev" 'select(.kind=="Deployment" and .metadata.name=="console") | .spec.template.spec.containers[0].image')" ghcr.io/shopnexus/console:main "dev console image"
+withconsole=$(render prod --set console.enabled=true --set images.console.repository=ghcr.io/shopnexus/console --set images.console.tag=0.1.0)
+eq "$(q "$withconsole" 'select(.kind=="Ingress") | .spec.rules[] | select(.host=="console.shopnexus.id.vn") | .http.paths[0].backend.service.name')" console "console host when enabled"
 eq "$(q "$prod" 'select(.kind=="Ingress") | .spec.rules[] | select(.host=="api.shopnexus.id.vn") | .http.paths[0].backend.service.name')" server-api "api goes to server-api"
 eq "$(q "$prod" 'select(.kind=="Deployment" and .metadata.name=="website") | .spec.replicas')" 2 "prod website replicas"
 eq "$(q "$dev" 'select(.kind=="Deployment" and .metadata.name=="website") | .spec.replicas')" 1 "dev website replicas"
@@ -81,7 +83,7 @@ cm='select(.kind=="ConfigMap" and .metadata.name=="server-env") | .data'
 eq "$(q "$prod" "$cm | .RESTATE_REGISTER")" false "the operator registers"
 eq "$(q "$prod" "$cm | .APP_ENV")" prod "prod APP_ENV"
 eq "$(q "$prod" "$cm | .PNV_TEST_NUMBERS")" false "prod refuses test numbers"
-eq "$(q "$prod" "$cm | .STAFF_CONSOLE_ORIGIN")" https://ops.shopnexus.id.vn "console origin"
+eq "$(q "$prod" "$cm | .STAFF_CONSOLE_ORIGIN")" https://console.shopnexus.id.vn "console origin"
 eq "$(q "$dev" "$cm | .MEDIA_PUBLIC_URL")" https://media.dev.shopnexus.id.vn/shopnexus "dev media URL"
 eq "$(q "$dev" "$cm | .RESTATE_INGRESS_URL")" http://restate.restate-dev:8080 "dev restate ingress"
 # Review Focus 1: a config change makes a new server version.
@@ -129,6 +131,7 @@ eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sou
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
+for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "console docs server website " "stack-$s images"; done
 ok $(! grep -rq 'from Step 1\|from Task 12' platform cluster 2>/dev/null; echo $?) "chart versions pinned"
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health

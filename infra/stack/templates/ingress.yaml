@@ -1,8 +1,8 @@
 {{- /* Hosts only. TLS belongs to the edge: Traefik's websecure entrypoint
        in direct mode, the outer proxy in behind-proxy mode. */ -}}
 {{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
-{{- if .Values.ops.enabled }}
-{{- $routes = append $routes (list "ops" "ops" (int .Values.ops.port)) }}
+{{- if .Values.console.enabled }}
+{{- $routes = append $routes (list "console" "console" (int .Values.console.port)) }}
 {{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

@@ -7,20 +7,20 @@ images:
   server: { repository: ghcr.io/shopnexus/server, tag: main }
   website: { repository: ghcr.io/shopnexus/website, tag: main }
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
-  ops: { repository: "", tag: "" }
+  console: { repository: ghcr.io/shopnexus/console, tag: main }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
 
-ops:
-  enabled: false
+console:
+  enabled: true
   port: 80
 
 replicas:
   server: 1
   website: 1
   docs: 1
-  ops: 1
+  console: 1
 
 postgres:
   instances: 1
