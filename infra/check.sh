@@ -55,7 +55,14 @@ ok $(grep -q 'default-replication = 2' <<<"$(q "$prod" "$rc | .spec.config")"; e
 ok $(grep -q 'default-replication = 1' <<<"$(q "$dev" "$rc | .spec.config")"; echo $?) "dev keeps one copy"
 ok $(grep -q 'destination = "s3://restate-snapshots/prod"' <<<"$(q "$prod" "$rc | .spec.config")"; echo $?) "snapshots in rustfs"
 eq "$(q "$prod" "$rc | .spec.security.requestSigningPrivateKey.secret.secretName")" restate-secrets "signing key"
+# restate-operator admits ingress and admin traffic only from networkPeers, and
+# lets Restate pods reach in-cluster pods labelled allow.restate.dev/<cluster>.
+eq "$(q "$prod" "$rc | .spec.security.networkPeers.ingress[0].podSelector.matchLabels[\"app.kubernetes.io/name\"]")" server "server reaches restate ingress"
+eq "$(q "$prod" "$rc | .spec.security.networkPeers.admin[0].namespaceSelector.matchLabels[\"kubernetes.io/metadata.name\"]")" shopnexus-prod "server reaches restate admin"
+eq "$(q "$prod" 'select(.kind=="StatefulSet" and .metadata.name=="rustfs") | .spec.template.metadata.labels["allow.restate.dev/restate-prod"]')" true "restate reaches rustfs"
+eq "$(q "$prod" "$rc | .spec.compute.topologySpreadConstraints[0].labelSelector.matchLabels[\"app.kubernetes.io/instance\"]")" restate-prod "restate pods spread over nodes"
 rd='select(.kind=="RestateDeployment")'
+eq "$(q "$prod" "$rd | .spec.template.metadata.labels[\"allow.restate.dev/restate-prod\"]")" true "restate reaches the server"
 eq "$(q "$prod" "$rd | .spec.replicas")" 3 "prod server replicas"
 eq "$(q "$prod" "$rd | .spec.restate.register.cluster")" restate-prod "server registers with prod restate"
 eq "$(q "$prod" "$rd | .spec.restate.useHttp11")" true "HTTP/1.1 to the endpoint"

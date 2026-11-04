@@ -51,3 +51,8 @@ podAntiAffinity:
         labelSelector:
           matchLabels: { app.kubernetes.io/name: {{ . }} }
 {{- end }}
+
+{{/* Pod label that lets the stack's Restate pods reach this pod. */}}
+{{- define "sn.restateAllow" -}}
+allow.restate.dev/{{ include "sn.restate" . }}: "true"
+{{- end }}

@@ -11,7 +11,9 @@ spec:
     matchLabels: { app.kubernetes.io/name: rustfs }
   template:
     metadata:
-      labels: {{- include "sn.podLabels" (dict "root" . "name" "rustfs") | nindent 8 }}
+      labels:
+        {{- include "sn.podLabels" (dict "root" . "name" "rustfs") | nindent 8 }}
+        {{- include "sn.restateAllow" . | nindent 8 }}
     spec:
       affinity:
         {{- include "sn.preferRole" "stateful" | nindent 8 }}

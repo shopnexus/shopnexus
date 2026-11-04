@@ -24,7 +24,9 @@ spec:
     matchLabels: { app.kubernetes.io/name: server }
   template:
     metadata:
-      labels: {{- include "sn.podLabels" (dict "root" . "name" "server") | nindent 8 }}
+      labels:
+        {{- include "sn.podLabels" (dict "root" . "name" "server") | nindent 8 }}
+        {{- include "sn.restateAllow" . | nindent 8 }}
       annotations:
         # A config change changes the template, so the operator starts a new version.
         checksum/env: {{ include "sn.serverEnvData" . | sha256sum | trunc 16 }}

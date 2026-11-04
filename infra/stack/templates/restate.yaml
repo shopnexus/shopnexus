@@ -21,6 +21,12 @@ spec:
   compute:
     replicas: {{ .Values.restate.replicas }}
     image: {{ include "sn.image" .Values.images.restate }}
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels: { app.kubernetes.io/name: restate, app.kubernetes.io/instance: {{ $name }} }
     env:
       - name: RESTATE_WORKER__SNAPSHOTS__AWS_ACCESS_KEY_ID
         valueFrom: { secretKeyRef: { name: restate-secrets, key: AWS_ACCESS_KEY_ID } }
@@ -29,6 +35,15 @@ spec:
   storage:
     storageRequestBytes: {{ .Values.restate.storageBytes | int64 }}
   security:
+    # The operator admits traffic to the ingress and admin ports only from
+    # these peers: the stack's server pods.
+    networkPeers:
+      ingress:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: server } }
+      admin:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: server } }
     requestSigningPrivateKey:
       version: v1
       secret:
