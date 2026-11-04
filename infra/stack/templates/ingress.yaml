@@ -1,0 +1,26 @@
+{{- /* Hosts only. TLS belongs to the edge: Traefik's websecure entrypoint
+       in direct mode, the outer proxy in behind-proxy mode. */ -}}
+{{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- if .Values.ops.enabled }}
+{{- $routes = append $routes (list "ops" "ops" (int .Values.ops.port)) }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopnexus
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  ingressClassName: traefik
+  rules:
+  {{- range $routes }}
+    - host: {{ include "sn.host" (dict "root" $ "sub" (index . 0)) }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ index . 1 }}
+                port: { number: {{ index . 2 }} }
+  {{- end }}

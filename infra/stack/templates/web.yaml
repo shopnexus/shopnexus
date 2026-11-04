@@ -1,0 +1,47 @@
+{{- /* Stateless HTTP apps: one Deployment and one Service each. */ -}}
+{{- $apps := list
+  (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website)
+  (dict "name" "docs" "port" 80 "image" .Values.images.docs "replicas" .Values.replicas.docs) }}
+{{- if .Values.ops.enabled }}
+{{- $apps = append $apps (dict "name" "ops" "port" .Values.ops.port "image" .Values.images.ops "replicas" .Values.replicas.ops) }}
+{{- end }}
+{{- range $apps }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  labels: {{- include "sn.labels" $ | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: {{ .replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: {{ .name }} }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" $ "name" .name) | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+        {{- include "sn.spread" .name | nindent 8 }}
+      containers:
+        - name: {{ .name }}
+          image: {{ include "sn.image" .image }}
+          ports:
+            - { name: http, containerPort: {{ .port }} }
+          readinessProbe:
+            tcpSocket: { port: http }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels: {{- include "sn.labels" $ | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: {{ .name }} }
+  ports:
+    - { name: http, port: {{ .port }}, targetPort: http }
+{{- end }}
