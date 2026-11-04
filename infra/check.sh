@@ -5,13 +5,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 fails=0
-render() { helm template shopnexus stack -f "stack/values-$1.yaml" --namespace "shopnexus-$1" "${@:2}"; }
+# The chart refuses to render without sealed secrets or a language model, so
+# the checks render a copy that carries probe SealedSecrets and set the model.
+probe() { printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: probe, namespace: shopnexus-%s}\nspec: {encryptedData: {k: %s}}\n' "$1" "$2"; }
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+cp -r stack "$work/"; chart=$work/stack
+for s in dev prod; do mkdir -p "$chart/secrets/$s"; probe "$s" one > "$chart/secrets/$s/probe.yaml"; done
+render() { helm template shopnexus "$chart" -f "stack/values-$1.yaml" --namespace "shopnexus-$1" --set server.llmModel=probe-model "${@:2}"; }
 q() { yq ea -N "$2" <<<"$1"; }
 eq() { [[ "$1" == "$2" ]] || { echo "FAIL: $3: got '$1', want '$2'" >&2; fails=$((fails + 1)); }; }
 ok() { (( $1 == 0 )) || { echo "FAIL: $2" >&2; fails=$((fails + 1)); }; }
 
 for s in dev prod; do
-  helm lint --quiet stack -f "stack/values-$s.yaml" >/dev/null
+  helm lint --quiet "$chart" -f "stack/values-$s.yaml" --set server.llmModel=probe-model >/dev/null
   render "$s" | kubeconform -strict -ignore-missing-schemas -summary \
     -schema-location default \
     -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
@@ -102,10 +108,17 @@ eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-stack")
 
 # ── secrets ──
 for k in $secret_keys; do grep -qw "$k" cluster/seal.sh 2>/dev/null || { echo "FAIL: seal.sh does not write $k" >&2; fails=$((fails + 1)); }; done
-tmpd=$(mktemp -d); cp -r stack "$tmpd/"; mkdir -p "$tmpd/stack/secrets/dev"
-printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: probe, namespace: shopnexus-dev}\nspec: {encryptedData: {}}\n' > "$tmpd/stack/secrets/dev/probe.yaml"
-eq "$(helm template x "$tmpd/stack" -f stack/values-dev.yaml | yq ea -N 'select(.kind=="SealedSecret") | .metadata.name')" probe "chart includes secrets/<stack>/*.yaml"
-rm -rf "$tmpd"
+eq "$(q "$dev" 'select(.kind=="SealedSecret") | .metadata.name')" probe "chart includes secrets/<stack>/*.yaml"
+err=$(helm template x stack -f stack/values-dev.yaml --set server.llmModel=m 2>&1 >/dev/null || true)
+ok $(grep -q 'seal.sh dev' <<<"$err"; echo $?) "rendering without sealed secrets fails and names seal.sh"
+err=$(helm template x "$chart" -f stack/values-dev.yaml 2>&1 >/dev/null || true)
+ok $(grep -q 'server.llmModel' <<<"$err"; echo $?) "rendering without a language model fails and names server.llmModel"
+# A reseal must reach the pods: the secrets' checksum is on the pod templates.
+probe prod two > "$chart/secrets/prod/probe.yaml"; resealed=$(render prod); probe prod one > "$chart/secrets/prod/probe.yaml"
+for w in 'select(.kind=="RestateDeployment")' 'select(.kind=="StatefulSet" and .metadata.name=="rustfs")'; do
+  a=$(q "$prod" "$w | .spec.template.metadata.annotations[\"checksum/secrets\"]"); b=$(q "$resealed" "$w | .spec.template.metadata.annotations[\"checksum/secrets\"]")
+  ok $([[ $a != null && -n $a && $a != "$b" ]]; echo $?) "a reseal rolls $w"
+done
 
 # ── argo ──
 apps=$(for f in argocd/*.yaml platform/*.yaml; do cat "$f"; echo ---; done 2>/dev/null || true)
@@ -117,6 +130,14 @@ eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
 ok $(! grep -rq 'from Step 1\|from Task 12' platform cluster 2>/dev/null; echo $?) "chart versions pinned"
+# First sync of an empty cluster: the ImageUpdater CRD arrives with a child
+# Application, every Application retries, and Argo CD judges Application health
+# so root's waves wait for the platform.
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-options"]')" SkipDryRunOnMissingResource=true "ImageUpdater survives the dry-run"
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 1 "ImageUpdater waits for the platform only"
+eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
+ok $(grep -q 'obj.status.health' <<<"$(yq '.configs.cm["resource.customizations.health.argoproj.io_Application"]' cluster/argocd-values.yaml 2>/dev/null)"; echo $?) "Argo CD judges Application health"
+ok $(grep -q -- '-f argocd-values.yaml' cluster/up.sh; echo $?) "up.sh installs Argo CD with those values"
 
 # ── edge ──
 # k3s v1.37.1 (cluster/k3d.yaml) bundles Traefik chart 41.4.0, whose schema

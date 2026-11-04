@@ -56,3 +56,11 @@ podAntiAffinity:
 {{- define "sn.restateAllow" -}}
 allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- end }}
+
+{{/* Checksum of the stack's sealed secrets, for pod template annotations:
+     a reseal changes it and so starts new pods. */}}
+{{- define "sn.secretsSum" -}}
+{{- $all := "" }}
+{{- range $path, $_ := .Files.Glob (printf "secrets/%s/*.yaml" .Values.stack) }}{{ $all = print $all ($.Files.Get $path) }}{{ end }}
+{{- $all | sha256sum | trunc 16 }}
+{{- end }}

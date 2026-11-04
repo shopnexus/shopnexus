@@ -15,6 +15,7 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -33,6 +34,7 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
 ---
 # dev follows :main by digest; prod follows the newest X.Y.Z tag.
 apiVersion: argocd-image-updater.argoproj.io/v1alpha1
@@ -40,7 +42,11 @@ kind: ImageUpdater
 metadata:
   name: shopnexus
   namespace: argocd
-  annotations: { argocd.argoproj.io/sync-wave: "2" }
+  annotations:
+    # Its CRD comes with the image-updater Application in wave 0, after
+    # root's dry-run has looked at every resource.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   applicationRefs:
     - namePattern: stack-dev

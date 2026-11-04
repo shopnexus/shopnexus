@@ -29,7 +29,7 @@ sed -e "s|\${ACME_EMAIL}|${ACME_EMAIL:-}|" -e "s|\${ACME_SERVER}|${ACME_SERVER:-
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null
 helm repo update argo >/dev/null
 helm upgrade --install argocd argo/argo-cd --version "$ARGOCD_CHART" \
-  --namespace argocd --create-namespace --wait
+  --namespace argocd --create-namespace --wait -f argocd-values.yaml
 kubectl apply -f ../argocd/root.yaml
 
 echo "Argo CD is syncing. Watch it with: kubectl -n argocd get applications -w"

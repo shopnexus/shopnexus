@@ -68,8 +68,9 @@ three agents, and two stacks of ShopNexus in it.
 | dev | `dev.shopnexus.id.vn` | `shopnexus-dev` | `:main`, by digest |
 | prod | `shopnexus.id.vn` | `shopnexus-prod` | the newest `X.Y.Z` tag |
 
-Each stack serves the website on its domain and `api.`, `media.`, `docs.`
-and `ops.` below it. Argo CD syncs the Helm chart in `infra/stack` once per
+Each stack serves the website on its domain and `api.`, `media.` and
+`docs.` below it; `ops.` follows when the staff console has an image
+(`ops.enabled`). Argo CD syncs the Helm chart in `infra/stack` once per
 stack, and Argo CD Image Updater moves the image tags. Postgres runs on
 CloudNativePG, Restate on restate-operator; prod runs two Postgres instances
 and three Restate nodes.
@@ -77,8 +78,12 @@ and three Restate nodes.
 To run your own copy:
 
 1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
-   `infra/argocd/stacks.yaml`, and `domain` in
-   `infra/stack/values-dev.yaml` and `infra/stack/values-prod.yaml`.
+   `infra/argocd/stacks.yaml`. In `infra/stack/values-dev.yaml` and
+   `infra/stack/values-prod.yaml`, set `domain` and `server.llmBaseURL` and
+   `server.llmModel`, the OpenAI-compatible API and model that search uses.
+   If your images are not `ghcr.io/shopnexus/*`, change the names in
+   `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
+   pulls them without credentials, so the GHCR packages must be public.
 2. Point DNS at the machine: `<domain>`, `*.<domain>` and `*.dev.<domain>`.
 3. Run `infra/cluster/up.sh direct` with `ACME_EMAIL` set when Traefik may
    take ports 80 and 443, or `infra/cluster/up.sh behind-proxy` when another
@@ -89,8 +94,8 @@ To run your own copy:
 5. Argo CD brings up both stacks. `infra/smoke.sh <domain>` checks one.
 
 `seal.sh` keeps the generated keys in the git-ignored
-`infra/stack/secrets/<stack>.env`. Back those files up, and the controller's
-key with them: `kubectl -n kube-system get secret -l
+`infra/stack/secrets/<stack>.env` and `<stack>.restate.pem`. Back up all four
+files, and the controller's key with them: `kubectl -n kube-system get secret -l
 sealedsecrets.bitnami.com/sealed-secrets-key -o yaml`. Without the key, the
 committed SealedSecrets cannot be opened on a new cluster.
 

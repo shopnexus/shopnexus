@@ -30,6 +30,7 @@ spec:
       annotations:
         # A config change changes the template, so the operator starts a new version.
         checksum/env: {{ include "sn.serverEnvData" . | sha256sum | trunc 16 }}
+        checksum/secrets: {{ include "sn.secretsSum" . }}
     spec:
       affinity:
         {{- include "sn.preferRole" "app" | nindent 8 }}

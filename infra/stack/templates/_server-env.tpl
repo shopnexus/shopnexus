@@ -36,8 +36,8 @@ OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" 
 OBJECT_STORE_REGION: us-east-1
 OBJECT_STORE_BUCKET: shopnexus
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
-LLM_BASE_URL: {{ .Values.server.llmBaseURL | quote }}
-LLM_MODEL: {{ .Values.server.llmModel | quote }}
+LLM_BASE_URL: {{ required "server.llmBaseURL is required: the OpenAI-compatible API search uses" .Values.server.llmBaseURL | quote }}
+LLM_MODEL: {{ required "server.llmModel is required: the model search uses" .Values.server.llmModel | quote }}
 FIREBASE_PROJECT_ID: {{ .Values.server.firebaseProjectID | quote }}
 FIREBASE_PROJECT_NUMBER: {{ .Values.server.firebaseProjectNumber | quote }}
 FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com

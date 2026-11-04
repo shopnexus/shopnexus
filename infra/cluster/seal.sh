@@ -15,13 +15,21 @@ env_file=$dir/$stack.env
 pem=$dir/$stack.restate.pem
 image=${SERVER_IMAGE:-ghcr.io/shopnexus/server:main}
 
-[[ -f $env_file ]] || cp "$here/../stack/secrets/example.env" "$env_file"
+# The keys in <stack>.env and <stack>.restate.pem are for this user only.
+umask 077
+[[ -f $env_file ]] || install -m 600 "$here/../stack/secrets/example.env" "$env_file"
+chmod 600 "$env_file"
 get() { grep -m1 "^$1=" "$env_file" | cut -d= -f2-; }
 has() { grep -q "^$1=." "$env_file"; }
 
 has JWT_KEY_ID || docker run --rm --entrypoint /keygen "$image" >> "$env_file"
 has STAFF_KEY || docker run --rm --entrypoint /keygen "$image" -staff >> "$env_file"
-if ! has RESTATE_IDENTITY_KEY || [[ ! -f $pem ]]; then
+if has RESTATE_IDENTITY_KEY && [[ ! -f $pem ]]; then
+  # A new pair would sign Restate's requests with a key the running server
+  # does not know. Restore the backup, or delete the line to rotate on purpose.
+  echo "$env_file has RESTATE_IDENTITY_KEY but $pem is missing: restore $(basename "$pem") from the backup" >&2; exit 1
+fi
+if ! has RESTATE_IDENTITY_KEY; then
   sed -i '/^RESTATE_IDENTITY_KEY=/d' "$env_file"
   docker run --rm --user "$(id -u)" -v "$dir:/out" --entrypoint /keygen "$image" \
     -restate "/out/$(basename "$pem")" >> "$env_file"

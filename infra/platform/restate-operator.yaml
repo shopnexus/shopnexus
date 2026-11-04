@@ -14,6 +14,7 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
 ---
 # Argo CD reads the operator's chart from GHCR as an OCI Helm repository.
 apiVersion: v1
