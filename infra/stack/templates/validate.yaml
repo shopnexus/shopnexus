@@ -1,0 +1,3 @@
+{{- if not (has .Values.stack (list "dev" "prod")) }}{{ fail "stack must be dev or prod" }}{{ end }}
+{{- if not (has .Values.appEnv (list "dev" "prod")) }}{{ fail "appEnv must be dev or prod" }}{{ end }}
+{{- $_ := required "domain is required" .Values.domain }}

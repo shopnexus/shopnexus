@@ -1,0 +1,42 @@
+# values-dev.yaml and values-prod.yaml set these three; the chart fails without them.
+stack: ""     # dev | prod
+domain: ""    # dev.shopnexus.id.vn | shopnexus.id.vn
+appEnv: ""    # the server's APP_ENV: dev | prod
+
+images:
+  server: { repository: ghcr.io/shopnexus/server, tag: main }
+  website: { repository: ghcr.io/shopnexus/website, tag: main }
+  docs: { repository: ghcr.io/shopnexus/docs, tag: main }
+  ops: { repository: "", tag: "" }
+  postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
+  restate: { repository: restatedev/restate, tag: 1.8.1 }
+  rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
+
+ops:
+  enabled: false
+  port: 80
+
+replicas:
+  server: 1
+  website: 1
+  docs: 1
+  ops: 1
+
+postgres:
+  instances: 1
+  storage: 5Gi
+
+restate:
+  replicas: 1
+  storageBytes: 2147483648 # 2 GiB
+
+rustfs:
+  storage: 10Gi
+
+server:
+  logLevel: info
+  pnvTestNumbers: "true"
+  llmBaseURL: ""
+  llmModel: ""
+  firebaseProjectID: shopnexus-26aca
+  firebaseProjectNumber: "5362373878"

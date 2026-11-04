@@ -1,0 +1,3 @@
+secrets/*.env
+secrets/*.pem
+secrets/example.env

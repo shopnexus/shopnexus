@@ -1,0 +1,23 @@
+name: Infra checks
+
+on:
+  pull_request:
+    paths: ["infra/**"]
+  push:
+    branches: [main]
+    paths: ["infra/**"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - name: Install yq and kubeconform
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/yq" https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          chmod +x "$HOME/bin/yq"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - run: infra/check.sh

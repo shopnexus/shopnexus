@@ -1,0 +1,25 @@
+stack: prod
+domain: shopnexus.id.vn
+appEnv: prod
+images:
+  server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }
+  website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }
+  docs: { repository: ghcr.io/shopnexus/docs, tag: 0.1.0 }
+replicas:
+  server: 3
+  website: 2
+  docs: 1
+  ops: 2
+postgres:
+  instances: 2
+  storage: 10Gi
+restate:
+  replicas: 3
+  storageBytes: 4294967296 # 4 GiB
+server:
+  logLevel: info
+  pnvTestNumbers: "false"
+  llmBaseURL: http://khoakomlem-internal.ddns.net:8317/v1
+  llmModel: ""
+  firebaseProjectID: shopnexus-26aca
+  firebaseProjectNumber: "5362373878"

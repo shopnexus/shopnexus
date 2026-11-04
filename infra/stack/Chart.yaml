@@ -1,0 +1,5 @@
+apiVersion: v2
+name: shopnexus
+description: One ShopNexus stack (dev or prod) in its own namespace.
+type: application
+version: 0.1.0
