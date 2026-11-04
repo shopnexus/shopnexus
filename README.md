@@ -84,7 +84,9 @@ To run your own copy:
    If your images are not `ghcr.io/shopnexus/*`, change the names in
    `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
    pulls them without credentials, so the GHCR packages must be public.
-2. Point DNS at the machine: `<domain>`, `*.<domain>` and `*.dev.<domain>`.
+2. Point DNS at the machine: `<domain>`, `*.<domain>`, `*.dev.<domain>` and
+   `dev.<domain>`. The last one is needed because a `*` record does not
+   cover `dev` once `*.dev` exists.
 3. Run `infra/cluster/up.sh direct` with `ACME_EMAIL` set when Traefik may
    take ports 80 and 443, or `infra/cluster/up.sh behind-proxy` when another
    proxy on the machine holds them and forwards to `127.0.0.1:18080`.
