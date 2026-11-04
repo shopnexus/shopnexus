@@ -42,3 +42,8 @@ deploy/k8s/base/secret.env
 # so `embedding` is no longer a component of the system. The directory may still be
 # present in an older working tree — it is not tracked here.
 embedding/
+
+# Plain secrets that infra/cluster/seal.sh keeps; only the sealed YAML is committed.
+infra/stack/secrets/*.env
+!infra/stack/secrets/example.env
+infra/stack/secrets/*.pem

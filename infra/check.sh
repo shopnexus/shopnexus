@@ -89,6 +89,13 @@ eq "$(np "$prod")" "default-deny-ingress from-cnpg from-restate from-stack from-
 eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-restate") | .spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]')" restate-prod "restate namespace"
 eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-stack") | .spec.ingress[0].from[0] | has("namespaceSelector")')" false "from-stack is this namespace only"
 
+# ── secrets ──
+for k in $secret_keys; do grep -qw "$k" cluster/seal.sh 2>/dev/null || { echo "FAIL: seal.sh does not write $k" >&2; fails=$((fails + 1)); }; done
+tmpd=$(mktemp -d); cp -r stack "$tmpd/"; mkdir -p "$tmpd/stack/secrets/dev"
+printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: probe, namespace: shopnexus-dev}\nspec: {encryptedData: {}}\n' > "$tmpd/stack/secrets/dev/probe.yaml"
+eq "$(helm template x "$tmpd/stack" -f stack/values-dev.yaml | yq ea -N 'select(.kind=="SealedSecret") | .metadata.name')" probe "chart includes secrets/<stack>/*.yaml"
+rm -rf "$tmpd"
+
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
 echo "all checks passed"
