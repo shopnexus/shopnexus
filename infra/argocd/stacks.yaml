@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stack-dev
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/shopnexus.git
+    targetRevision: main
+    path: infra/stack
+    helm: { valueFiles: [values-dev.yaml] }
+  destination: { server: https://kubernetes.default.svc, namespace: shopnexus-dev }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stack-prod
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/shopnexus.git
+    targetRevision: main
+    path: infra/stack
+    helm: { valueFiles: [values-prod.yaml] }
+  destination: { server: https://kubernetes.default.svc, namespace: shopnexus-prod }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+# dev follows :main by digest; prod follows the newest X.Y.Z tag.
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: shopnexus
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  applicationRefs:
+    - namePattern: stack-dev
+      images:
+        - { alias: server, imageName: "ghcr.io/shopnexus/server:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.server.repository, tag: images.server.tag } } }
+        - { alias: website, imageName: "ghcr.io/shopnexus/website:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.website.repository, tag: images.website.tag } } }
+        - { alias: docs, imageName: "ghcr.io/shopnexus/docs:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }
+    - namePattern: stack-prod
+      images:
+        - { alias: server, imageName: "ghcr.io/shopnexus/server", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.server.repository, tag: images.server.tag } } }
+        - { alias: website, imageName: "ghcr.io/shopnexus/website", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.website.repository, tag: images.website.tag } } }
+        - { alias: docs, imageName: "ghcr.io/shopnexus/docs", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }

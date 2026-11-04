@@ -103,6 +103,17 @@ printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: p
 eq "$(helm template x "$tmpd/stack" -f stack/values-dev.yaml | yq ea -N 'select(.kind=="SealedSecret") | .metadata.name')" probe "chart includes secrets/<stack>/*.yaml"
 rm -rf "$tmpd"
 
+# ── argo ──
+apps=$(for f in argocd/*.yaml platform/*.yaml; do cat "$f"; echo ---; done 2>/dev/null || true)
+eq "$(q "$apps" 'select(.kind=="Application") | .metadata.name' | sort | tr '\n' ' ')" "cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "applications"
+eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.source.helm.valueFiles[0]')" values-prod.yaml "prod values"
+eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.destination.namespace')" shopnexus-prod "prod namespace"
+eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sources[].repoURL)' | grep github.com | sort -u | wc -l | tr -d ' ')" 1 "one repo URL for the umbrella"
+eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
+ok $(! grep -rq 'from Step 1\|from Task 12' platform cluster 2>/dev/null; echo $?) "chart versions pinned"
+
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
 echo "all checks passed"

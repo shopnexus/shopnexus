@@ -1,0 +1,28 @@
+# The app-of-apps. up.sh applies it once; from then on Argo CD manages
+# everything under infra/platform and infra/argocd, this file included.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/shopnexus/shopnexus.git
+      targetRevision: main
+      path: infra/platform
+    - repoURL: https://github.com/shopnexus/shopnexus.git
+      targetRevision: main
+      path: infra/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Image Updater writes image tags as Helm parameters on the stack
+  # Applications; without this, self-heal would put them back.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers: [/spec/source/helm/parameters]
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [RespectIgnoreDifferences=true]

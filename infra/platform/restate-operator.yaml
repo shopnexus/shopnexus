@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: restate-operator
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/restatedev
+    chart: restate-operator-helm
+    targetRevision: 3.2.0
+  destination: { server: https://kubernetes.default.svc, namespace: restate-operator }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+# Argo CD reads the operator's chart from GHCR as an OCI Helm repository.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-restatedev-oci
+  namespace: argocd
+  labels: { argocd.argoproj.io/secret-type: repository }
+stringData:
+  type: helm
+  name: restatedev
+  url: ghcr.io/restatedev
+  enableOCI: "true"
