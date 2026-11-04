@@ -1,0 +1,52 @@
+{{- $name := include "sn.restate" . }}
+{{- $copies := min 2 (int .Values.restate.replicas) }}
+# The operator puts the cluster in a namespace named after it. Creating the
+# namespace here lets the sealed restate-secrets land before the cluster.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $name }}
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "-1" | nindent 4 }}
+---
+apiVersion: restate.dev/v1
+kind: RestateCluster
+metadata:
+  name: {{ $name }}
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  cluster:
+    autoProvision: true
+  compute:
+    replicas: {{ .Values.restate.replicas }}
+    image: {{ include "sn.image" .Values.images.restate }}
+    env:
+      - name: RESTATE_WORKER__SNAPSHOTS__AWS_ACCESS_KEY_ID
+        valueFrom: { secretKeyRef: { name: restate-secrets, key: AWS_ACCESS_KEY_ID } }
+      - name: RESTATE_WORKER__SNAPSHOTS__AWS_SECRET_ACCESS_KEY
+        valueFrom: { secretKeyRef: { name: restate-secrets, key: AWS_SECRET_ACCESS_KEY } }
+  storage:
+    storageRequestBytes: {{ .Values.restate.storageBytes | int64 }}
+  security:
+    requestSigningPrivateKey:
+      version: v1
+      secret:
+        secretName: restate-secrets
+        key: private.pem
+  config: |
+    roles = ["worker", "admin", "log-server", "metadata-server", "http-ingress"]
+    auto-provision = false
+    default-num-partitions = 24
+    default-replication = {{ $copies }}
+
+    [metadata-client]
+    type = "replicated"
+    addresses = ["http://restate-cluster:5122/"]
+
+    [worker.snapshots]
+    destination = "s3://restate-snapshots/{{ .Values.stack }}"
+    snapshot-interval-num-records = 10000
+    aws-region = "us-east-1"
+    aws-endpoint-url = "http://rustfs.{{ .Release.Namespace }}:9000"
+    aws-allow-http = true

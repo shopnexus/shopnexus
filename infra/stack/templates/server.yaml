@@ -1,0 +1,62 @@
+{{- $restate := include "sn.restate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: server-env
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data: {{- include "sn.serverEnvData" . | nindent 2 }}
+---
+# restate-operator gives every pod template a ReplicaSet and a Service of its
+# own, registers it, and keeps an old one until its invocations finish.
+apiVersion: restate.dev/v1beta1
+kind: RestateDeployment
+metadata:
+  name: server
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas.server }}
+  restate:
+    register:
+      cluster: {{ $restate }}
+    useHttp11: true
+  selector:
+    matchLabels: { app.kubernetes.io/name: server }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "server") | nindent 8 }}
+      annotations:
+        # A config change changes the template, so the operator starts a new version.
+        checksum/env: {{ include "sn.serverEnvData" . | sha256sum | trunc 16 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+        {{- include "sn.spread" "server" | nindent 8 }}
+      containers:
+        - name: server
+          image: {{ include "sn.image" .Values.images.server }}
+          {{- include "sn.serverEnv" . | nindent 10 }}
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: restate, containerPort: 9080 }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+---
+# API traffic reaches every server pod, of any version.
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-api
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: server }
+  ports:
+    - { name: http, port: 8080, targetPort: http }

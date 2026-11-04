@@ -46,6 +46,43 @@ eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="migrate") | .metadata.
 eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="migrate") | .spec.template.spec.containers[0].command[0]')" /migrate "migrate runs /migrate"
 eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="objectstore-init-snapshots") | .spec.template.spec.containers[0].env[] | select(.name=="OBJECT_STORE_BUCKET") | .value')" restate-snapshots "snapshot bucket"
 
+# ── restate and server ──
+rc='select(.kind=="RestateCluster")'
+eq "$(q "$prod" "$rc | .metadata.name")" restate-prod "prod restate name"
+eq "$(q "$prod" "$rc | .spec.compute.replicas")" 3 "prod restate nodes"
+eq "$(q "$dev" "$rc | .spec.compute.replicas")" 1 "dev restate nodes"
+ok $(grep -q 'default-replication = 2' <<<"$(q "$prod" "$rc | .spec.config")"; echo $?) "prod replicates the log twice"
+ok $(grep -q 'default-replication = 1' <<<"$(q "$dev" "$rc | .spec.config")"; echo $?) "dev keeps one copy"
+ok $(grep -q 'destination = "s3://restate-snapshots/prod"' <<<"$(q "$prod" "$rc | .spec.config")"; echo $?) "snapshots in rustfs"
+eq "$(q "$prod" "$rc | .spec.security.requestSigningPrivateKey.secret.secretName")" restate-secrets "signing key"
+rd='select(.kind=="RestateDeployment")'
+eq "$(q "$prod" "$rd | .spec.replicas")" 3 "prod server replicas"
+eq "$(q "$prod" "$rd | .spec.restate.register.cluster")" restate-prod "server registers with prod restate"
+eq "$(q "$prod" "$rd | .spec.restate.useHttp11")" true "HTTP/1.1 to the endpoint"
+eq "$(q "$prod" 'select(.kind=="Service" and .metadata.name=="server-api") | .spec.selector["app.kubernetes.io/name"]')" server "server-api selects every server pod"
+cm='select(.kind=="ConfigMap" and .metadata.name=="server-env") | .data'
+eq "$(q "$prod" "$cm | .RESTATE_REGISTER")" false "the operator registers"
+eq "$(q "$prod" "$cm | .APP_ENV")" prod "prod APP_ENV"
+eq "$(q "$prod" "$cm | .PNV_TEST_NUMBERS")" false "prod refuses test numbers"
+eq "$(q "$prod" "$cm | .STAFF_CONSOLE_ORIGIN")" https://ops.shopnexus.id.vn "console origin"
+eq "$(q "$dev" "$cm | .MEDIA_PUBLIC_URL")" https://media.dev.shopnexus.id.vn/shopnexus "dev media URL"
+eq "$(q "$dev" "$cm | .RESTATE_INGRESS_URL")" http://restate.restate-dev:8080 "dev restate ingress"
+# Review Focus 1: a config change makes a new server version.
+sum() { q "$1" "$rd | .spec.template.metadata.annotations[\"checksum/env\"]"; }
+ok $([[ -n "$(sum "$prod")" && "$(sum "$prod")" != "$(sum "$(render prod --set server.logLevel=debug)")" ]]; echo $?) "config change rolls the server"
+# Review Focus 2: every variable config.Load reads is set by the ConfigMap, the Secret or DATABASE_URL.
+secret_keys="JWT_KEY_ID JWT_PRIVATE_KEY STAFF_KEY RESTATE_IDENTITY_KEY OBJECT_STORE_ACCESS_KEY OBJECT_STORE_SECRET_KEY LLM_API_KEY FCM_CREDENTIALS"
+cm_keys=$(q "$prod" "$cm | keys | .[]")
+for v in APP_ENV HTTP_ADDR LOG_LEVEL LOG_FORMAT RESTATE_INGRESS_URL RESTATE_ADMIN_URL RESTATE_LISTEN_ADDR \
+  RESTATE_ENDPOINT_URL RESTATE_SERVICE_PREFIX RESTATE_IDENTITY_KEY RESTATE_REGISTER JWT_KEY_ID JWT_PRIVATE_KEY \
+  JWT_PREVIOUS_KEY_ID JWT_PREVIOUS_PUBLIC_KEY JWT_ISSUER JWT_AUDIENCE STAFF_KEY STAFF_CONSOLE_ORIGIN \
+  OBJECT_STORE_ENDPOINT OBJECT_STORE_PUBLIC_ENDPOINT OBJECT_STORE_REGION OBJECT_STORE_ACCESS_KEY \
+  OBJECT_STORE_SECRET_KEY OBJECT_STORE_BUCKET MEDIA_PUBLIC_URL FCM_CREDENTIALS FIREBASE_PROJECT_ID \
+  FIREBASE_PROJECT_NUMBER FIREBASE_AUTH_JWKS_URL PNV_JWKS_URL PNV_TEST_NUMBERS LLM_BASE_URL LLM_API_KEY \
+  LLM_MODEL OTEL_EXPORTER_OTLP_ENDPOINT SERVICE_NAME TRUSTED_PROXIES; do
+  grep -qx "$v" <<<"$cm_keys" || grep -qw "$v" <<<"$secret_keys" || { echo "FAIL: $v is set nowhere" >&2; fails=$((fails + 1)); }
+done
+
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
 echo "all checks passed"
