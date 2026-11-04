@@ -5,19 +5,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 fails=0
-# The chart refuses to render without sealed secrets or a language model, so
-# the checks render a copy that carries probe SealedSecrets and set the model.
+# The chart refuses to render without sealed secrets, so the checks render a
+# copy that carries probe SealedSecrets.
 probe() { printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata: {name: probe, namespace: shopnexus-%s}\nspec: {encryptedData: {k: %s}}\n' "$1" "$2"; }
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 cp -r stack "$work/"; chart=$work/stack
 for s in dev prod; do mkdir -p "$chart/secrets/$s"; probe "$s" one > "$chart/secrets/$s/probe.yaml"; done
-render() { helm template shopnexus "$chart" -f "stack/values-$1.yaml" --namespace "shopnexus-$1" --set server.llmModel=probe-model "${@:2}"; }
+render() { helm template shopnexus "$chart" -f "stack/values-$1.yaml" --namespace "shopnexus-$1" "${@:2}"; }
 q() { yq ea -N "$2" <<<"$1"; }
 eq() { [[ "$1" == "$2" ]] || { echo "FAIL: $3: got '$1', want '$2'" >&2; fails=$((fails + 1)); }; }
 ok() { (( $1 == 0 )) || { echo "FAIL: $2" >&2; fails=$((fails + 1)); }; }
 
 for s in dev prod; do
-  helm lint --quiet "$chart" -f "stack/values-$s.yaml" --set server.llmModel=probe-model >/dev/null
+  helm lint --quiet "$chart" -f "stack/values-$s.yaml" >/dev/null
   render "$s" | kubeconform -strict -ignore-missing-schemas -summary \
     -schema-location default \
     -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
@@ -53,7 +53,7 @@ eq "$(q "$prod" 'select(.kind=="ImageCatalog") | .spec.images[0].image')" parade
 eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.postgresUID')" 999 "postgres runs as the image's postgres user"
 eq "$(q "$prod" 'select(.kind=="Cluster") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 0 "postgres in wave 0"
 eq "$(q "$prod" 'select(.kind=="StatefulSet" and .metadata.name=="rustfs") | .spec.replicas')" 1 "one rustfs"
-eq "$(q "$prod" 'select(.kind=="Job") | .metadata.name' | sort | tr '\n' ' ')" "migrate objectstore-init objectstore-init-snapshots " "jobs"
+eq "$(q "$prod" 'select(.kind=="Job") | .metadata.name' | sort | tr '\n' ' ')" "litellm-key migrate objectstore-init objectstore-init-snapshots " "jobs"
 eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="migrate") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 1 "migrate in wave 1"
 eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="migrate") | .spec.template.spec.containers[0].command[0]')" /migrate "migrate runs /migrate"
 eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="objectstore-init-snapshots") | .spec.template.spec.containers[0].env[] | select(.name=="OBJECT_STORE_BUCKET") | .value')" restate-snapshots "snapshot bucket"
@@ -111,10 +111,8 @@ eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-stack")
 # ── secrets ──
 for k in $secret_keys; do grep -qw "$k" cluster/seal.sh 2>/dev/null || { echo "FAIL: seal.sh does not write $k" >&2; fails=$((fails + 1)); }; done
 eq "$(q "$dev" 'select(.kind=="SealedSecret") | .metadata.name')" probe "chart includes secrets/<stack>/*.yaml"
-err=$(helm template x stack -f stack/values-dev.yaml --set server.llmModel=m 2>&1 >/dev/null || true)
+err=$(helm template x stack -f stack/values-dev.yaml 2>&1 >/dev/null || true)
 ok $(grep -q 'seal.sh dev' <<<"$err"; echo $?) "rendering without sealed secrets fails and names seal.sh"
-err=$(helm template x "$chart" -f stack/values-dev.yaml 2>&1 >/dev/null || true)
-ok $(grep -q 'server.llmModel' <<<"$err"; echo $?) "rendering without a language model fails and names server.llmModel"
 # A reseal must reach the pods: the secrets' checksum is on the pod templates.
 probe prod two > "$chart/secrets/prod/probe.yaml"; resealed=$(render prod); probe prod one > "$chart/secrets/prod/probe.yaml"
 for w in 'select(.kind=="RestateDeployment")' 'select(.kind=="StatefulSet" and .metadata.name=="rustfs")'; do
@@ -155,6 +153,31 @@ done
 grep -qF -- '--entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks trusted IPs" >&2; fails=$((fails + 1)); }
 grep -qF -- 'redirections' <<<"$proxy" && { echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
 eq "$(yq '.image' cluster/k3d.yaml)" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"
+
+# ── litellm ──
+# The server reaches models only through the stack's LiteLLM, under one alias.
+eq "$(q "$prod" "$cm | .LLM_BASE_URL")" http://litellm:4000/v1 "server calls LiteLLM"
+eq "$(q "$prod" "$cm | .LLM_MODEL")" search "server asks for the search alias"
+lc='select(.kind=="ConfigMap" and .metadata.name=="litellm-config") | .data["config.yaml"]'
+eq "$(q "$prod" "$lc" | yq '.model_list[0].model_name')" search "alias search"
+eq "$(q "$prod" "$lc" | yq '.model_list[0].litellm_params.model')" openai/claude-haiku-5-5 "search model"
+eq "$(q "$prod" "$lc" | yq '.model_list[0].litellm_params.api_base')" http://host.k3d.internal:8317/v1 "upstream is cli-proxy-api on the host"
+# Budgets count USD; at 1e-6 per token, 1 USD of budget is 1M tokens.
+eq "$(q "$prod" "$lc" | yq '.model_list[0].model_info.input_cost_per_token')" 0.000001 "a token costs 1e-6"
+eq "$(q "$prod" "$lc" | yq '.model_list[0].model_info.output_cost_per_token')" 0.000001 "an output token costs 1e-6"
+kj='select(.kind=="Job" and .metadata.name=="litellm-key") | .spec.template.spec.containers[0].env[]'
+eq "$(q "$prod" "$kj | select(.name==\"MAX_BUDGET\") | .value")" 2 "prod: 2M tokens a day"
+eq "$(q "$dev" "$kj | select(.name==\"MAX_BUDGET\") | .value")" 0.2 "dev: 200k tokens a day"
+eq "$(q "$prod" "$kj | select(.name==\"TPM_LIMIT\") | .value")" 100000 "prod tpm"
+eq "$(q "$dev" "$kj | select(.name==\"TPM_LIMIT\") | .value")" 20000 "dev tpm"
+eq "$(q "$prod" 'select(.kind=="Job" and .metadata.name=="litellm-key") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 3 "the key job runs after LiteLLM is up"
+eq "$(q "$prod" 'select(.kind=="Database") | .spec.owner')" litellm "LiteLLM owns its database"
+eq "$(q "$prod" 'select(.kind=="Cluster") | .spec.managed.roles[0].passwordSecret.name')" litellm-db "LiteLLM's role password is sealed"
+ld='select(.kind=="Deployment" and .metadata.name=="litellm") | .spec.template'
+eq "$(q "$prod" "$ld | .spec.containers[0].image")" ghcr.io/berriai/litellm-database:v1.108.0 "litellm image"
+ok $([[ "$(q "$prod" "$ld | .metadata.annotations[\"checksum/config\"]")" != null ]]; echo $?) "a config change rolls LiteLLM"
+ok $([[ "$(q "$prod" "$ld | .metadata.annotations[\"checksum/secrets\"]")" != null ]]; echo $?) "a reseal rolls LiteLLM"
+for k in LITELLM_MASTER_KEY LLM_UPSTREAM_API_KEY LITELLM_DB_PASSWORD; do grep -qw "$k" cluster/seal.sh || { echo "FAIL: seal.sh does not write $k" >&2; fails=$((fails + 1)); }; done
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

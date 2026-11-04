@@ -20,7 +20,8 @@ restate:
 server:
   logLevel: info
   pnvTestNumbers: "false"
-  llmBaseURL: http://khoakomlem-internal.ddns.net:8317/v1
-  llmModel: ""
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
+litellm:
+  dailyTokens: 2000000
+  tpmLimit: 100000

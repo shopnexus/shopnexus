@@ -4,7 +4,8 @@ appEnv: dev
 server:
   logLevel: debug
   pnvTestNumbers: "true"
-  llmBaseURL: http://khoakomlem-internal.ddns.net:8317/v1
-  llmModel: ""
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
+litellm:
+  dailyTokens: 200000
+  tpmLimit: 20000

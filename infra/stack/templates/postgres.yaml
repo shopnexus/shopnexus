@@ -29,6 +29,13 @@ spec:
     major: 18
   postgresql:
     shared_preload_libraries: [pg_search]
+  managed:
+    roles:
+      # LiteLLM keeps its keys and spend in a database of its own.
+      - name: litellm
+        ensure: present
+        login: true
+        passwordSecret: { name: litellm-db }
   bootstrap:
     initdb:
       database: app
@@ -42,3 +49,14 @@ spec:
     enablePodAntiAffinity: true
     podAntiAffinityType: preferred
     topologyKey: kubernetes.io/hostname
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: litellm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  name: litellm
+  owner: litellm
+  cluster: { name: postgres }

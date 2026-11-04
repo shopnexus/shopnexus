@@ -1,0 +1,127 @@
+{{- /* The stack's LiteLLM: one alias, "search", over the upstream API, and a
+       virtual key for the server with a daily token budget. */ -}}
+{{- define "sn.litellmConfig" -}}
+model_list:
+  - model_name: search
+    litellm_params:
+      model: openai/{{ required "litellm.model is required" .Values.litellm.model }}
+      api_base: {{ required "litellm.apiBase is required" .Values.litellm.apiBase }}
+      api_key: os.environ/LLM_UPSTREAM_API_KEY
+    # Budgets count money; at 1e-6 per token, 1 of budget is 1M tokens.
+    model_info:
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000001
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+litellm_settings:
+  drop_params: true
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "sn.litellmConfig" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: litellm }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "litellm") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "sn.litellmConfig" . | sha256sum | trunc 16 }}
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: litellm
+          image: {{ include "sn.image" .Values.images.litellm }}
+          args: [--config, /etc/litellm/config.yaml, --port, "4000"]
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY } }
+            - name: LLM_UPSTREAM_API_KEY
+              valueFrom: { secretKeyRef: { name: litellm-secrets, key: LLM_UPSTREAM_API_KEY } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: litellm-db, key: password } }
+            - name: DATABASE_URL
+              value: postgresql://litellm:$(DB_PASSWORD)@postgres-rw:5432/litellm
+          ports:
+            - { name: http, containerPort: 4000 }
+          readinessProbe:
+            httpGet: { path: /health/readiness, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/liveliness, port: http }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          volumeMounts:
+            - { name: config, mountPath: /etc/litellm }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: config
+          configMap: { name: litellm-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: litellm }
+  ports:
+    - { name: http, port: 4000, targetPort: http }
+---
+# Makes the server's virtual key exist with this stack's budget: updates it
+# when it exists, creates it with the sealed value when it does not.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: litellm-key
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    {{- include "sn.wave" "3" | nindent 4 }}
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "litellm-key") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: litellm-key
+          image: {{ include "sn.image" .Values.images.curl }}
+          env:
+            - name: MASTER_KEY
+              valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY } }
+            - name: SERVER_KEY
+              valueFrom: { secretKeyRef: { name: server-secrets, key: LLM_API_KEY } }
+            - { name: MAX_BUDGET, value: {{ divf (required "litellm.dailyTokens is required" .Values.litellm.dailyTokens) 1000000 | toString | quote }} }
+            - { name: TPM_LIMIT, value: {{ required "litellm.tpmLimit is required" .Values.litellm.tpmLimit | int | toString | quote }} }
+          command: [sh, -ec]
+          args:
+            - |
+              body="{\"key\":\"$SERVER_KEY\",\"key_alias\":\"server\",\"models\":[\"search\"],\"max_budget\":$MAX_BUDGET,\"budget_duration\":\"1d\",\"tpm_limit\":$TPM_LIMIT}"
+              call() { curl -s -o /tmp/out -w '%{http_code}' -X POST "http://litellm:4000/key/$1" \
+                -H "Authorization: Bearer $MASTER_KEY" -H 'Content-Type: application/json' -d "$body"; }
+              code=$(call update)
+              if [ "$code" != 200 ]; then code=$(call generate); fi
+              # The response holds the key, so only its status is logged.
+              echo "litellm key: HTTP $code"
+              [ "$code" = 200 ] || { grep -o '"message":"[^"]*"' /tmp/out; exit 1; }

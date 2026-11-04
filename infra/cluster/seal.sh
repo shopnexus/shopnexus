@@ -36,8 +36,11 @@ if ! has RESTATE_IDENTITY_KEY; then
 fi
 has OBJECT_STORE_ACCESS_KEY || echo "OBJECT_STORE_ACCESS_KEY=$(openssl rand -hex 12)" >> "$env_file"
 has OBJECT_STORE_SECRET_KEY || echo "OBJECT_STORE_SECRET_KEY=$(openssl rand -hex 24)" >> "$env_file"
+has LITELLM_MASTER_KEY || echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)" >> "$env_file"
+has LITELLM_DB_PASSWORD || echo "LITELLM_DB_PASSWORD=$(openssl rand -hex 24)" >> "$env_file"
+has LLM_API_KEY || echo "LLM_API_KEY=sk-$(openssl rand -hex 24)" >> "$env_file"
 
-has LLM_API_KEY || { echo "$env_file: set LLM_API_KEY" >&2; exit 1; }
+has LLM_UPSTREAM_API_KEY || { echo "$env_file: set LLM_UPSTREAM_API_KEY" >&2; exit 1; }
 if [[ $stack == prod ]] && ! has FCM_CREDENTIALS; then
   echo "$env_file: prod needs FCM_CREDENTIALS (APP_ENV=prod refuses to only log pushes)" >&2; exit 1
 fi
@@ -55,4 +58,14 @@ kubectl create secret generic restate-secrets -n "restate-$stack" \
   --from-literal=AWS_SECRET_ACCESS_KEY="$(get OBJECT_STORE_SECRET_KEY)" \
   --dry-run=client -o yaml \
   | out "$here/../stack/secrets/$stack/restate-secrets.yaml"
+kubectl create secret generic litellm-secrets -n "shopnexus-$stack" \
+  --from-literal=LITELLM_MASTER_KEY="$(get LITELLM_MASTER_KEY)" \
+  --from-literal=LLM_UPSTREAM_API_KEY="$(get LLM_UPSTREAM_API_KEY)" \
+  --dry-run=client -o yaml \
+  | out "$here/../stack/secrets/$stack/litellm-secrets.yaml"
+# CNPG reads a managed role's password from a basic-auth Secret.
+kubectl create secret generic litellm-db -n "shopnexus-$stack" --type=kubernetes.io/basic-auth \
+  --from-literal=username=litellm --from-literal=password="$(get LITELLM_DB_PASSWORD)" \
+  --dry-run=client -o yaml \
+  | out "$here/../stack/secrets/$stack/litellm-db.yaml"
 [[ $dry == --dry-run ]] || echo "sealed into infra/stack/secrets/$stack/; commit and push"

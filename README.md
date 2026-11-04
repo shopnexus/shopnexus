@@ -78,8 +78,9 @@ To run your own copy:
 
 1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
    `infra/argocd/stacks.yaml`. In `infra/stack/values-dev.yaml` and
-   `infra/stack/values-prod.yaml`, set `domain` and `server.llmBaseURL` and
-   `server.llmModel`, the OpenAI-compatible API and model that search uses.
+   `infra/stack/values-prod.yaml`, set `domain`. Each stack's LiteLLM sends
+   search to `litellm.model` at `litellm.apiBase` (in `values.yaml`), with a
+   daily token budget per stack.
    If your images are not `ghcr.io/shopnexus/*`, change the names in
    `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
    pulls them without credentials, so the GHCR packages must be public.
@@ -88,7 +89,8 @@ To run your own copy:
    take ports 80 and 443, or `infra/cluster/up.sh behind-proxy` when another
    proxy on the machine holds them and forwards to `127.0.0.1:18080`.
 4. Run `infra/cluster/seal.sh dev` and `infra/cluster/seal.sh prod`, fill in
-   the two values each `.env` asks for, run them again, then commit and push
+   the two values each `.env` asks for (the upstream model API key, and
+   Firebase's service account for prod), run them again, then commit and push
    `infra/stack/secrets/`.
 5. Argo CD brings up both stacks. `infra/smoke.sh <domain>` checks one.
 

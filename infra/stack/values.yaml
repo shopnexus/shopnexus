@@ -11,6 +11,8 @@ images:
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
+  litellm: { repository: ghcr.io/berriai/litellm-database, tag: v1.108.0 }
+  curl: { repository: curlimages/curl, tag: 8.23.0 }
 
 console:
   enabled: true
@@ -33,10 +35,17 @@ restate:
 rustfs:
   storage: 10Gi
 
+# The stack's LiteLLM. The server calls it under the alias "search"; the
+# alias maps to one model of the upstream OpenAI-compatible API. The budget
+# counts tokens: every token is priced at 1e-6, so 1 of budget is 1M tokens.
+litellm:
+  model: claude-haiku-5-5
+  apiBase: http://host.k3d.internal:8317/v1   # cli-proxy-api on the host
+  dailyTokens: 0   # set per stack
+  tpmLimit: 0      # set per stack
+
 server:
   logLevel: info
   pnvTestNumbers: "true"
-  llmBaseURL: ""
-  llmModel: ""
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
