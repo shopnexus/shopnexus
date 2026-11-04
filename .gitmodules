@@ -10,3 +10,6 @@
 [submodule "website"]
 	path = website
 	url = https://github.com/shopnexus/website.git
+[submodule "console"]
+	path = console
+	url = https://github.com/shopnexus/console.git
