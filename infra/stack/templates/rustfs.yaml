@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rustfs
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  serviceName: rustfs
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: rustfs }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "rustfs") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "stateful" | nindent 8 }}
+      containers:
+        - name: rustfs
+          image: {{ include "sn.image" .Values.images.rustfs }}
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: server-secrets, key: OBJECT_STORE_ACCESS_KEY } }
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: server-secrets, key: OBJECT_STORE_SECRET_KEY } }
+            - { name: RUSTFS_VOLUMES, value: /data }
+            - { name: RUSTFS_ADDRESS, value: "0.0.0.0:9000" }
+            - { name: RUSTFS_CONSOLE_ENABLE, value: "false" }
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /health, port: s3 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 1Gi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: {{ .Values.rustfs.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: rustfs }
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }

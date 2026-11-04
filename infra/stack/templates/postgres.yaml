@@ -1,0 +1,24 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ include "sn.image" .Values.images.postgres }}
+  postgresql:
+    shared_preload_libraries: [pg_search]
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      # As the superuser, so the migration's CREATE EXTENSION finds it present.
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS pg_search CASCADE
+  storage:
+    size: {{ .Values.postgres.storage }}
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname

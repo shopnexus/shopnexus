@@ -1,0 +1,34 @@
+{{- /* Sync hooks in wave 1: after postgres and rustfs (wave 0) are healthy,
+       before the server (wave 2). Each sync runs them again; all three are
+       idempotent. */ -}}
+{{- $jobs := list
+  (dict "name" "migrate" "command" "/migrate" "env" (list))
+  (dict "name" "objectstore-init" "command" "/objectstore-init" "env" (list))
+  (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (list (dict "name" "OBJECT_STORE_BUCKET" "value" "restate-snapshots"))) }}
+{{- range $jobs }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .name }}
+  labels: {{- include "sn.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" $ "name" .name) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: {{ .name }}
+          image: {{ include "sn.image" $.Values.images.server }}
+          command: [{{ .command | quote }}]
+          {{- include "sn.serverEnv" $ | nindent 10 }}
+          {{- range .env }}
+            - { name: {{ .name }}, value: {{ .value | quote }} }
+          {{- end }}
+{{- end }}
