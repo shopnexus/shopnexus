@@ -83,6 +83,12 @@ for v in APP_ENV HTTP_ADDR LOG_LEVEL LOG_FORMAT RESTATE_INGRESS_URL RESTATE_ADMI
   grep -qx "$v" <<<"$cm_keys" || grep -qw "$v" <<<"$secret_keys" || { echo "FAIL: $v is set nowhere" >&2; fails=$((fails + 1)); }
 done
 
+# ── network policies ──
+np() { q "$1" 'select(.kind=="NetworkPolicy") | .metadata.name' | sort | tr '\n' ' '; }
+eq "$(np "$prod")" "default-deny-ingress from-cnpg from-restate from-stack from-traefik " "policies"
+eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-restate") | .spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]')" restate-prod "restate namespace"
+eq "$(q "$prod" 'select(.kind=="NetworkPolicy" and .metadata.name=="from-stack") | .spec.ingress[0].from[0] | has("namespaceSelector")')" false "from-stack is this namespace only"
+
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
 echo "all checks passed"

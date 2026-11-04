@@ -1,0 +1,68 @@
+{{- $restate := include "sn.restate" . }}
+# Ingress is denied unless a policy below admits it. Egress stays open: the
+# server calls Firebase, FCM and the language model.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Pods of this stack reach each other: server to postgres and rustfs, website
+# to server-api, the jobs, postgres replication.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-stack
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-traefik
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, ops, server, rustfs] }
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: traefik }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-cnpg
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: postgres }
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: cnpg-system }
+---
+# Restate invokes the server's endpoint and writes snapshots to rustfs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-restate
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [server, rustfs] }
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
