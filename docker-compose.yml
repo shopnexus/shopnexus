@@ -17,7 +17,7 @@
 # Backend only:    cd server  && docker compose up
 # Storefront only: cd website && docker compose up
 #
-# Production is Kubernetes — see ./deploy. This file is dev-only.
+# Production is the k3d cluster in ./infra. This file is dev-only.
 name: shopnexus
 
 include:

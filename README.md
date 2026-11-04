@@ -56,14 +56,44 @@ cd website && docker compose up                             # storefront, hot re
 cd docs    && docker compose up --build                     # docs site (nginx)
 ```
 
-## Deployment (CI/CD)
+## Deployment
 
-Hosted on a k3d cluster via GitOps (Argo CD). CI builds each component's image
-in its submodule repo; Argo CD in the cluster syncs `deploy/k8s`. Full
-architecture, flow diagram, and bootstrap steps: **[`deploy/README.md`](deploy/README.md)**.
+Each component repo builds its own image in GitHub Actions and pushes it to
+GHCR: `:main` on every push to `main`, `X.Y.Z` on every `vX.Y.Z` tag. `infra/`
+holds the cluster that runs them: one k3d cluster with a server node and
+three agents, and two stacks of ShopNexus in it.
 
-```
-git push (server/website/docs) → GitHub Actions → GHCR :main
-   → Argo CD Image Updater (digest) → Argo CD sync (wave-ordered)
-   → k3d → Traefik ingress → Caddy (TLS) → shop.toanehihi.io.vn
-```
+| Stack | Domain | Namespace | Follows |
+|---|---|---|---|
+| dev | `dev.shopnexus.id.vn` | `shopnexus-dev` | `:main`, by digest |
+| prod | `shopnexus.id.vn` | `shopnexus-prod` | the newest `X.Y.Z` tag |
+
+Each stack serves the website on its domain and `api.`, `media.`, `docs.`
+and `ops.` below it. Argo CD syncs the Helm chart in `infra/stack` once per
+stack, and Argo CD Image Updater moves the image tags. Postgres runs on
+CloudNativePG, Restate on restate-operator; prod runs two Postgres instances
+and three Restate nodes.
+
+To run your own copy:
+
+1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
+   `infra/argocd/stacks.yaml`, and `domain` in
+   `infra/stack/values-dev.yaml` and `infra/stack/values-prod.yaml`.
+2. Point DNS at the machine: `<domain>`, `*.<domain>` and `*.dev.<domain>`.
+3. Run `infra/cluster/up.sh direct` with `ACME_EMAIL` set when Traefik may
+   take ports 80 and 443, or `infra/cluster/up.sh behind-proxy` when another
+   proxy on the machine holds them and forwards to `127.0.0.1:18080`.
+4. Run `infra/cluster/seal.sh dev` and `infra/cluster/seal.sh prod`, fill in
+   the two values each `.env` asks for, run them again, then commit and push
+   `infra/stack/secrets/`.
+5. Argo CD brings up both stacks. `infra/smoke.sh <domain>` checks one.
+
+`seal.sh` keeps the generated keys in the git-ignored
+`infra/stack/secrets/<stack>.env`. Back those files up, and the controller's
+key with them: `kubectl -n kube-system get secret -l
+sealedsecrets.bitnami.com/sealed-secrets-key -o yaml`. Without the key, the
+committed SealedSecrets cannot be opened on a new cluster.
+
+`infra/check.sh` renders the chart for both stacks and checks it; CI runs it
+on every change under `infra/`. The design is in
+`docs/superpowers/specs/2026-11-04-infra-k3d-stacks-design.md`.
