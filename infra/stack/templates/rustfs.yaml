@@ -30,9 +30,12 @@ spec:
               valueFrom: { secretKeyRef: { name: server-secrets, key: OBJECT_STORE_SECRET_KEY } }
             - { name: RUSTFS_VOLUMES, value: /data }
             - { name: RUSTFS_ADDRESS, value: "0.0.0.0:9000" }
-            - { name: RUSTFS_CONSOLE_ENABLE, value: "false" }
+            # The web console, which dashboards.yaml serves at s3.<domain>.
+            - { name: RUSTFS_CONSOLE_ENABLE, value: "true" }
+            - { name: RUSTFS_CONSOLE_ADDRESS, value: "0.0.0.0:9001" }
           ports:
             - { name: s3, containerPort: 9000 }
+            - { name: console, containerPort: 9001 }
           readinessProbe:
             httpGet: { path: /health, port: s3 }
           volumeMounts:
@@ -56,3 +59,4 @@ spec:
   selector: { app.kubernetes.io/name: rustfs }
   ports:
     - { name: s3, port: 9000, targetPort: s3 }
+    - { name: console, port: 9001, targetPort: console }

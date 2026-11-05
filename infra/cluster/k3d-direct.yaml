@@ -41,6 +41,11 @@ files:
         namespace: kube-system
       spec:
         valuesContent: |-
+          # The dashboards' IngressRoute reaches Restate's admin UI and Argo
+          # CD in their own namespaces.
+          providers:
+            kubernetesCRD:
+              allowCrossNamespace: true
           deployment:
             replicas: 1
           updateStrategy:

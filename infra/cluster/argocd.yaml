@@ -12,7 +12,16 @@ spec:
   createNamespace: true
   valuesContent: |-
     configs:
+      # Argo CD sits behind the console's sign-in at argocd.<prod domain>
+      # (infra/stack/templates/dashboards.yaml), which lets admins only.
+      # Behind that gate it asks for no sign-in of its own, and Traefik
+      # terminates TLS.
+      params:
+        server.insecure: true
+      rbac:
+        policy.default: role:admin
       cm:
+        users.anonymous.enabled: "true"
         # Argo CD stopped judging Application health in 1.8. Without this, root's
         # sync waves would not wait for the platform Applications (wave 0) to be
         # Healthy before the stacks (wave 1) start.

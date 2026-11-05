@@ -1,0 +1,136 @@
+suite: operations dashboards
+templates: [dashboards.yaml, server.yaml, rustfs.yaml, restate.yaml, networkpolicy.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: routes each prod dashboard host through the gate, and its /_dashboard to the server
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: IngressRoute }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - lengthEqual:
+          path: spec.routes
+          count: 10
+      - equal:
+          path: spec.routes[0].match
+          value: Host(`grafana.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
+      - equal:
+          path: spec.routes[0].services[0].name
+          value: server-api
+      - notExists:
+          path: spec.routes[0].middlewares
+      - equal:
+          path: spec.routes[1].match
+          value: Host(`grafana.shopnexus.id.vn`)
+      - equal:
+          path: spec.routes[1].middlewares[0].name
+          value: dashboard-auth
+      - equal:
+          path: spec.routes[1].services[0]
+          value: { name: lgtm, namespace: shopnexus-prod, port: 3000 }
+      - equal:
+          path: spec.routes[3].services[0]
+          value: { name: restate, namespace: restate-prod, port: 9070 }
+      - equal:
+          path: spec.routes[5].services[0]
+          value: { name: litellm, namespace: shopnexus-prod, port: 4000 }
+      - equal:
+          path: spec.routes[7].services[0]
+          value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
+      - equal:
+          path: spec.routes[9].match
+          value: Host(`argocd.shopnexus.id.vn`)
+      - equal:
+          path: spec.routes[9].services[0]
+          value: { name: argocd-server, namespace: argocd, port: 80 }
+  - it: leaves Argo CD to the prod stack
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: IngressRoute }
+    values: [../values-dev.yaml, values-test.yaml]
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - lengthEqual:
+          path: spec.routes
+          count: 8
+      - equal:
+          path: spec.routes[0].match
+          value: Host(`grafana.dev.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
+  # Traefik copies only these headers from the server's answer, replacing any
+  # the client sent, so a client cannot claim to be a staff member.
+  - it: asks the stack's server before every dashboard request
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: Middleware }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.forwardAuth.address
+          value: http://server-api.shopnexus-prod.svc:8080/v1/staff/dashboard-auth
+      - equal:
+          path: spec.forwardAuth.authResponseHeaders
+          value: [X-Staff-Email, X-Staff-Role]
+  - it: signs Grafana's users in from the gate's headers
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: Deployment }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Staff-Email }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Staff-Role" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: GF_SERVER_ROOT_URL, value: https://grafana.shopnexus.id.vn }
+  - it: tells the server the dashboard hosts and where to send telemetry
+    template: server.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: data.DASHBOARD_HOSTS
+          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,litellm=litellm.shopnexus.id.vn,s3=s3.shopnexus.id.vn,argocd=argocd.shopnexus.id.vn
+      - equal:
+          path: data.OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://lgtm:4318
+  - it: gives the dev server the dev hosts without Argo CD
+    template: server.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: data.DASHBOARD_HOSTS
+          value: grafana=grafana.dev.shopnexus.id.vn,restate=restate.dev.shopnexus.id.vn,litellm=litellm.dev.shopnexus.id.vn,s3=s3.dev.shopnexus.id.vn
+  - it: serves RustFS's console on port 9001
+    template: rustfs.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: RUSTFS_CONSOLE_ENABLE, value: "true" }
+        documentIndex: 0
+      - contains:
+          path: spec.ports
+          content: { name: console, port: 9001, targetPort: console }
+        documentIndex: 1
+  - it: admits Traefik to Restate's admin port
+    template: restate.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.security.networkPeers.admin[1].podSelector.matchLabels["app.kubernetes.io/name"]
+          value: traefik
+  - it: admits Traefik to Grafana and LiteLLM
+    template: networkpolicy.yaml
+    documentSelector: { path: metadata.name, value: from-traefik }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.podSelector.matchExpressions[0].values
+          content: lgtm
+      - contains:
+          path: spec.podSelector.matchExpressions[0].values
+          content: litellm

@@ -16,7 +16,7 @@ APP_ENV: {{ .Values.appEnv | quote }}
 HTTP_ADDR: ":8080"
 LOG_LEVEL: {{ .Values.server.logLevel | quote }}
 LOG_FORMAT: json
-OTEL_EXPORTER_OTLP_ENDPOINT: ""
+OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
 SERVICE_NAME: server
 # k3s's pod network; Traefik's X-Forwarded-For is believed.
 TRUSTED_PROXIES: "10.42.0.0/16"
@@ -31,6 +31,7 @@ JWT_AUDIENCE: shopnexus-app
 JWT_PREVIOUS_KEY_ID: ""
 JWT_PREVIOUS_PUBLIC_KEY: ""
 STAFF_CONSOLE_ORIGIN: https://{{ include "sn.host" (dict "root" . "sub" "console") }}
+DASHBOARD_HOSTS: {{ include "sn.dashboardHosts" . | quote }}
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 OBJECT_STORE_REGION: us-east-1

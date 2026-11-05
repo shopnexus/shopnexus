@@ -134,6 +134,8 @@ x-server-env: &server-env
   RESTATE_REGISTER: "true"
   SERVICE_NAME: server
   TRUSTED_PROXIES: ""
+  # The ops dashboards are open locally, so the server serves none of them.
+  DASHBOARD_HOSTS: ""
   JWT_ISSUER: shopnexus
   JWT_AUDIENCE: shopnexus-app
   JWT_PREVIOUS_KEY_ID: ""

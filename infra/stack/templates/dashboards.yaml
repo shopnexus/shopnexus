@@ -1,0 +1,108 @@
+{{- /* The operations dashboards, each on a host of its own and behind the
+       console's sign-in: Traefik asks the server (forwardAuth) before every
+       request, and the path /_dashboard of each host goes to the server,
+       which turns the console's one-time ticket into the host's cookie.
+       docs/superpowers/specs/2026-11-05-ops-dashboards-design.md */ -}}
+{{- $ns := .Release.Namespace }}
+# Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector; the
+# server sends its traces, metrics and logs to port 4318. Grafana takes the
+# staff member from the headers the forwardAuth answer sets.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lgtm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: lgtm }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "lgtm") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "stateful" | nindent 8 }}
+      containers:
+        - name: lgtm
+          image: {{ include "sn.image" .Values.images.lgtm }}
+          env:
+            - { name: GF_SERVER_ROOT_URL, value: "https://{{ include "sn.host" (dict "root" . "sub" "grafana") }}" }
+            - { name: GF_AUTH_PROXY_ENABLED, value: "true" }
+            - { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Staff-Email }
+            - { name: GF_AUTH_PROXY_HEADER_PROPERTY, value: email }
+            - { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Staff-Role" }
+            - { name: GF_AUTH_PROXY_AUTO_SIGN_UP, value: "true" }
+            - { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
+          ports:
+            - { name: grafana, containerPort: 3000 }
+            - { name: otlp-http, containerPort: 4318 }
+          readinessProbe:
+            httpGet: { path: /api/health, port: grafana }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 2Gi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: lgtm }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lgtm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: {{ .Values.lgtm.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lgtm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: lgtm }
+  ports:
+    - { name: grafana, port: 3000, targetPort: grafana }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }
+---
+# The server answers 200 with the staff member in X-Staff-Email and
+# X-Staff-Role, or sends the browser to the console. Traefik copies only
+# those two headers onto the request, replacing any the client sent.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: dashboard-auth
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  forwardAuth:
+    address: http://server-api.{{ $ns }}.svc:8080/v1/staff/dashboard-auth
+    authResponseHeaders: [X-Staff-Email, X-Staff-Role]
+---
+# Restate's admin UI and Argo CD live in other namespaces, which Traefik
+# reaches with allowCrossNamespace (infra/cluster/k3d-*.yaml).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: dashboards
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  routes:
+  {{- range include "sn.dashboards" . | fromJsonArray }}
+    - kind: Rule
+      match: Host(`{{ .host }}`) && PathPrefix(`/_dashboard`)
+      services:
+        - { name: server-api, port: 8080 }
+    - kind: Rule
+      match: Host(`{{ .host }}`)
+      middlewares:
+        - { name: dashboard-auth }
+      services:
+        - { name: {{ .service }}, namespace: {{ .namespace | default $ns }}, port: {{ .port }} }
+  {{- end }}

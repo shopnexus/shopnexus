@@ -36,7 +36,7 @@ spec:
     storageRequestBytes: {{ .Values.restate.storageBytes | int64 }}
   security:
     # The operator admits traffic to the ingress and admin ports only from
-    # these peers: the stack's server pods.
+    # these peers: the stack's server pods, and Traefik for the admin UI.
     networkPeers:
       ingress:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
@@ -44,6 +44,9 @@ spec:
       admin:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
           podSelector: { matchLabels: { app.kubernetes.io/name: server } }
+        # Traefik serves the admin UI at restate.<domain>, behind the gate.
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: traefik } }
     requestSigningPrivateKey:
       version: v1
       secret:

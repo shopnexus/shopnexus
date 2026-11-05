@@ -74,6 +74,7 @@ tests:
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
+      - exists: { path: data.DASHBOARD_HOSTS }
   # checksum/env is a hash of the ConfigMap's data. A change to it makes a new
   # server version. The value below is the hash of the prod data.
   - it: carries the hash of the configuration
@@ -82,7 +83,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 1862b7e4eb1525e3
+          value: 202c24a243e49239
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -90,4 +91,4 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 1862b7e4eb1525e3
+          value: 202c24a243e49239

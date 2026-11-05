@@ -64,3 +64,29 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- range $path, $_ := .Files.Glob (printf "%s/%s/*.yaml" .Values.secretsDir .Values.stack) }}{{ $all = print $all ($.Files.Get $path) }}{{ end }}
 {{- $all | sha256sum | trunc 16 }}
 {{- end }}
+
+{{/* The operations dashboards of the stack as a JSON list of app, host,
+     service, namespace (empty: the stack's) and port. Argo CD is one per
+     cluster and sits behind the prod stack. */}}
+{{- define "sn.dashboards" -}}
+{{- $l := list
+  (dict "app" "grafana" "service" "lgtm" "port" 3000)
+  (dict "app" "restate" "service" "restate" "namespace" (include "sn.restate" .) "port" 9070)
+  (dict "app" "litellm" "service" "litellm" "port" 4000)
+  (dict "app" "s3" "service" "rustfs" "port" 9001) }}
+{{- if eq .Values.stack "prod" }}
+{{- $l = append $l (dict "app" "argocd" "service" "argocd-server" "namespace" "argocd" "port" 80) }}
+{{- end }}
+{{- $out := list }}
+{{- range $l }}
+{{- $out = append $out (merge (dict "host" (include "sn.host" (dict "root" $ "sub" .app))) .) }}
+{{- end }}
+{{- toJson $out }}
+{{- end }}
+
+{{/* DASHBOARD_HOSTS: app=host pairs, comma-separated. */}}
+{{- define "sn.dashboardHosts" -}}
+{{- $pairs := list }}
+{{- range include "sn.dashboards" . | fromJsonArray }}{{ $pairs = append $pairs (printf "%s=%s" .app .host) }}{{ end }}
+{{- join "," $pairs }}
+{{- end }}

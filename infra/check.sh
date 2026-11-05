@@ -56,6 +56,12 @@ done
 grep -qF -- '--entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks trusted IPs" >&2; fails=$((fails + 1)); }
 grep -qF -- 'redirections' <<<"$proxy" && { echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
 for e in direct behind-proxy; do eq "$(yq '.image' "cluster/k3d-$e.yaml")" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"; done
+# The dashboards' IngressRoute reaches Restate and Argo CD in other namespaces.
+for e in "$direct" "$proxy"; do grep -qF -- '--providers.kubernetescrd.allowCrossNamespace=true' <<<"$e" || { echo "FAIL: an edge lacks allowCrossNamespace" >&2; fails=$((fails + 1)); }; done
+# Argo CD sits behind the console's sign-in, which lets admins only, and asks for none itself.
+argo=$(yq '.spec.valuesContent' cluster/argocd.yaml)
+eq "$(yq '.configs.cm["users.anonymous.enabled"]' <<<"$argo")" true "Argo CD takes the gate's admins without a sign-in"
+eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's anonymous user is an admin"
 
 # ── local compose ──
 # Every stack of the root docker-compose.yml runs the stack's data services
