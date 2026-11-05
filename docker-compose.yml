@@ -1,26 +1,318 @@
-# Local DEV stack for the whole system.
+# The whole system on one machine, in two profiles. Production is the k3d
+# cluster in ./infra; this file is for running things locally.
 #
-#   docker compose --profile app up --build     # everything: infra + gateway + storefront + docs
-#   docker compose up -d                        # infra only (db, redis, nats, grafana, loki, alloy)
+#   docker compose --profile dev up --build --watch   # docs, website, console with live reload
+#   docker compose --profile prod up -d --build       # every component built from its Dockerfile
 #
-# This file defines NO services of its own. Each submodule owns how it builds and
-# runs itself, and this file composes those definitions — so infra versions have
-# exactly one source of truth (the submodule that depends on them).
+# dev: the three web apps run their dev servers. The image holds each app's
+# dependencies; --watch copies a saved file into the container, where the dev
+# server reloads it, and rebuilds the image when package.json or bun.lock
+# changes. The server is not here; `cd server && make run` starts it with its
+# own Postgres, Restate and RustFS (project shopnexus-server2) on the host.
+#   docs     http://localhost:56421
+#   website  http://localhost:4321
+#   console  http://localhost:5173
+# The website shares the host's network to call the server at localhost:8080;
+# Docker Desktop needs host networking turned on in its settings for that.
 #
-# Why `--profile app` is required: the server's compose keeps `gateway` and
-# `migrate` behind `profiles: ["app"]` so a backend developer gets infra-only by
-# default and runs the binary on the host. Compose does not let an including file
-# clear an inherited profile list — an override of `profiles: []` is ignored, the
-# services stay gated — so the flag is the honest way to pull them in, not an
-# oversight.
+# prod: the images the cluster runs, plus their own Postgres, Restate and
+# RustFS, behind one Caddy on port 56480 that routes by host the way the
+# cluster's ingress does. Browsers resolve *.localhost to 127.0.0.1.
+#   website  http://localhost:56480
+#   api      http://api.localhost:56480
+#   media    http://media.localhost:56480
+#   docs     http://docs.localhost:56480
+#   console  http://console.localhost:56480
+# The first start writes the server's keys into the keys volume. The server
+# needs an OpenAI-compatible API for search: LLM_BASE_URL, LLM_API_KEY and
+# LLM_MODEL, which it reads from .env next to this file. `docker compose --profile prod down -v` deletes
+# the data and the keys.
 #
-# Backend only:    cd server  && docker compose up
-# Storefront only: cd website && docker compose up
-#
-# Production is the k3d cluster in ./infra. This file is dev-only.
+# Image versions of Postgres, Restate and RustFS follow infra/stack/values.yaml;
+# infra/check.sh fails when they differ.
 name: shopnexus
 
-include:
-  - server/docker-compose.yml
-  - website/docker-compose.yml
-  - docs/docker-compose.yml
+x-bun-dev: &bun-dev
+  profiles: [dev]
+  restart: unless-stopped
+
+# The dev image: the app's dependencies, then its source. DIR is the app's
+# directory in the build context; $$ keeps Compose from reading ${DIR} as
+# one of its own variables.
+x-bun-dev-dockerfile: &bun-dev-dockerfile |
+  FROM oven/bun:1.4.4
+  ARG DIR=.
+  WORKDIR /src
+  COPY $${DIR}/package.json $${DIR}/bun.lock ./
+  RUN bun install --frozen-lockfile
+  COPY $${DIR}/ ./
+
+x-server-image: &server-image
+  image: shopnexus-server:local
+  build: ./server
+
+# Every container that runs the server image reads this, then the .env in its
+# working directory for the keys the keys service wrote.
+x-server-env: &server-env
+  APP_ENV: dev
+  HTTP_ADDR: ":8080"
+  LOG_LEVEL: info
+  LOG_FORMAT: text
+  DATABASE_URL: postgres://shopnexus:shopnexus@postgres:5432/shopnexus?sslmode=disable
+  RESTATE_INGRESS_URL: http://restate:8080
+  RESTATE_ADMIN_URL: http://restate:9070
+  RESTATE_LISTEN_ADDR: 0.0.0.0:9080
+  RESTATE_ENDPOINT_URL: http://server:9080
+  RESTATE_SERVICE_PREFIX: ""
+  RESTATE_REGISTER: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  SERVICE_NAME: server
+  TRUSTED_PROXIES: ""
+  JWT_ISSUER: shopnexus
+  JWT_AUDIENCE: shopnexus-app
+  JWT_PREVIOUS_KEY_ID: ""
+  JWT_PREVIOUS_PUBLIC_KEY: ""
+  STAFF_CONSOLE_ORIGIN: http://console.localhost:56480
+  OBJECT_STORE_ENDPOINT: http://rustfs:9000
+  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56480
+  OBJECT_STORE_REGION: us-east-1
+  OBJECT_STORE_ACCESS_KEY: shopnexus
+  OBJECT_STORE_SECRET_KEY: shopnexus-secret
+  OBJECT_STORE_BUCKET: shopnexus
+  MEDIA_PUBLIC_URL: http://media.localhost:56480/shopnexus
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  FIREBASE_PROJECT_ID: shopnexus-26aca
+  FIREBASE_PROJECT_NUMBER: "5362373878"
+  FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+  PNV_JWKS_URL: https://fpnv.googleapis.com/v1beta/jwks
+  PNV_TEST_NUMBERS: "true"
+  FCM_CREDENTIALS: ""
+
+services:
+  # ── dev ──
+
+  docs-dev:
+    <<: *bun-dev
+    image: shopnexus-docs-dev:local
+    build:
+      context: ./docs
+      args: { DIR: web }
+      dockerfile_inline: *bun-dev-dockerfile
+    command: ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "4321"]
+    environment:
+      # true adds the internal pages (the Developers tab).
+      DOCS_INTERNAL: ${DOCS_INTERNAL:-true}
+    ports:
+      - "127.0.0.1:56421:4321"
+    develop:
+      watch:
+        - { action: sync, path: ./docs/web, target: /src, ignore: [node_modules/, dist/, .astro/] }
+        - { action: rebuild, path: ./docs/web/package.json }
+        - { action: rebuild, path: ./docs/web/bun.lock }
+
+  website-dev:
+    <<: *bun-dev
+    image: shopnexus-website-dev:local
+    build:
+      context: ./website
+      dockerfile_inline: *bun-dev-dockerfile
+    # Astro renders pages in the container and calls the server that make run
+    # starts on the host. The host's network lets it reach localhost:8080
+    # directly, past firewalls that drop traffic from containers to the host.
+    network_mode: host
+    command: ["bun", "run", "dev", "--port", "4321"]
+    environment:
+      API_URL: http://localhost:8080/v1
+    develop:
+      watch:
+        - { action: sync, path: ./website, target: /src, ignore: [node_modules/, dist/, .astro/] }
+        - { action: rebuild, path: ./website/package.json }
+        - { action: rebuild, path: ./website/bun.lock }
+
+  console-dev:
+    <<: *bun-dev
+    image: shopnexus-console-dev:local
+    build:
+      context: ./console
+      dockerfile_inline: *bun-dev-dockerfile
+    command: ["bun", "run", "dev", "--host", "0.0.0.0"]
+    environment:
+      # The browser calls the server, so localhost is the host's.
+      VITE_API_URL: http://localhost:8080/v1
+    # Port 5173 is the origin the server's .env.example lets through CORS.
+    ports:
+      - "127.0.0.1:5173:5173"
+    develop:
+      watch:
+        - { action: sync, path: ./console, target: /src, ignore: [node_modules/, dist/] }
+        - { action: rebuild, path: ./console/package.json }
+        - { action: rebuild, path: ./console/bun.lock }
+
+  # ── prod ──
+
+  postgres:
+    image: paradedb/paradedb:0.26.4-pg18
+    profiles: [prod]
+    environment:
+      POSTGRES_USER: shopnexus
+      POSTGRES_PASSWORD: shopnexus
+      POSTGRES_DB: shopnexus
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: during the first start the image runs a socket-only server
+      # while it creates the database, and a socket check passes too early.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U shopnexus -d shopnexus"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  rustfs:
+    image: rustfs/rustfs:1.0.4
+    profiles: [prod]
+    environment:
+      RUSTFS_ACCESS_KEY: shopnexus
+      RUSTFS_SECRET_KEY: shopnexus-secret
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+    volumes:
+      - rustfs:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Fills in the server's keys (JWT, STAFF_KEY, the Restate request identity
+  # key) in the keys volume, as make run does in server/.env. Keys already
+  # there stay. The volume is the nonroot user's home, which the image owns,
+  # so the containers write and read it without root.
+  keys:
+    <<: *server-image
+    profiles: [prod]
+    entrypoint: ["/envgen", "-env", "/home/nonroot/.env", "-restate", "/home/nonroot/identity.pem"]
+    volumes:
+      - keys:/home/nonroot
+
+  restate:
+    image: restatedev/restate:1.8.1
+    profiles: [prod]
+    environment:
+      RESTATE_BASE_DIR: /restate-data
+      RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE: /keys/identity.pem
+    volumes:
+      - restate:/restate-data
+      - keys:/keys:ro
+    depends_on:
+      keys: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9070/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    <<: *server-image
+    profiles: [prod]
+    entrypoint: ["/migrate"]
+    working_dir: /home/nonroot
+    environment: *server-env
+    volumes:
+      - keys:/home/nonroot:ro
+    depends_on:
+      keys: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+
+  objectstore-init:
+    <<: *server-image
+    profiles: [prod]
+    entrypoint: ["/objectstore-init"]
+    working_dir: /home/nonroot
+    environment: *server-env
+    volumes:
+      - keys:/home/nonroot:ro
+    depends_on:
+      keys: { condition: service_completed_successfully }
+      rustfs: { condition: service_healthy }
+
+  server:
+    <<: *server-image
+    profiles: [prod]
+    working_dir: /home/nonroot
+    environment: *server-env
+    volumes:
+      - keys:/home/nonroot:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      objectstore-init: { condition: service_completed_successfully }
+      restate: { condition: service_healthy }
+    restart: unless-stopped
+
+  website:
+    image: shopnexus-website:local
+    build: ./website
+    profiles: [prod]
+    environment:
+      API_URL: http://server:8080/v1
+    depends_on: [server]
+    restart: unless-stopped
+
+  # The console finds the API at api.<its own host>, so console.localhost
+  # calls api.localhost.
+  console:
+    image: shopnexus-console:local
+    build: ./console
+    profiles: [prod]
+    restart: unless-stopped
+
+  docs:
+    image: shopnexus-docs:local
+    build: ./docs
+    profiles: [prod]
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    profiles: [prod]
+    ports:
+      - "127.0.0.1:56480:80"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on: [server, website, console, docs, rustfs]
+    restart: unless-stopped
+
+configs:
+  caddyfile:
+    content: |
+      {
+        auto_https off
+        admin off
+      }
+      http://localhost {
+        reverse_proxy website:3000
+      }
+      http://api.localhost {
+        reverse_proxy server:8080
+      }
+      http://media.localhost {
+        reverse_proxy rustfs:9000
+      }
+      http://docs.localhost {
+        reverse_proxy docs:80
+      }
+      http://console.localhost {
+        reverse_proxy console:80
+      }
+
+volumes:
+  postgres:
+  rustfs:
+  restate:
+  keys:
