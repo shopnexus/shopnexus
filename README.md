@@ -51,18 +51,20 @@ Each target is one `docker compose` command, in the root `Makefile`, for
 machines without `make`.
 
 `dev` and `prod` each sit behind one Caddy that routes by host, as the
-cluster's ingress does:
+cluster's ingress does, on the domain `shopnexus.localhost`. Every host shares
+that site, as the cluster's hosts share theirs, so the console's `SameSite`
+cookie reaches the API:
 
 | App | dev | prod |
 |---|---|---|
-| website | http://localhost:56481 | http://localhost:56480 |
-| api | http://api.localhost:56481 | http://api.localhost:56480 |
-| media | http://media.localhost:56481 | http://media.localhost:56480 |
-| docs | http://docs.localhost:56481 | http://docs.localhost:56480 |
-| console | http://console.localhost:56481 | http://console.localhost:56480 |
-| Grafana | http://grafana.localhost:56481 | http://grafana.localhost:56480 |
-| Restate UI | http://restate.localhost:56481 | http://restate.localhost:56480 |
-| RustFS console | http://s3.localhost:56481 | http://s3.localhost:56480 |
+| website | http://shopnexus.localhost:56481 | http://shopnexus.localhost:56480 |
+| api | http://api.shopnexus.localhost:56481 | http://api.shopnexus.localhost:56480 |
+| media | http://media.shopnexus.localhost:56481 | http://media.shopnexus.localhost:56480 |
+| docs | http://docs.shopnexus.localhost:56481 | http://docs.shopnexus.localhost:56480 |
+| console | http://console.shopnexus.localhost:56481 | http://console.shopnexus.localhost:56480 |
+| Grafana | http://grafana.shopnexus.localhost:56481 | http://grafana.shopnexus.localhost:56480 |
+| Restate UI | http://restate.shopnexus.localhost:56481 | http://restate.shopnexus.localhost:56480 |
+| RustFS console | http://s3.shopnexus.localhost:56481 | http://s3.shopnexus.localhost:56480 |
 
 Grafana gets the server's traces, metrics and logs. Locally the three
 dashboards need no sign-in, and the RustFS console signs in with the stack's

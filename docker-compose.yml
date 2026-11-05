@@ -8,17 +8,20 @@
 #   docker compose --profile test run --rm --build tests   # the server's Go tests
 #
 # dev and prod each sit behind one Caddy that routes by host, the way the
-# cluster's ingress does. Browsers resolve *.localhost to 127.0.0.1.
+# cluster's ingress does, on the domain shopnexus.localhost: browsers resolve
+# *.localhost to 127.0.0.1, and every host shares the site shopnexus.localhost,
+# as the cluster's hosts share theirs, so the console's SameSite cookie reaches
+# the API.
 #
-#              dev                                prod
-#   website    http://localhost:56481             http://localhost:56480
-#   api        http://api.localhost:56481         http://api.localhost:56480
-#   media      http://media.localhost:56481       http://media.localhost:56480
-#   docs       http://docs.localhost:56481        http://docs.localhost:56480
-#   console    http://console.localhost:56481     http://console.localhost:56480
-#   grafana    http://grafana.localhost:56481     http://grafana.localhost:56480
-#   restate    http://restate.localhost:56481     http://restate.localhost:56480
-#   s3         http://s3.localhost:56481          http://s3.localhost:56480
+#              dev                                        prod
+#   website    http://shopnexus.localhost:56481           http://shopnexus.localhost:56480
+#   api        http://api.shopnexus.localhost:56481       http://api.shopnexus.localhost:56480
+#   media      http://media.shopnexus.localhost:56481     http://media.shopnexus.localhost:56480
+#   docs       http://docs.shopnexus.localhost:56481      http://docs.shopnexus.localhost:56480
+#   console    http://console.shopnexus.localhost:56481   http://console.shopnexus.localhost:56480
+#   grafana    http://grafana.shopnexus.localhost:56481   http://grafana.shopnexus.localhost:56480
+#   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
+#   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
 #
 # Grafana gets the server's traces, metrics and logs. The dashboards need no
 # sign-in here; in the cluster the console's sign-in guards them.
@@ -162,10 +165,10 @@ x-server-env-dev: &server-env-dev
   RESTATE_ADMIN_URL: http://restate-dev:9070
   RESTATE_ENDPOINT_URL: http://server-dev:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-dev:4318
-  STAFF_CONSOLE_ORIGIN: http://console.localhost:56481
+  STAFF_CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
-  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56481
-  MEDIA_PUBLIC_URL: http://media.localhost:56481/shopnexus
+  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
+  MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -174,10 +177,10 @@ x-server-env-prod: &server-env-prod
   RESTATE_ADMIN_URL: http://restate-prod:9070
   RESTATE_ENDPOINT_URL: http://server-prod:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
-  STAFF_CONSOLE_ORIGIN: http://console.localhost:56480
+  STAFF_CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
-  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56480
-  MEDIA_PUBLIC_URL: http://media.localhost:56480/shopnexus
+  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
+  MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
 
 # A web app's dev image: its dependencies, then its source. DIR is the app's
 # directory in the build context; $$ keeps Compose from reading ${DIR} as one
@@ -510,28 +513,28 @@ configs:
         auto_https off
         admin off
       }
-      http://localhost {
+      http://shopnexus.localhost {
         reverse_proxy website-dev:4321
       }
-      http://api.localhost {
+      http://api.shopnexus.localhost {
         reverse_proxy server-dev:8080
       }
-      http://media.localhost {
+      http://media.shopnexus.localhost {
         reverse_proxy rustfs-dev:9000
       }
-      http://docs.localhost {
+      http://docs.shopnexus.localhost {
         reverse_proxy docs-dev:4321
       }
-      http://console.localhost {
+      http://console.shopnexus.localhost {
         reverse_proxy console-dev:5173
       }
-      http://grafana.localhost {
+      http://grafana.shopnexus.localhost {
         reverse_proxy lgtm-dev:3000
       }
-      http://restate.localhost {
+      http://restate.shopnexus.localhost {
         reverse_proxy restate-dev:9070
       }
-      http://s3.localhost {
+      http://s3.shopnexus.localhost {
         redir / /rustfs/console/
         reverse_proxy rustfs-dev:9001
       }
@@ -541,28 +544,28 @@ configs:
         auto_https off
         admin off
       }
-      http://localhost {
+      http://shopnexus.localhost {
         reverse_proxy website-prod:3000
       }
-      http://api.localhost {
+      http://api.shopnexus.localhost {
         reverse_proxy server-prod:8080
       }
-      http://media.localhost {
+      http://media.shopnexus.localhost {
         reverse_proxy rustfs-prod:9000
       }
-      http://docs.localhost {
+      http://docs.shopnexus.localhost {
         reverse_proxy docs-prod:80
       }
-      http://console.localhost {
+      http://console.shopnexus.localhost {
         reverse_proxy console-prod:80
       }
-      http://grafana.localhost {
+      http://grafana.shopnexus.localhost {
         reverse_proxy lgtm-prod:3000
       }
-      http://restate.localhost {
+      http://restate.shopnexus.localhost {
         reverse_proxy restate-prod:9070
       }
-      http://s3.localhost {
+      http://s3.shopnexus.localhost {
         redir / /rustfs/console/
         reverse_proxy rustfs-prod:9001
       }
