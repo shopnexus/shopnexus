@@ -1,3 +1,23 @@
+# Everything at the top of the repository is ignored unless listed here, so
+# a stray file there is never committed by accident. A new top-level file or
+# directory needs its own line.
+/*
+!/.env.example
+!/.github/
+!/.gitignore
+!/.gitmodules
+!/LICENSE
+!/Makefile
+!/README.md
+!/app
+!/console
+!/docker-compose.yml
+!/docs
+!/infra/
+!/server
+!/website
+
+# Inside the directories above:
 # OS
 .DS_Store
 Thumbs.db
@@ -38,3 +58,6 @@ tmp/
 infra/stack/secrets/*.env
 !infra/stack/secrets/example.env
 infra/stack/secrets/*.pem
+
+# helm-unittest writes snapshots here; the suites use none.
+infra/stack/tests/__snapshot__/
