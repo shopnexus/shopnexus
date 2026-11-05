@@ -20,4 +20,10 @@ jobs:
           curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
           chmod +x "$HOME/bin/yq"
           echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Install helm-unittest
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1 --verify=false
       - run: infra/check.sh
+      - uses: actions/setup-go@v6
+        with: { go-version-file: infra/go.mod }
+      # The seal tests run /envgen from the server image on GHCR.
+      - run: go -C infra test ./...

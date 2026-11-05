@@ -1,0 +1,2 @@
+# Every suite renders with the probe SealedSecrets in tests/secrets.
+secretsDir: tests/secrets

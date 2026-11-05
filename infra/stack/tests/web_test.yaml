@@ -1,0 +1,101 @@
+suite: web apps and ingress
+templates: [web.yaml, ingress.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: serves the prod hosts, each to its Service
+    template: ingress.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - lengthEqual:
+          path: spec.rules
+          count: 5
+      - equal:
+          path: spec.rules[0].host
+          value: shopnexus.id.vn
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: website
+      - equal:
+          path: spec.rules[1].host
+          value: api.shopnexus.id.vn
+      - equal:
+          path: spec.rules[1].http.paths[0].backend.service.name
+          value: server-api
+      - equal:
+          path: spec.rules[2].host
+          value: media.shopnexus.id.vn
+      - equal:
+          path: spec.rules[3].host
+          value: docs.shopnexus.id.vn
+      - equal:
+          path: spec.rules[4].host
+          value: console.shopnexus.id.vn
+      - equal:
+          path: spec.rules[4].http.paths[0].backend.service.name
+          value: console
+  - it: serves the dev hosts
+    template: ingress.yaml
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.rules[0].host
+          value: dev.shopnexus.id.vn
+      - equal:
+          path: spec.rules[1].host
+          value: api.dev.shopnexus.id.vn
+      - equal:
+          path: spec.rules[2].host
+          value: media.dev.shopnexus.id.vn
+      - equal:
+          path: spec.rules[3].host
+          value: docs.dev.shopnexus.id.vn
+      - equal:
+          path: spec.rules[4].host
+          value: console.dev.shopnexus.id.vn
+  - it: leaves TLS to the edge
+    template: ingress.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - notExists:
+          path: spec.tls
+  - it: runs two prod website pods and one in dev
+    template: web.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: website
+      - equal:
+          path: spec.replicas
+          value: 2
+  - it: runs one dev website pod
+    template: web.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+  - it: runs the prod docs and console from release tags
+    template: web.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/shopnexus/docs:0.1.0
+        documentIndex: 2
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/shopnexus/console:0.1.0
+        documentIndex: 4
+  - it: runs the dev console from main
+    template: web.yaml
+    documentIndex: 4
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/shopnexus/console:main

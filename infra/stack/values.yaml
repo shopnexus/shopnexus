@@ -3,6 +3,10 @@ stack: ""     # dev | prod
 domain: ""    # dev.shopnexus.id.vn | shopnexus.id.vn
 appEnv: ""    # the server's APP_ENV: dev | prod
 
+# The chart includes the SealedSecrets in <secretsDir>/<stack>/*.yaml. The
+# chart's tests set tests/secrets, which holds probes.
+secretsDir: secrets
+
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: main }
   website: { repository: ghcr.io/shopnexus/website, tag: main }

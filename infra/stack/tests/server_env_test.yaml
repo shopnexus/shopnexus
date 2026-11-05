@@ -1,0 +1,93 @@
+suite: the server's configuration
+templates: [server.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: sets the prod values
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: data.APP_ENV
+          value: prod
+      # restate-operator registers each version.
+      - equal:
+          path: data.RESTATE_REGISTER
+          value: "false"
+      - equal:
+          path: data.PNV_TEST_NUMBERS
+          value: "false"
+      - equal:
+          path: data.STAFF_CONSOLE_ORIGIN
+          value: https://console.shopnexus.id.vn
+      # The server reaches models only through the stack's LiteLLM, under one alias.
+      - equal:
+          path: data.LLM_BASE_URL
+          value: http://litellm:4000/v1
+      - equal:
+          path: data.LLM_MODEL
+          value: search
+  - it: sets the dev values
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: data.MEDIA_PUBLIC_URL
+          value: https://media.dev.shopnexus.id.vn/shopnexus
+      - equal:
+          path: data.RESTATE_INGRESS_URL
+          value: http://restate.restate-dev:8080
+  # config.Load reads every variable below. The rest come from server-secrets,
+  # which infra/cmd/seal writes, and DATABASE_URL from CloudNativePG's secret.
+  - it: sets every variable config.Load reads that is not a secret
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - exists: { path: data.APP_ENV }
+      - exists: { path: data.HTTP_ADDR }
+      - exists: { path: data.LOG_LEVEL }
+      - exists: { path: data.LOG_FORMAT }
+      - exists: { path: data.RESTATE_INGRESS_URL }
+      - exists: { path: data.RESTATE_ADMIN_URL }
+      - exists: { path: data.RESTATE_LISTEN_ADDR }
+      - exists: { path: data.RESTATE_ENDPOINT_URL }
+      - exists: { path: data.RESTATE_SERVICE_PREFIX }
+      - exists: { path: data.RESTATE_REGISTER }
+      - exists: { path: data.JWT_PREVIOUS_KEY_ID }
+      - exists: { path: data.JWT_PREVIOUS_PUBLIC_KEY }
+      - exists: { path: data.JWT_ISSUER }
+      - exists: { path: data.JWT_AUDIENCE }
+      - exists: { path: data.STAFF_CONSOLE_ORIGIN }
+      - exists: { path: data.OBJECT_STORE_ENDPOINT }
+      - exists: { path: data.OBJECT_STORE_PUBLIC_ENDPOINT }
+      - exists: { path: data.OBJECT_STORE_REGION }
+      - exists: { path: data.OBJECT_STORE_BUCKET }
+      - exists: { path: data.MEDIA_PUBLIC_URL }
+      - exists: { path: data.FIREBASE_PROJECT_ID }
+      - exists: { path: data.FIREBASE_PROJECT_NUMBER }
+      - exists: { path: data.FIREBASE_AUTH_JWKS_URL }
+      - exists: { path: data.PNV_JWKS_URL }
+      - exists: { path: data.PNV_TEST_NUMBERS }
+      - exists: { path: data.LLM_BASE_URL }
+      - exists: { path: data.LLM_MODEL }
+      - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
+      - exists: { path: data.SERVICE_NAME }
+      - exists: { path: data.TRUSTED_PROXIES }
+  # checksum/env is a hash of the ConfigMap's data. A change to it makes a new
+  # server version. The value below is the hash of the prod data.
+  - it: carries the hash of the configuration
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/env"]
+          value: 1862b7e4eb1525e3
+  - it: rolls the server when the configuration changes
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    set: { server.logLevel: debug }
+    asserts:
+      - notEqual:
+          path: spec.template.metadata.annotations["checksum/env"]
+          value: 1862b7e4eb1525e3

@@ -1,0 +1,12 @@
+suite: values
+templates: [validate.yaml]
+tests:
+  - it: refuses to render without a stack values file
+    values: [values-test.yaml]
+    asserts:
+      - failedTemplate: {}
+  - it: refuses a stack other than dev or prod
+    values: [../values-dev.yaml, values-test.yaml]
+    set: { stack: qa }
+    asserts:
+      - failedTemplate: { errorMessage: stack must be dev or prod }

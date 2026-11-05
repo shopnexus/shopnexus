@@ -1,0 +1,90 @@
+# k3d cluster create --config infra/cluster/k3d-direct.yaml
+#
+# The cluster for a machine where Traefik takes ports 80 and 443 and gets
+# certificates from Let's Encrypt with the TLS-ALPN-01 challenge. k3d fills
+# ${ACME_EMAIL} from the environment before it reads this file. To try the
+# setup against Let's Encrypt's staging server, which has higher rate limits,
+# add caServer: https://acme-staging-v02.api.letsencrypt.org/directory under
+# acme below.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: shopnexus
+# One server node and three agents. Each agent stands in for a machine:
+# agent-0 prefers the stateful workloads, agent-1 and agent-2 the apps.
+servers: 1
+agents: 3
+image: rancher/k3s:v1.37.1-k3s1
+options:
+  k3s:
+    nodeLabels:
+      - label: role=stateful
+        nodeFilters: [agent:0]
+      - label: role=app
+        nodeFilters: [agent:1, agent:2]
+# Straight onto server-0, where Traefik runs: k3d's serverlb would hide the
+# client's address.
+ports:
+  - port: 80:80
+    nodeFilters: [server:0:direct]
+  - port: 443:443
+    nodeFilters: [server:0:direct]
+files:
+  - description: Traefik
+    destination: k3s-manifests/traefik-config.yaml
+    nodeFilters: [server:0]
+    source: |
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChartConfig
+      metadata:
+        name: traefik
+        namespace: kube-system
+      spec:
+        valuesContent: |-
+          deployment:
+            replicas: 1
+          updateStrategy:
+            type: Recreate
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+            - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
+          accessLog:
+            enabled: true
+          # With k3d mapping 80/443 onto server-0 (not its serverlb), Local
+          # keeps the client's address through klipper-lb to Traefik.
+          service:
+            spec:
+              externalTrafficPolicy: Local
+          persistence:
+            enabled: true
+            size: 128Mi
+            path: /data
+          podSecurityContext:
+            fsGroup: 65532
+          certificatesResolvers:
+            le:
+              acme:
+                email: ${ACME_EMAIL}
+                storage: /data/acme.json
+                tlsChallenge: true
+          ports:
+            web:
+              http:
+                redirections:
+                  entryPoint: { to: websecure, scheme: https, permanent: true }
+            websecure:
+              http:
+                tls:
+                  enabled: true
+                  certResolver: le
+  # k3s applies these at its first start: Argo CD, then root, the
+  # app-of-apps, which k3s retries until Argo CD's CRDs exist.
+  - description: Argo CD
+    source: argocd.yaml
+    destination: k3s-manifests/argocd.yaml
+    nodeFilters: [server:0]
+  - description: root
+    source: ../argocd/root.yaml
+    destination: k3s-manifests/root.yaml
+    nodeFilters: [server:0]

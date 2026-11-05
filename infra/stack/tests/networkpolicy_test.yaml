@@ -1,0 +1,40 @@
+suite: network policies
+templates: [networkpolicy.yaml]
+release: { namespace: shopnexus-prod }
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  - it: denies ingress by default and opens it to five sources
+    asserts:
+      - hasDocuments:
+          count: 5
+      - equal:
+          path: metadata.name
+          value: default-deny-ingress
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: from-stack
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: from-traefik
+        documentIndex: 2
+      - equal:
+          path: metadata.name
+          value: from-cnpg
+        documentIndex: 3
+      - equal:
+          path: metadata.name
+          value: from-restate
+        documentIndex: 4
+  - it: admits the stack's Restate namespace
+    documentSelector: { path: metadata.name, value: from-restate }
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: restate-prod
+  - it: admits pods of this namespace only
+    documentSelector: { path: metadata.name, value: from-stack }
+    asserts:
+      - notExists:
+          path: spec.ingress[0].from[0].namespaceSelector

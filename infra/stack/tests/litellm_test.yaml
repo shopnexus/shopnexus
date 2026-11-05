@@ -1,0 +1,82 @@
+suite: litellm
+templates: [litellm.yaml, postgres.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  # The server asks for the alias search; LiteLLM sends it to one model of
+  # cli-proxy-api on the host. Budgets count money; at 1e-6 per token, 1 of
+  # budget is 1M tokens.
+  - it: maps the alias search to the upstream model at 1e-6 a token
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: metadata.name
+          value: litellm-config
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "model_name: search\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "model: openai/claude-haiku-5-5\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "api_base: http://host.k3d.internal:8317/v1\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "input_cost_per_token: 0.000001\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "output_cost_per_token: 0.000001\\n"
+  - it: runs the pinned image and rolls on a config change
+    template: litellm.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/berriai/litellm-database:v1.108.0
+      - exists:
+          path: spec.template.metadata.annotations["checksum/config"]
+  - it: gives prod 2M tokens a day at 100k a minute, after LiteLLM is up
+    template: litellm.yaml
+    documentIndex: 3
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: metadata.name
+          value: litellm-key
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: MAX_BUDGET, value: "2" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: TPM_LIMIT, value: "100000" }
+  - it: gives dev 200k tokens a day at 20k a minute
+    template: litellm.yaml
+    documentIndex: 3
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: MAX_BUDGET, value: "0.2" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: TPM_LIMIT, value: "20000" }
+  - it: gives LiteLLM its own database and a sealed role password
+    template: postgres.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.owner
+          value: litellm
+        documentIndex: 2
+      - equal:
+          path: spec.managed.roles[0].passwordSecret.name
+          value: litellm-db
+        documentIndex: 1

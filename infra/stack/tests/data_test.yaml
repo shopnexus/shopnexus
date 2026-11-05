@@ -1,0 +1,96 @@
+suite: postgres, rustfs and the sync jobs
+templates: [postgres.yaml, rustfs.yaml, jobs.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: runs two prod Postgres instances on ParadeDB in wave 0
+    template: postgres.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: Cluster
+      - equal:
+          path: spec.instances
+          value: 2
+      - equal:
+          path: spec.postgresql.shared_preload_libraries[0]
+          value: pg_search
+      # CNPG reads the major version from a tag like 18.1; ParadeDB's
+      # 0.26.4-pg18 needs a catalog entry.
+      - equal:
+          path: spec.imageCatalogRef.major
+          value: 18
+      # The image's postgres user.
+      - equal:
+          path: spec.postgresUID
+          value: 999
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "0"
+  - it: runs one dev Postgres instance
+    template: postgres.yaml
+    documentIndex: 1
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.instances
+          value: 1
+  - it: lists the ParadeDB image in the catalog
+    template: postgres.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: ImageCatalog
+      - equal:
+          path: spec.images[0].image
+          value: paradedb/paradedb:0.26.4-pg18
+  - it: runs one RustFS
+    template: rustfs.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - equal:
+          path: spec.replicas
+          value: 1
+  - it: runs migrate, objectstore-init and objectstore-init-snapshots
+    template: jobs.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: metadata.name
+          value: migrate
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: objectstore-init
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: objectstore-init-snapshots
+        documentIndex: 2
+  - it: runs /migrate in wave 1
+    template: jobs.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "1"
+      - equal:
+          path: spec.template.spec.containers[0].command[0]
+          value: /migrate
+  - it: prepares the snapshot bucket
+    template: jobs.yaml
+    documentIndex: 2
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_BUCKET
+            value: restate-snapshots

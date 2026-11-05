@@ -1,0 +1,57 @@
+# k3d cluster create --config infra/cluster/k3d-behind-proxy.yaml
+#
+# The cluster for a machine where another proxy holds ports 80 and 443,
+# terminates TLS and sends HTTP to 127.0.0.1:18080, which k3d maps to
+# Traefik's web entrypoint. Traefik believes the X-Forwarded-* headers coming
+# through the k3d network.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: shopnexus
+# One server node and three agents. Each agent stands in for a machine:
+# agent-0 prefers the stateful workloads, agent-1 and agent-2 the apps.
+servers: 1
+agents: 3
+image: rancher/k3s:v1.37.1-k3s1
+options:
+  k3s:
+    nodeLabels:
+      - label: role=stateful
+        nodeFilters: [agent:0]
+      - label: role=app
+        nodeFilters: [agent:1, agent:2]
+ports:
+  - port: 127.0.0.1:18080:80
+    nodeFilters: [loadbalancer]
+files:
+  - description: Traefik
+    destination: k3s-manifests/traefik-config.yaml
+    nodeFilters: [server:0]
+    source: |
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChartConfig
+      metadata:
+        name: traefik
+        namespace: kube-system
+      spec:
+        valuesContent: |-
+          deployment:
+            replicas: 1
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+            - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
+          ports:
+            web:
+              forwardedHeaders:
+                trustedIPs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  # k3s applies these at its first start: Argo CD, then root, the
+  # app-of-apps, which k3s retries until Argo CD's CRDs exist.
+  - description: Argo CD
+    source: argocd.yaml
+    destination: k3s-manifests/argocd.yaml
+    nodeFilters: [server:0]
+  - description: root
+    source: ../argocd/root.yaml
+    destination: k3s-manifests/root.yaml
+    nodeFilters: [server:0]

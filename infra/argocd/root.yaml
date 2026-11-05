@@ -1,5 +1,6 @@
-# The app-of-apps. up.sh applies it once; from then on Argo CD manages
-# everything under infra/platform and infra/argocd, this file included.
+# The app-of-apps. k3s applies it once, from the k3d config; from then on
+# Argo CD manages everything under infra/platform and infra/argocd, this
+# file included.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

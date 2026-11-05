@@ -1,0 +1,91 @@
+suite: restate and the server
+templates: [restate.yaml, server.yaml, rustfs.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: runs three prod Restate nodes that replicate the log twice
+    template: restate.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: RestateCluster
+      - equal:
+          path: metadata.name
+          value: restate-prod
+      - equal:
+          path: spec.compute.replicas
+          value: 3
+      - matchRegex:
+          path: spec.config
+          pattern: default-replication = 2
+      - matchRegex:
+          path: spec.config
+          pattern: destination = "s3://restate-snapshots/prod"
+      - equal:
+          path: spec.security.requestSigningPrivateKey.secret.secretName
+          value: restate-secrets
+      - equal:
+          path: spec.compute.topologySpreadConstraints[0].labelSelector.matchLabels["app.kubernetes.io/instance"]
+          value: restate-prod
+  - it: runs one dev Restate node with one copy of the log
+    template: restate.yaml
+    documentIndex: 1
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.compute.replicas
+          value: 1
+      - matchRegex:
+          path: spec.config
+          pattern: default-replication = 1
+  # restate-operator admits ingress and admin traffic only from networkPeers,
+  # and lets Restate pods reach pods labelled allow.restate.dev/<cluster>.
+  - it: admits the server to Restate's ingress and admin ports
+    template: restate.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.security.networkPeers.ingress[0].podSelector.matchLabels["app.kubernetes.io/name"]
+          value: server
+      - equal:
+          path: spec.security.networkPeers.admin[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: shopnexus-prod
+  - it: lets Restate reach RustFS
+    template: rustfs.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["allow.restate.dev/restate-prod"]
+          value: "true"
+  - it: runs three prod server pods that restate-operator registers over HTTP/1.1
+    template: server.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: RestateDeployment
+      - equal:
+          path: spec.template.metadata.labels["allow.restate.dev/restate-prod"]
+          value: "true"
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.restate.register.cluster
+          value: restate-prod
+      - equal:
+          path: spec.restate.useHttp11
+          value: true
+  - it: sends API traffic to every server pod
+    template: server.yaml
+    documentIndex: 2
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: metadata.name
+          value: server-api
+      - equal:
+          path: spec.selector["app.kubernetes.io/name"]
+          value: server

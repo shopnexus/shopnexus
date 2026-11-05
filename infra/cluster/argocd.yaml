@@ -1,0 +1,29 @@
+# Argo CD, installed by k3s's Helm controller from the k3d config's files.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: 10.11.7
+  targetNamespace: argocd
+  createNamespace: true
+  valuesContent: |-
+    configs:
+      cm:
+        # Argo CD stopped judging Application health in 1.8. Without this, root's
+        # sync waves would not wait for the platform Applications (wave 0) to be
+        # Healthy before the stacks (wave 1) start.
+        resource.customizations.health.argoproj.io_Application: |
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status ~= nil and obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+          return hs
