@@ -7,9 +7,10 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 | Path      | Repository              | Description            |
 | --------- | ----------------------- | ---------------------- |
 | `app`     | `shopnexus/app-android` | Android app (Kotlin)   |
+| `console` | `shopnexus/console`     | Staff console (React)  |
 | `docs`    | `shopnexus/docs`        | Documentation          |
 | `server`  | `shopnexus/server`      | Backend (Go)           |
-| `website` | `shopnexus/website`     | Web frontend (Next.js) |
+| `website` | `shopnexus/website`     | Storefront (Astro)     |
 
 ## Clone
 
@@ -33,28 +34,52 @@ git submodule update --remote --merge
 
 ## Development
 
-The whole system, from here. The root `docker-compose.yml` defines no services of
-its own — it `include:`s each submodule's compose file, so infra versions have one
-source of truth:
+The root `docker-compose.yml` runs the system on one machine, in two profiles:
 
 ```bash
-docker compose --profile app up --build   # infra + gateway + storefront + docs
-docker compose up -d                      # infra only (db, redis, nats, grafana, loki, alloy)
+docker compose --profile dev up --build --watch   # live reload
+docker compose --profile prod up -d --build       # built images
 ```
 
-`--profile app` is required because the server's compose keeps `gateway` and
-`migrate` behind that profile, and Compose does not let an including file clear an
-inherited profile list.
+The `dev` profile runs the dev servers of the three web apps. Each image
+holds the app's dependencies. `--watch` copies a saved file into its
+container, where the dev server reloads the page in about two seconds, and
+rebuilds the image when `package.json` or `bun.lock` changes. The command
+stays in the foreground and prints the logs. `docker compose --profile dev
+down` stops the apps.
 
-A single component, from its own repo — this is how each submodule is meant to be
-worked on, and needs nothing from the umbrella:
+| App | URL |
+|---|---|
+| docs | http://localhost:56421 |
+| website | http://localhost:4321 |
+| console | http://localhost:5173 |
 
-```bash
-cd server  && docker compose up -d                          # infra only; run `go run ./cmd/gateway` on the host
-cd server  && docker compose --profile app up -d --build    # infra + gateway + migrations
-cd website && docker compose up                             # storefront, hot reload
-cd docs    && docker compose up --build                     # docs site (nginx)
-```
+The server is not in `dev`. Run it with `cd server && make run`, which starts
+Postgres, Restate and RustFS in Docker and the server on the host. The console
+calls it from the browser at `localhost:8080`. The website renders pages in its
+container, which shares the host's network to call `localhost:8080`; Docker
+Desktop needs host networking turned on in its settings for that.
+Docs show the internal pages; `DOCS_INTERNAL=false` before the command hides
+them. Search is empty in dev, because only `bun run build` makes the Pagefind
+index.
+
+The `prod` profile builds every component from its Dockerfile and runs it with
+its own Postgres, Restate and RustFS, which the cluster runs too. A Caddy on
+port 56480 routes by host, as the cluster's ingress does:
+
+| App | URL |
+|---|---|
+| website | http://localhost:56480 |
+| api | http://api.localhost:56480 |
+| media | http://media.localhost:56480 |
+| docs | http://docs.localhost:56480 |
+| console | http://console.localhost:56480 |
+
+Before the first start, copy `.env.example` to `.env` and set `LLM_API_KEY`.
+The first start writes the server's keys into a volume, and `docker compose
+--profile prod down -v` deletes them with the data. The server runs with
+`APP_ENV=dev`, so PNV's test numbers sign in. `dev`, `prod` and `make run` use
+different ports and can run at the same time.
 
 ## Deployment
 
@@ -87,21 +112,31 @@ To run your own copy:
 2. Point DNS at the machine: `<domain>`, `*.<domain>`, `*.dev.<domain>` and
    `dev.<domain>`. The last one is needed because a `*` record does not
    cover `dev` once `*.dev` exists.
-3. Run `infra/cluster/up.sh direct` with `ACME_EMAIL` set when Traefik may
-   take ports 80 and 443, or `infra/cluster/up.sh behind-proxy` when another
-   proxy on the machine holds them and forwards to `127.0.0.1:18080`.
-4. Run `infra/cluster/seal.sh dev` and `infra/cluster/seal.sh prod`, fill in
-   the two values each `.env` asks for (the upstream model API key, and
-   Firebase's service account for prod), run them again, then commit and push
-   `infra/stack/secrets/`.
-5. Argo CD brings up both stacks. `infra/smoke.sh <domain>` checks one.
+3. Create the cluster. When Traefik may take ports 80 and 443:
+   `ACME_EMAIL=<you> k3d cluster create --config infra/cluster/k3d-direct.yaml`.
+   When another proxy on the machine holds them and forwards to
+   `127.0.0.1:18080`:
+   `k3d cluster create --config infra/cluster/k3d-behind-proxy.yaml`. k3s
+   installs Traefik's settings, Argo CD and the root Application from the
+   config's `files`.
+4. Run `go -C infra run ./cmd/seal dev` and `go -C infra run ./cmd/seal prod`,
+   fill in the two values each `.env` asks for (the upstream model API key,
+   and Firebase's service account for prod), run them again, then commit and
+   push `infra/stack/secrets/`.
+5. Argo CD brings up both stacks.
+   `hurl --test --variable domain=<domain> infra/smoke.hurl` checks one.
 
-`seal.sh` keeps the generated keys in the git-ignored
+`seal` keeps the generated keys in the git-ignored
 `infra/stack/secrets/<stack>.env` and `<stack>.restate.pem`. Back up all four
 files, and the controller's key with them: `kubectl -n kube-system get secret -l
 sealedsecrets.bitnami.com/sealed-secrets-key -o yaml`. Without the key, the
 committed SealedSecrets cannot be opened on a new cluster.
 
-`infra/check.sh` renders the chart for both stacks and checks it; CI runs it
-on every change under `infra/`. The design is in
+`infra/check.sh` lints the chart, runs its helm-unittest suites in
+`infra/stack/tests`, and checks the Argo CD Applications and the Traefik edge;
+CI runs it on every change under `infra/`. The design is in
 `docs/superpowers/specs/2026-11-04-infra-k3d-stacks-design.md`.
+
+## License
+
+MIT, in `LICENSE` here and in each component's repository.
