@@ -34,52 +34,51 @@ git submodule update --remote --merge
 
 ## Development
 
-The root `docker-compose.yml` runs the system on one machine, in two profiles:
+The root `docker-compose.yml` runs the whole system on one machine, in three
+stacks. Each profile is a stack of its own, with its own network, Postgres,
+Restate, RustFS and volumes, so the stacks share no data and run at the same
+time. They need Docker and nothing else on the machine.
 
 ```bash
-docker compose --profile dev up --build --watch   # live reload
-docker compose --profile prod up -d --build       # built images
+cp .env.example .env                                  # the LLM API search uses
+docker compose --profile dev up --build --watch       # everything, live reload
+docker compose --profile prod up -d --build           # the images the cluster runs
+docker compose --profile test run --rm --build tests  # the server's Go tests
 ```
 
-The `dev` profile runs the dev servers of the three web apps. Each image
-holds the app's dependencies. `--watch` copies a saved file into its
-container, where the dev server reloads the page in about two seconds, and
-rebuilds the image when `package.json` or `bun.lock` changes. The command
-stays in the foreground and prints the logs. `docker compose --profile dev
-down` stops the apps.
+`dev` and `prod` each sit behind one Caddy that routes by host, as the
+cluster's ingress does:
 
-| App | URL |
-|---|---|
-| docs | http://localhost:56421 |
-| website | http://localhost:4321 |
-| console | http://localhost:5173 |
+| App | dev | prod |
+|---|---|---|
+| website | http://localhost:56481 | http://localhost:56480 |
+| api | http://api.localhost:56481 | http://api.localhost:56480 |
+| media | http://media.localhost:56481 | http://media.localhost:56480 |
+| docs | http://docs.localhost:56481 | http://docs.localhost:56480 |
+| console | http://console.localhost:56481 | http://console.localhost:56480 |
 
-The server is not in `dev`. Run it with `cd server && make run`, which starts
-Postgres, Restate and RustFS in Docker and the server on the host. The console
-calls it from the browser at `localhost:8080`. The website renders pages in its
-container, which shares the host's network to call `localhost:8080`; Docker
-Desktop needs host networking turned on in its settings for that.
-Docs show the internal pages; `DOCS_INTERNAL=false` before the command hides
-them. Search is empty in dev, because only `bun run build` makes the Pagefind
-index.
+`dev` runs the server with `go run` and the web apps' dev servers. With
+`--watch`, a saved file is copied into its container: the web apps reload the
+page, and the server's container restarts on the new code in a few seconds. A
+change to `go.mod`, `package.json` or a lock file rebuilds the image, and a
+change under `server/migrations` runs the migrations again. Docs show the
+internal pages; `DOCS_INTERNAL=false` before the command hides them. Search
+is empty in dev, because only `bun run build` makes the Pagefind index.
 
-The `prod` profile builds every component from its Dockerfile and runs it with
-its own Postgres, Restate and RustFS, which the cluster runs too. A Caddy on
-port 56480 routes by host, as the cluster's ingress does:
+`prod` builds every component from its Dockerfile. Its server runs with
+`APP_ENV=dev`, so PNV's test numbers sign in.
 
-| App | URL |
-|---|---|
-| website | http://localhost:56480 |
-| api | http://api.localhost:56480 |
-| media | http://media.localhost:56480 |
-| docs | http://docs.localhost:56480 |
-| console | http://console.localhost:56480 |
+`test` runs `go test -race ./...` for the server against Postgres, Restate
+and RustFS on tmpfs. `run` exits with the tests' status and leaves the three
+running for the next run; `docker compose --profile test down` empties them.
 
-Before the first start, copy `.env.example` to `.env` and set `LLM_API_KEY`.
-The first start writes the server's keys into a volume, and `docker compose
---profile prod down -v` deletes them with the data. The server runs with
-`APP_ENV=dev`, so PNV's test numbers sign in. `dev`, `prod` and `make run` use
-different ports and can run at the same time.
+The server in `dev` and `prod` needs an OpenAI-compatible API for search:
+`LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`. The first start of a
+stack writes the server's keys into its volume, and
+`docker compose --profile <stack> down -v` deletes the stack's data and keys.
+
+Each component also runs from its own repository, as its README says; the
+server, for example, with `make run` and `make test`.
 
 ## Deployment
 

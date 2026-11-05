@@ -1,68 +1,113 @@
-# The whole system on one machine, in two profiles. Production is the k3d
+# The whole system on one machine, in three stacks. Each profile is a stack of
+# its own, with its own network, Postgres, Restate, RustFS and volumes, so the
+# stacks never share data and can run at the same time. Production is the k3d
 # cluster in ./infra; this file is for running things locally.
 #
-#   docker compose --profile dev up --build --watch   # docs, website, console with live reload
-#   docker compose --profile prod up -d --build       # every component built from its Dockerfile
+#   docker compose --profile dev up --build --watch    # everything, with live reload
+#   docker compose --profile prod up -d --build        # the images the cluster runs
+#   docker compose --profile test run --rm --build tests   # the server's Go tests
 #
-# dev: the three web apps run their dev servers. The image holds each app's
-# dependencies; --watch copies a saved file into the container, where the dev
-# server reloads it, and rebuilds the image when package.json or bun.lock
-# changes. The server is not here; `cd server && make run` starts it with its
-# own Postgres, Restate and RustFS (project shopnexus-server2) on the host.
-#   docs     http://localhost:56421
-#   website  http://localhost:4321
-#   console  http://localhost:5173
-# The website shares the host's network to call the server at localhost:8080;
-# Docker Desktop needs host networking turned on in its settings for that.
-#
-# prod: the images the cluster runs, plus their own Postgres, Restate and
-# RustFS, behind one Caddy on port 56480 that routes by host the way the
+# dev and prod each sit behind one Caddy that routes by host, the way the
 # cluster's ingress does. Browsers resolve *.localhost to 127.0.0.1.
-#   website  http://localhost:56480
-#   api      http://api.localhost:56480
-#   media    http://media.localhost:56480
-#   docs     http://docs.localhost:56480
-#   console  http://console.localhost:56480
-# The first start writes the server's keys into the keys volume. The server
-# needs an OpenAI-compatible API for search: LLM_BASE_URL, LLM_API_KEY and
-# LLM_MODEL, which it reads from .env next to this file. `docker compose --profile prod down -v` deletes
-# the data and the keys.
+#
+#              dev                                prod
+#   website    http://localhost:56481             http://localhost:56480
+#   api        http://api.localhost:56481         http://api.localhost:56480
+#   media      http://media.localhost:56481       http://media.localhost:56480
+#   docs       http://docs.localhost:56481        http://docs.localhost:56480
+#   console    http://console.localhost:56481     http://console.localhost:56480
+#
+# dev runs the server with go run and the web apps' dev servers. --watch
+# copies a saved file into its container: the web dev servers reload the
+# page, and the server's container restarts and builds again. A change to
+# go.mod, package.json or a lock file rebuilds the image; a change under
+# server/migrations runs the migrations again.
+#
+# test runs the server's Go tests against Postgres, Restate and RustFS on
+# tmpfs. run starts them and exits with the tests' status; they keep running
+# for the next run, and `docker compose --profile test down` empties them.
+# The tests container shares Restate's network namespace, so Restate reaches
+# the endpoints the tests serve on 127.0.0.1.
+#
+# The server needs an OpenAI-compatible API for search in dev and prod:
+# LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, read from .env next to this file.
+# The tests use a stub. The first start of a stack writes the server's keys
+# into its keys volume. `docker compose --profile <stack> down -v` deletes
+# the stack's data and keys.
 #
 # Image versions of Postgres, Restate and RustFS follow infra/stack/values.yaml;
 # infra/check.sh fails when they differ.
 name: shopnexus
 
-x-bun-dev: &bun-dev
-  profiles: [dev]
+# ── building blocks ──
+
+x-postgres: &postgres
+  image: paradedb/paradedb:0.26.4-pg18
+  environment:
+    POSTGRES_USER: shopnexus
+    POSTGRES_PASSWORD: shopnexus
+    POSTGRES_DB: shopnexus
+  # Over TCP: during the first start the image runs a socket-only server
+  # while it creates the database, and a socket check passes too early.
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U shopnexus -d shopnexus"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
   restart: unless-stopped
 
-# The dev image: the app's dependencies, then its source. DIR is the app's
-# directory in the build context; $$ keeps Compose from reading ${DIR} as
-# one of its own variables.
-x-bun-dev-dockerfile: &bun-dev-dockerfile |
-  FROM oven/bun:1.4.4
-  ARG DIR=.
-  WORKDIR /src
-  COPY $${DIR}/package.json $${DIR}/bun.lock ./
-  RUN bun install --frozen-lockfile
-  COPY $${DIR}/ ./
+x-rustfs: &rustfs
+  image: rustfs/rustfs:1.0.4
+  environment:
+    RUSTFS_ACCESS_KEY: shopnexus
+    RUSTFS_SECRET_KEY: shopnexus-secret
+    RUSTFS_VOLUMES: /data
+    RUSTFS_ADDRESS: 0.0.0.0:9000
+    RUSTFS_CONSOLE_ENABLE: "false"
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
+
+# Signs every request to the server's endpoint with the key the stack's keys
+# service wrote.
+x-restate: &restate
+  image: restatedev/restate:1.8.1
+  environment: &restate-env
+    RESTATE_BASE_DIR: /restate-data
+    # A fixed name: the default is the container's hostname, which changes when
+    # the container is created again, and Restate then refuses its own data.
+    RESTATE_NODE_NAME: restate
+    RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE: /keys/identity.pem
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9070/health"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
 
 x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
 
-# Every container that runs the server image reads this, then the .env in its
-# working directory for the keys the keys service wrote.
+# Fills in the server's keys (JWT, STAFF_KEY, the Restate request identity
+# key) in the stack's keys volume, as make run does in server/.env. Keys
+# already there stay. The volume is the nonroot user's home, which the image
+# owns, so the container writes it without root.
+x-keys: &keys
+  <<: *server-image
+  entrypoint: ["/envgen", "-env", "/home/nonroot/.env", "-restate", "/home/nonroot/identity.pem"]
+
+# The server's configuration. Each stack adds the addresses of its own
+# services; the keys come from the .env the keys service wrote.
 x-server-env: &server-env
   APP_ENV: dev
   HTTP_ADDR: ":8080"
   LOG_LEVEL: info
   LOG_FORMAT: text
-  DATABASE_URL: postgres://shopnexus:shopnexus@postgres:5432/shopnexus?sslmode=disable
-  RESTATE_INGRESS_URL: http://restate:8080
-  RESTATE_ADMIN_URL: http://restate:9070
   RESTATE_LISTEN_ADDR: 0.0.0.0:9080
-  RESTATE_ENDPOINT_URL: http://server:9080
   RESTATE_SERVICE_PREFIX: ""
   RESTATE_REGISTER: "true"
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
@@ -72,14 +117,10 @@ x-server-env: &server-env
   JWT_AUDIENCE: shopnexus-app
   JWT_PREVIOUS_KEY_ID: ""
   JWT_PREVIOUS_PUBLIC_KEY: ""
-  STAFF_CONSOLE_ORIGIN: http://console.localhost:56480
-  OBJECT_STORE_ENDPOINT: http://rustfs:9000
-  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56480
   OBJECT_STORE_REGION: us-east-1
   OBJECT_STORE_ACCESS_KEY: shopnexus
   OBJECT_STORE_SECRET_KEY: shopnexus-secret
   OBJECT_STORE_BUCKET: shopnexus
-  MEDIA_PUBLIC_URL: http://media.localhost:56480/shopnexus
   LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-}
@@ -90,11 +131,126 @@ x-server-env: &server-env
   PNV_TEST_NUMBERS: "true"
   FCM_CREDENTIALS: ""
 
+x-server-env-dev: &server-env-dev
+  <<: *server-env
+  LOG_LEVEL: debug
+  DATABASE_URL: postgres://shopnexus:shopnexus@postgres-dev:5432/shopnexus?sslmode=disable
+  RESTATE_INGRESS_URL: http://restate-dev:8080
+  RESTATE_ADMIN_URL: http://restate-dev:9070
+  RESTATE_ENDPOINT_URL: http://server-dev:9080
+  STAFF_CONSOLE_ORIGIN: http://console.localhost:56481
+  OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
+  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56481
+  MEDIA_PUBLIC_URL: http://media.localhost:56481/shopnexus
+
+x-server-env-prod: &server-env-prod
+  <<: *server-env
+  DATABASE_URL: postgres://shopnexus:shopnexus@postgres-prod:5432/shopnexus?sslmode=disable
+  RESTATE_INGRESS_URL: http://restate-prod:8080
+  RESTATE_ADMIN_URL: http://restate-prod:9070
+  RESTATE_ENDPOINT_URL: http://server-prod:9080
+  STAFF_CONSOLE_ORIGIN: http://console.localhost:56480
+  OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
+  OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56480
+  MEDIA_PUBLIC_URL: http://media.localhost:56480/shopnexus
+
+# A web app's dev image: its dependencies, then its source. DIR is the app's
+# directory in the build context; $$ keeps Compose from reading ${DIR} as one
+# of its own variables.
+x-bun-dev-dockerfile: &bun-dev-dockerfile |
+  FROM oven/bun:1.4.4
+  ARG DIR=.
+  WORKDIR /src
+  COPY $${DIR}/package.json $${DIR}/bun.lock ./
+  RUN bun install --frozen-lockfile
+  COPY $${DIR}/ ./
+
+x-dev: &dev
+  profiles: [dev]
+  networks: [dev]
+
+x-prod: &prod
+  profiles: [prod]
+  networks: [prod]
+
+x-test: &test
+  profiles: [test]
+  networks: [test]
+
 services:
   # ── dev ──
 
+  postgres-dev:
+    <<: [*dev, *postgres]
+    volumes: [postgres-dev:/var/lib/postgresql]
+
+  rustfs-dev:
+    <<: [*dev, *rustfs]
+    volumes: [rustfs-dev:/data]
+
+  keys-dev:
+    <<: [*dev, *keys]
+    volumes: [keys-dev:/home/nonroot]
+
+  restate-dev:
+    <<: [*dev, *restate]
+    volumes: [restate-dev:/restate-data, keys-dev:/keys:ro]
+    depends_on:
+      keys-dev: { condition: service_completed_successfully }
+
+  migrate-dev:
+    <<: [*dev, *server-image]
+    entrypoint: ["/migrate"]
+    working_dir: /home/nonroot
+    environment: *server-env-dev
+    volumes: [keys-dev:/home/nonroot:ro]
+    depends_on:
+      keys-dev: { condition: service_completed_successfully }
+      postgres-dev: { condition: service_healthy }
+    develop:
+      watch:
+        - { action: rebuild, path: ./server/migrations }
+
+  objectstore-init-dev:
+    <<: [*dev, *server-image]
+    entrypoint: ["/objectstore-init"]
+    working_dir: /home/nonroot
+    environment: *server-env-dev
+    volumes: [keys-dev:/home/nonroot:ro]
+    depends_on:
+      keys-dev: { condition: service_completed_successfully }
+      rustfs-dev: { condition: service_healthy }
+
+  # go run on the source. The image holds the modules; .dockerignore keeps the
+  # host's .env out, and the .env here is the keys-dev volume's.
+  server-dev:
+    <<: *dev
+    image: shopnexus-server-dev:local
+    build:
+      context: ./server
+      dockerfile_inline: |
+        FROM golang:1.27.3
+        WORKDIR /src
+        COPY go.mod go.sum ./
+        RUN go mod download
+        COPY . .
+        RUN ln -s /keys/.env .env
+    command: ["go", "run", "./cmd/server"]
+    environment: *server-env-dev
+    volumes: [keys-dev:/keys:ro, go-build-dev:/root/.cache/go-build]
+    depends_on:
+      migrate-dev: { condition: service_completed_successfully }
+      objectstore-init-dev: { condition: service_completed_successfully }
+      restate-dev: { condition: service_healthy }
+    restart: unless-stopped
+    develop:
+      watch:
+        - { action: sync+restart, path: ./server, target: /src, ignore: [.env, .restate/, tmp/, bin/, .git/] }
+        - { action: rebuild, path: ./server/go.mod }
+        - { action: rebuild, path: ./server/go.sum }
+
   docs-dev:
-    <<: *bun-dev
+    <<: *dev
     image: shopnexus-docs-dev:local
     build:
       context: ./docs
@@ -104,8 +260,7 @@ services:
     environment:
       # true adds the internal pages (the Developers tab).
       DOCS_INTERNAL: ${DOCS_INTERNAL:-true}
-    ports:
-      - "127.0.0.1:56421:4321"
+    restart: unless-stopped
     develop:
       watch:
         - { action: sync, path: ./docs/web, target: /src, ignore: [node_modules/, dist/, .astro/] }
@@ -113,206 +268,259 @@ services:
         - { action: rebuild, path: ./docs/web/bun.lock }
 
   website-dev:
-    <<: *bun-dev
+    <<: *dev
     image: shopnexus-website-dev:local
     build:
       context: ./website
       dockerfile_inline: *bun-dev-dockerfile
-    # Astro renders pages in the container and calls the server that make run
-    # starts on the host. The host's network lets it reach localhost:8080
-    # directly, past firewalls that drop traffic from containers to the host.
-    network_mode: host
-    command: ["bun", "run", "dev", "--port", "4321"]
+    command: ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "4321"]
     environment:
-      API_URL: http://localhost:8080/v1
+      API_URL: http://server-dev:8080/v1
+    restart: unless-stopped
     develop:
       watch:
         - { action: sync, path: ./website, target: /src, ignore: [node_modules/, dist/, .astro/] }
         - { action: rebuild, path: ./website/package.json }
         - { action: rebuild, path: ./website/bun.lock }
 
+  # The console finds the API at api.<its own host>, so console.localhost
+  # calls api.localhost.
   console-dev:
-    <<: *bun-dev
+    <<: *dev
     image: shopnexus-console-dev:local
     build:
       context: ./console
       dockerfile_inline: *bun-dev-dockerfile
     command: ["bun", "run", "dev", "--host", "0.0.0.0"]
-    environment:
-      # The browser calls the server, so localhost is the host's.
-      VITE_API_URL: http://localhost:8080/v1
-    # Port 5173 is the origin the server's .env.example lets through CORS.
-    ports:
-      - "127.0.0.1:5173:5173"
+    restart: unless-stopped
     develop:
       watch:
         - { action: sync, path: ./console, target: /src, ignore: [node_modules/, dist/] }
         - { action: rebuild, path: ./console/package.json }
         - { action: rebuild, path: ./console/bun.lock }
 
+  proxy-dev:
+    <<: *dev
+    image: caddy:2.10.2-alpine
+    ports: ["127.0.0.1:56481:80"]
+    configs:
+      - { source: caddyfile-dev, target: /etc/caddy/Caddyfile }
+    restart: unless-stopped
+
   # ── prod ──
 
-  postgres:
-    image: paradedb/paradedb:0.26.4-pg18
-    profiles: [prod]
-    environment:
-      POSTGRES_USER: shopnexus
-      POSTGRES_PASSWORD: shopnexus
-      POSTGRES_DB: shopnexus
-    volumes:
-      - postgres:/var/lib/postgresql
-    healthcheck:
-      # Over TCP: during the first start the image runs a socket-only server
-      # while it creates the database, and a socket check passes too early.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U shopnexus -d shopnexus"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-    restart: unless-stopped
+  postgres-prod:
+    <<: [*prod, *postgres]
+    volumes: [postgres-prod:/var/lib/postgresql]
 
-  rustfs:
-    image: rustfs/rustfs:1.0.4
-    profiles: [prod]
-    environment:
-      RUSTFS_ACCESS_KEY: shopnexus
-      RUSTFS_SECRET_KEY: shopnexus-secret
-      RUSTFS_VOLUMES: /data
-      RUSTFS_ADDRESS: 0.0.0.0:9000
-      RUSTFS_CONSOLE_ENABLE: "false"
-    volumes:
-      - rustfs:/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-    restart: unless-stopped
+  rustfs-prod:
+    <<: [*prod, *rustfs]
+    volumes: [rustfs-prod:/data]
 
-  # Fills in the server's keys (JWT, STAFF_KEY, the Restate request identity
-  # key) in the keys volume, as make run does in server/.env. Keys already
-  # there stay. The volume is the nonroot user's home, which the image owns,
-  # so the containers write and read it without root.
-  keys:
-    <<: *server-image
-    profiles: [prod]
-    entrypoint: ["/envgen", "-env", "/home/nonroot/.env", "-restate", "/home/nonroot/identity.pem"]
-    volumes:
-      - keys:/home/nonroot
+  keys-prod:
+    <<: [*prod, *keys]
+    volumes: [keys-prod:/home/nonroot]
 
-  restate:
-    image: restatedev/restate:1.8.1
-    profiles: [prod]
-    environment:
-      RESTATE_BASE_DIR: /restate-data
-      RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE: /keys/identity.pem
-    volumes:
-      - restate:/restate-data
-      - keys:/keys:ro
+  restate-prod:
+    <<: [*prod, *restate]
+    volumes: [restate-prod:/restate-data, keys-prod:/keys:ro]
     depends_on:
-      keys: { condition: service_completed_successfully }
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9070/health"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-    restart: unless-stopped
+      keys-prod: { condition: service_completed_successfully }
 
-  migrate:
-    <<: *server-image
-    profiles: [prod]
+  migrate-prod:
+    <<: [*prod, *server-image]
     entrypoint: ["/migrate"]
     working_dir: /home/nonroot
-    environment: *server-env
-    volumes:
-      - keys:/home/nonroot:ro
+    environment: *server-env-prod
+    volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      keys: { condition: service_completed_successfully }
-      postgres: { condition: service_healthy }
+      keys-prod: { condition: service_completed_successfully }
+      postgres-prod: { condition: service_healthy }
 
-  objectstore-init:
-    <<: *server-image
-    profiles: [prod]
+  objectstore-init-prod:
+    <<: [*prod, *server-image]
     entrypoint: ["/objectstore-init"]
     working_dir: /home/nonroot
-    environment: *server-env
-    volumes:
-      - keys:/home/nonroot:ro
+    environment: *server-env-prod
+    volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      keys: { condition: service_completed_successfully }
-      rustfs: { condition: service_healthy }
+      keys-prod: { condition: service_completed_successfully }
+      rustfs-prod: { condition: service_healthy }
 
-  server:
-    <<: *server-image
-    profiles: [prod]
+  server-prod:
+    <<: [*prod, *server-image]
     working_dir: /home/nonroot
-    environment: *server-env
-    volumes:
-      - keys:/home/nonroot:ro
+    environment: *server-env-prod
+    volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      migrate: { condition: service_completed_successfully }
-      objectstore-init: { condition: service_completed_successfully }
-      restate: { condition: service_healthy }
+      migrate-prod: { condition: service_completed_successfully }
+      objectstore-init-prod: { condition: service_completed_successfully }
+      restate-prod: { condition: service_healthy }
     restart: unless-stopped
 
-  website:
+  website-prod:
+    <<: *prod
     image: shopnexus-website:local
     build: ./website
-    profiles: [prod]
     environment:
-      API_URL: http://server:8080/v1
-    depends_on: [server]
+      API_URL: http://server-prod:8080/v1
+    depends_on: [server-prod]
     restart: unless-stopped
 
   # The console finds the API at api.<its own host>, so console.localhost
   # calls api.localhost.
-  console:
+  console-prod:
+    <<: *prod
     image: shopnexus-console:local
     build: ./console
-    profiles: [prod]
     restart: unless-stopped
 
-  docs:
+  docs-prod:
+    <<: *prod
     image: shopnexus-docs:local
     build: ./docs
-    profiles: [prod]
     restart: unless-stopped
 
-  proxy:
+  proxy-prod:
+    <<: *prod
     image: caddy:2.10.2-alpine
-    profiles: [prod]
-    ports:
-      - "127.0.0.1:56480:80"
+    ports: ["127.0.0.1:56480:80"]
     configs:
-      - source: caddyfile
-        target: /etc/caddy/Caddyfile
-    depends_on: [server, website, console, docs, rustfs]
+      - { source: caddyfile-prod, target: /etc/caddy/Caddyfile }
+    depends_on: [server-prod, website-prod, console-prod, docs-prod, rustfs-prod]
     restart: unless-stopped
+
+  # ── test ──
+
+  # go test runs a package per CPU, each test on a cloned database of about
+  # 13 MB, and holds connections longer while ParadeDB writes its index.
+  # Port 56433 and database server2_test are what the tests' guard
+  # (internal/platform/postgres/pgtest) accepts, so they never drop other data.
+  postgres-test:
+    <<: [*test, *postgres]
+    environment:
+      POSTGRES_USER: shopnexus
+      POSTGRES_PASSWORD: shopnexus
+      POSTGRES_DB: server2_test
+    command: postgres -p 56433 -c max_connections=400
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 56433 -U shopnexus -d server2_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs: [/var/lib/postgresql:size=4g]
+    mem_limit: 4608m
+
+  rustfs-test:
+    <<: [*test, *rustfs]
+    tmpfs: ["/data:size=512m,uid=10001,gid=10001"]
+    mem_limit: 768m
+
+  keys-test:
+    <<: [*test, *keys]
+    volumes: [keys-test:/home/nonroot]
+
+  restate-test:
+    <<: [*test, *restate]
+    environment:
+      <<: *restate-env
+      # RocksDB sizes itself for a server; the tmpfs counts toward mem_limit.
+      RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 256MB
+    tmpfs: [/restate-data:size=1g]
+    mem_limit: 2048m
+    volumes: [keys-test:/keys:ro]
+    depends_on:
+      keys-test: { condition: service_completed_successfully }
+
+  # The source is mounted read-only. Restate's network namespace makes
+  # 127.0.0.1 here Restate's own, and the variables below override the host
+  # ports in server/.env.test.
+  tests:
+    profiles: [test]
+    image: shopnexus-server-test:local
+    build:
+      context: ./server
+      dockerfile_inline: |
+        FROM golang:1.27.3
+        WORKDIR /src
+        COPY go.mod go.sum ./
+        RUN go mod download
+    network_mode: service:restate-test
+    command: ["go", "test", "-race", "./..."]
+    environment:
+      TEST_DATABASE_URL: postgres://shopnexus:shopnexus@postgres-test:56433/server2_test?sslmode=disable
+      TEST_RESTATE_INGRESS_URL: http://127.0.0.1:8080
+      TEST_RESTATE_ADMIN_URL: http://127.0.0.1:9070
+      TEST_RESTATE_IDENTITY_FILE: /keys/identity.pem
+      TEST_OBJECT_STORE_ENDPOINT: http://rustfs-test:9000
+      TEST_OBJECT_STORE_PUBLIC_ENDPOINT: http://rustfs-test:9000
+      TEST_OBJECT_STORE_ACCESS_KEY: shopnexus
+      TEST_OBJECT_STORE_SECRET_KEY: shopnexus-secret
+      TEST_MEDIA_PUBLIC_URL: http://rustfs-test:9000/server2-test
+    volumes: [./server:/src:ro, keys-test:/keys:ro, go-build-test:/root/.cache/go-build]
+    depends_on:
+      postgres-test: { condition: service_healthy }
+      rustfs-test: { condition: service_healthy }
+      restate-test: { condition: service_healthy }
+
+networks:
+  dev:
+  prod:
+  test:
 
 configs:
-  caddyfile:
+  caddyfile-dev:
     content: |
       {
         auto_https off
         admin off
       }
       http://localhost {
-        reverse_proxy website:3000
+        reverse_proxy website-dev:4321
       }
       http://api.localhost {
-        reverse_proxy server:8080
+        reverse_proxy server-dev:8080
       }
       http://media.localhost {
-        reverse_proxy rustfs:9000
+        reverse_proxy rustfs-dev:9000
       }
       http://docs.localhost {
-        reverse_proxy docs:80
+        reverse_proxy docs-dev:4321
       }
       http://console.localhost {
-        reverse_proxy console:80
+        reverse_proxy console-dev:5173
+      }
+  caddyfile-prod:
+    content: |
+      {
+        auto_https off
+        admin off
+      }
+      http://localhost {
+        reverse_proxy website-prod:3000
+      }
+      http://api.localhost {
+        reverse_proxy server-prod:8080
+      }
+      http://media.localhost {
+        reverse_proxy rustfs-prod:9000
+      }
+      http://docs.localhost {
+        reverse_proxy docs-prod:80
+      }
+      http://console.localhost {
+        reverse_proxy console-prod:80
       }
 
 volumes:
-  postgres:
-  rustfs:
-  restate:
-  keys:
+  postgres-dev:
+  rustfs-dev:
+  restate-dev:
+  keys-dev:
+  go-build-dev:
+  postgres-prod:
+  rustfs-prod:
+  restate-prod:
+  keys-prod:
+  keys-test:
+  go-build-test:

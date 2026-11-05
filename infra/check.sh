@@ -58,9 +58,10 @@ grep -qF -- 'redirections' <<<"$proxy" && { echo "FAIL: behind-proxy edge must n
 for e in direct behind-proxy; do eq "$(yq '.image' "cluster/k3d-$e.yaml")" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"; done
 
 # ── local compose ──
-# The prod profile of the root docker-compose.yml runs the stack's data services.
+# Every stack of the root docker-compose.yml runs the stack's data services
+# from the x-postgres, x-restate and x-rustfs blocks.
 for s in postgres restate rustfs; do
-  eq "$(yq ".services.$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
+  eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
 
 # ── end of checks ──
