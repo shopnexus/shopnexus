@@ -16,6 +16,12 @@
 #   media      http://media.localhost:56481       http://media.localhost:56480
 #   docs       http://docs.localhost:56481        http://docs.localhost:56480
 #   console    http://console.localhost:56481     http://console.localhost:56480
+#   grafana    http://grafana.localhost:56481     http://grafana.localhost:56480
+#   restate    http://restate.localhost:56481     http://restate.localhost:56480
+#   s3         http://s3.localhost:56481          http://s3.localhost:56480
+#
+# Grafana gets the server's traces, metrics and logs. The dashboards need no
+# sign-in here; in the cluster the console's sign-in guards them.
 #
 # dev runs the server with go run and the web apps' dev servers. --watch
 # copies a saved file into its container: the web dev servers reload the
@@ -58,7 +64,7 @@ x-postgres: &postgres
 
 x-rustfs: &rustfs
   image: rustfs/rustfs:1.0.4
-  environment:
+  environment: &rustfs-env
     RUSTFS_ACCESS_KEY: shopnexus
     RUSTFS_SECRET_KEY: shopnexus-secret
     RUSTFS_VOLUMES: /data
@@ -88,6 +94,22 @@ x-restate: &restate
     retries: 30
   restart: unless-stopped
 
+# Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector in one
+# container. Locally Grafana needs no sign-in.
+x-lgtm: &lgtm
+  image: grafana/otel-lgtm:0.37.0
+  environment:
+    GF_AUTH_ANONYMOUS_ENABLED: "true"
+    GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    GF_AUTH_DISABLE_LOGIN_FORM: "true"
+  restart: unless-stopped
+
+# RustFS's web console on port 9001, for browsing the buckets.
+x-rustfs-console-env: &rustfs-console-env
+  <<: *rustfs-env
+  RUSTFS_CONSOLE_ENABLE: "true"
+  RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+
 x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
@@ -110,7 +132,6 @@ x-server-env: &server-env
   RESTATE_LISTEN_ADDR: 0.0.0.0:9080
   RESTATE_SERVICE_PREFIX: ""
   RESTATE_REGISTER: "true"
-  OTEL_EXPORTER_OTLP_ENDPOINT: ""
   SERVICE_NAME: server
   TRUSTED_PROXIES: ""
   JWT_ISSUER: shopnexus
@@ -138,6 +159,7 @@ x-server-env-dev: &server-env-dev
   RESTATE_INGRESS_URL: http://restate-dev:8080
   RESTATE_ADMIN_URL: http://restate-dev:9070
   RESTATE_ENDPOINT_URL: http://server-dev:9080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-dev:4318
   STAFF_CONSOLE_ORIGIN: http://console.localhost:56481
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56481
@@ -149,6 +171,7 @@ x-server-env-prod: &server-env-prod
   RESTATE_INGRESS_URL: http://restate-prod:8080
   RESTATE_ADMIN_URL: http://restate-prod:9070
   RESTATE_ENDPOINT_URL: http://server-prod:9080
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
   STAFF_CONSOLE_ORIGIN: http://console.localhost:56480
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.localhost:56480
@@ -186,7 +209,12 @@ services:
 
   rustfs-dev:
     <<: [*dev, *rustfs]
+    environment: *rustfs-console-env
     volumes: [rustfs-dev:/data]
+
+  lgtm-dev:
+    <<: [*dev, *lgtm]
+    volumes: [lgtm-dev:/data]
 
   keys-dev:
     <<: [*dev, *keys]
@@ -315,7 +343,12 @@ services:
 
   rustfs-prod:
     <<: [*prod, *rustfs]
+    environment: *rustfs-console-env
     volumes: [rustfs-prod:/data]
+
+  lgtm-prod:
+    <<: [*prod, *lgtm]
+    volumes: [lgtm-prod:/data]
 
   keys-prod:
     <<: [*prod, *keys]
@@ -490,6 +523,16 @@ configs:
       http://console.localhost {
         reverse_proxy console-dev:5173
       }
+      http://grafana.localhost {
+        reverse_proxy lgtm-dev:3000
+      }
+      http://restate.localhost {
+        reverse_proxy restate-dev:9070
+      }
+      http://s3.localhost {
+        redir / /rustfs/console/
+        reverse_proxy rustfs-dev:9001
+      }
   caddyfile-prod:
     content: |
       {
@@ -511,6 +554,16 @@ configs:
       http://console.localhost {
         reverse_proxy console-prod:80
       }
+      http://grafana.localhost {
+        reverse_proxy lgtm-prod:3000
+      }
+      http://restate.localhost {
+        reverse_proxy restate-prod:9070
+      }
+      http://s3.localhost {
+        redir / /rustfs/console/
+        reverse_proxy rustfs-prod:9001
+      }
 
 volumes:
   postgres-dev:
@@ -518,9 +571,11 @@ volumes:
   restate-dev:
   keys-dev:
   go-build-dev:
+  lgtm-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
+  lgtm-prod:
   keys-test:
   go-build-test:

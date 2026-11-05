@@ -60,6 +60,13 @@ cluster's ingress does:
 | media | http://media.localhost:56481 | http://media.localhost:56480 |
 | docs | http://docs.localhost:56481 | http://docs.localhost:56480 |
 | console | http://console.localhost:56481 | http://console.localhost:56480 |
+| Grafana | http://grafana.localhost:56481 | http://grafana.localhost:56480 |
+| Restate UI | http://restate.localhost:56481 | http://restate.localhost:56480 |
+| RustFS console | http://s3.localhost:56481 | http://s3.localhost:56480 |
+
+Grafana gets the server's traces, metrics and logs. Locally the three
+dashboards need no sign-in, and the RustFS console signs in with the stack's
+object store keys, `shopnexus` and `shopnexus-secret`.
 
 `dev` runs the server with `go run` and the web apps' dev servers. With
 `--watch`, a saved file is copied into its container: the web apps reload the
