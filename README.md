@@ -40,11 +40,15 @@ Restate, RustFS and volumes, so the stacks share no data and run at the same
 time. They need Docker and nothing else on the machine.
 
 ```bash
-cp .env.example .env                                  # the LLM API search uses
-docker compose --profile dev up --build --watch       # everything, live reload
-docker compose --profile prod up -d --build           # the images the cluster runs
-docker compose --profile test run --rm --build tests  # the server's Go tests
+cp .env.example .env   # the LLM API search uses
+make dev               # everything, live reload
+make prod              # the images the cluster runs
+make test              # the server's Go tests
+make down              # stop every stack; data stays
 ```
+
+Each target is one `docker compose` command, in the root `Makefile`, for
+machines without `make`.
 
 `dev` and `prod` each sit behind one Caddy that routes by host, as the
 cluster's ingress does:
@@ -70,7 +74,7 @@ is empty in dev, because only `bun run build` makes the Pagefind index.
 
 `test` runs `go test -race ./...` for the server against Postgres, Restate
 and RustFS on tmpfs. `run` exits with the tests' status and leaves the three
-running for the next run; `docker compose --profile test down` empties them.
+running for the next run; `make down` empties them.
 
 The server in `dev` and `prod` needs an OpenAI-compatible API for search:
 `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`. The first start of a
