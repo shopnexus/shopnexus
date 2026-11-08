@@ -55,7 +55,7 @@ tests:
           path: spec.routes[0].match
           value: Host(`grafana.dev.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
   # Traefik copies only these headers from the server's answer, replacing any
-  # the client sent, so a client cannot claim to be a staff member.
+  # the client sent, so a client cannot claim to be a console member.
   - it: asks the stack's server before every dashboard request
     template: dashboards.yaml
     documentSelector: { path: kind, value: Middleware }
@@ -63,10 +63,10 @@ tests:
     asserts:
       - equal:
           path: spec.forwardAuth.address
-          value: http://server-api.shopnexus-prod.svc:8080/v1/staff/dashboard-auth
+          value: http://server-api.shopnexus-prod.svc:8080/v1/console/dashboard-auth
       - equal:
           path: spec.forwardAuth.authResponseHeaders
-          value: [X-Staff-Email, X-Staff-Role]
+          value: [X-Console-Email, X-Console-Role]
   - it: signs Grafana's users in from the gate's headers
     template: dashboards.yaml
     documentSelector: { path: kind, value: Deployment }
@@ -74,10 +74,10 @@ tests:
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Staff-Email }
+          content: { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Console-Email }
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Staff-Role" }
+          content: { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Console-Role" }
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }

@@ -69,7 +69,7 @@ func seal(stack string, o opts, out io.Writer) error {
 	pemFile := filepath.Join(dir, stack+".restate.pem")
 
 	// envgen copies example.env on first use and fills in the server's keys:
-	// JWT_KEY_ID, JWT_PRIVATE_KEY, STAFF_KEY and RESTATE_IDENTITY_KEY, with the
+	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY and RESTATE_IDENTITY_KEY, with the
 	// pem. It refuses a RESTATE_IDENTITY_KEY whose pem is gone: a new pair would
 	// sign Restate's requests with a key the running server does not know.
 	// It runs as this user, so the files stay this user's.
@@ -126,7 +126,7 @@ func seal(stack string, o opts, out io.Writer) error {
 	ns := "shopnexus-" + stack
 	secrets := []secret{
 		{name: "server-secrets", namespace: ns, data: env.pick(
-			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "STAFF_KEY", "RESTATE_IDENTITY_KEY",
+			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "FCM_CREDENTIALS")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),

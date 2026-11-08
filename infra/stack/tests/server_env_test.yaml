@@ -19,7 +19,7 @@ tests:
           path: data.PNV_TEST_NUMBERS
           value: "false"
       - equal:
-          path: data.STAFF_CONSOLE_ORIGIN
+          path: data.CONSOLE_ORIGIN
           value: https://console.shopnexus.id.vn
       # The server reaches models only through the stack's LiteLLM, under one alias.
       - equal:
@@ -58,7 +58,7 @@ tests:
       - exists: { path: data.JWT_PREVIOUS_PUBLIC_KEY }
       - exists: { path: data.JWT_ISSUER }
       - exists: { path: data.JWT_AUDIENCE }
-      - exists: { path: data.STAFF_CONSOLE_ORIGIN }
+      - exists: { path: data.CONSOLE_ORIGIN }
       - exists: { path: data.OBJECT_STORE_ENDPOINT }
       - exists: { path: data.OBJECT_STORE_PUBLIC_ENDPOINT }
       - exists: { path: data.OBJECT_STORE_REGION }
@@ -83,7 +83,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 202c24a243e49239
+          value: c3b96e0d260f7b1a
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -91,4 +91,4 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 202c24a243e49239
+          value: c3b96e0d260f7b1a

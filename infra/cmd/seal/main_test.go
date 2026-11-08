@@ -78,7 +78,7 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if want := []string{"litellm-db", "litellm-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
-	for _, k := range []string{"JWT_PRIVATE_KEY", "STAFF_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY", "private.pem", "LITELLM_MASTER_KEY"} {
+	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY", "private.pem", "LITELLM_MASTER_KEY"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
 		}

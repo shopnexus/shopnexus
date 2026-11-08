@@ -6,7 +6,7 @@
 {{- $ns := .Release.Namespace }}
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector; the
 # server sends its traces, metrics and logs to port 4318. Grafana takes the
-# staff member from the headers the forwardAuth answer sets.
+# console member from the headers the forwardAuth answer sets.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,9 +30,9 @@ spec:
           env:
             - { name: GF_SERVER_ROOT_URL, value: "https://{{ include "sn.host" (dict "root" . "sub" "grafana") }}" }
             - { name: GF_AUTH_PROXY_ENABLED, value: "true" }
-            - { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Staff-Email }
+            - { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Console-Email }
             - { name: GF_AUTH_PROXY_HEADER_PROPERTY, value: email }
-            - { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Staff-Role" }
+            - { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Console-Role" }
             - { name: GF_AUTH_PROXY_AUTO_SIGN_UP, value: "true" }
             - { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
           ports:
@@ -71,8 +71,8 @@ spec:
     - { name: grafana, port: 3000, targetPort: grafana }
     - { name: otlp-http, port: 4318, targetPort: otlp-http }
 ---
-# The server answers 200 with the staff member in X-Staff-Email and
-# X-Staff-Role, or sends the browser to the console. Traefik copies only
+# The server answers 200 with the console member in X-Console-Email and
+# X-Console-Role, or sends the browser to the console. Traefik copies only
 # those two headers onto the request, replacing any the client sent.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -81,8 +81,8 @@ metadata:
   labels: {{- include "sn.labels" . | nindent 4 }}
 spec:
   forwardAuth:
-    address: http://server-api.{{ $ns }}.svc:8080/v1/staff/dashboard-auth
-    authResponseHeaders: [X-Staff-Email, X-Staff-Role]
+    address: http://server-api.{{ $ns }}.svc:8080/v1/console/dashboard-auth
+    authResponseHeaders: [X-Console-Email, X-Console-Role]
 ---
 # Restate's admin UI and Argo CD live in other namespaces, which Traefik
 # reaches with allowCrossNamespace (infra/cluster/k3d-*.yaml).
