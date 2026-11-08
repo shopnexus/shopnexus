@@ -39,7 +39,8 @@
 # the endpoints the tests serve on 127.0.0.1.
 #
 # The server needs an OpenAI-compatible API for search in dev and prod:
-# LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, read from .env next to this file.
+# LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, read from server/.env (the Makefile
+# passes --env-file server/.env).
 # The tests use a stub. The first start of a stack writes the server's keys
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.

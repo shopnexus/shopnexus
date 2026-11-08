@@ -40,11 +40,11 @@ Restate, RustFS and volumes, so the stacks share no data and run at the same
 time. They need Docker and nothing else on the machine.
 
 ```bash
-cp .env.example .env   # the LLM API search uses
-make dev               # everything, live reload
-make prod              # the images the cluster runs
-make test              # the server's Go tests
-make down              # stop every stack; data stays
+cp -n server/.env.example server/.env   # then fill in its three LLM_ lines
+make dev                                 # everything, live reload
+make prod                                # the images the cluster runs
+make test                                # the server's Go tests
+make down                                # stop every stack; data stays
 ```
 
 Each target is one `docker compose` command, in the root `Makefile`, for
@@ -86,7 +86,9 @@ and RustFS on tmpfs. `run` exits with the tests' status and leaves the three
 running for the next run; `make down` empties them.
 
 The server in `dev` and `prod` needs an OpenAI-compatible API for search:
-`LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`. The first start of a
+`LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `server/.env`, the file
+`make run` in `server/` also reads. Compose takes only those three from it
+(`--env-file server/.env` in the root `Makefile`). The first start of a
 stack writes the server's keys into its volume, and
 `docker compose --profile <stack> down -v` deletes the stack's data and keys.
 

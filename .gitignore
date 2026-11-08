@@ -2,7 +2,6 @@
 # a stray file there is never committed by accident. A new top-level file or
 # directory needs its own line.
 /*
-!/.env.example
 !/.github/
 !/.gitignore
 !/.gitmodules

@@ -2,14 +2,19 @@
 # details and the URLs.
 .PHONY: dev prod test down
 
+# dev and prod take LLM_BASE_URL, LLM_API_KEY and LLM_MODEL from
+# server/.env. Compose uses the file only to fill in ${...} in
+# docker-compose.yml, and those three are the only ones it names.
+COMPOSE_LLM := docker compose --env-file server/.env
+
 # Everything with live reload, behind http://localhost:56481. Stays in the
 # foreground and prints the logs.
 dev:
-	docker compose --profile dev up --build --watch
+	$(COMPOSE_LLM) --profile dev up --build --watch
 
 # The images the cluster runs, behind http://localhost:56480.
 prod:
-	docker compose --profile prod up -d --build
+	$(COMPOSE_LLM) --profile prod up -d --build
 
 # The server's Go tests, on tmpfs.
 test:
