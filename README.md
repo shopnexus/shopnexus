@@ -4,13 +4,13 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 
 ## Components
 
-| Path      | Repository              | Description            |
-| --------- | ----------------------- | ---------------------- |
-| `app`     | `shopnexus/app-android` | Android app (Kotlin)   |
-| `console` | `shopnexus/console`     | Staff console (React)  |
-| `docs`    | `shopnexus/docs`        | Documentation          |
-| `server`  | `shopnexus/server`      | Backend (Go)           |
-| `website` | `shopnexus/website`     | Storefront (Astro)     |
+| Path      | Repository              | Description                |
+| --------- | ----------------------- | -------------------------- |
+| `app`     | `shopnexus/app-android` | Android app (Kotlin)       |
+| `console` | `shopnexus/console`     | Moderation console (React) |
+| `docs`    | `shopnexus/docs`        | Documentation              |
+| `server`  | `shopnexus/server`      | Backend (Go)               |
+| `website` | `shopnexus/website`     | Storefront (Astro)         |
 
 ## Clone
 
@@ -106,7 +106,7 @@ three agents, and two stacks of ShopNexus in it.
 | prod | `shopnexus.id.vn` | `shopnexus-prod` | the newest `X.Y.Z` tag |
 
 Each stack serves the website on its domain and `api.`, `media.`,
-`docs.` and `console.` (the staff console) below it. Argo CD syncs the Helm chart in `infra/stack` once per
+`docs.` and `console.` (the moderation console) below it. Argo CD syncs the Helm chart in `infra/stack` once per
 stack, and Argo CD Image Updater moves the image tags. Postgres runs on
 CloudNativePG, Restate on restate-operator; prod runs two Postgres instances
 and three Restate nodes.

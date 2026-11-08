@@ -117,7 +117,7 @@ x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
 
-# Fills in the server's keys (JWT, STAFF_KEY, the Restate request identity
+# Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
 # key) in the stack's keys volume, as make run does in server/.env. Keys
 # already there stay. The volume is the nonroot user's home, which the image
 # owns, so the container writes it without root.
@@ -165,7 +165,7 @@ x-server-env-dev: &server-env-dev
   RESTATE_ADMIN_URL: http://restate-dev:9070
   RESTATE_ENDPOINT_URL: http://server-dev:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-dev:4318
-  STAFF_CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
+  CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
@@ -177,7 +177,7 @@ x-server-env-prod: &server-env-prod
   RESTATE_ADMIN_URL: http://restate-prod:9070
   RESTATE_ENDPOINT_URL: http://server-prod:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
-  STAFF_CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
+  CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
