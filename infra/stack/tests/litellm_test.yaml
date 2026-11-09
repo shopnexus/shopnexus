@@ -1,5 +1,5 @@
 suite: litellm
-templates: [litellm.yaml, postgres.yaml]
+templates: [litellm.yaml, litellm-keys.yaml, postgres.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   # The server asks for the alias search; LiteLLM sends it to one model of
@@ -10,125 +10,107 @@ tests:
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal:
-          path: metadata.name
-          value: litellm-config
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "model_name: search\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "model: openai/claude-haiku-5-5\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "api_base: http://host.k3d.internal:8317/v1\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "input_cost_per_token: 0.000001\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "output_cost_per_token: 0.000001\\n"
-  - it: runs the pinned image and rolls on a config change
-    template: litellm.yaml
-    documentIndex: 1
-    values: [../values-prod.yaml, values-test.yaml]
-    asserts:
-      - isKind:
-          of: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].image
-          value: ghcr.io/berriai/litellm-database:v1.108.0
-      - exists:
-          path: spec.template.metadata.annotations["checksum/config"]
-  - it: gives prod 2M tokens a day at 100k a minute, after LiteLLM is up
-    template: litellm.yaml
-    documentIndex: 3
-    values: [../values-prod.yaml, values-test.yaml]
-    asserts:
-      - equal:
-          path: metadata.name
-          value: litellm-key
-      - equal:
-          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
-          value: "3"
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: MAX_BUDGET, value: "2" }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: TPM_LIMIT, value: "100000" }
-  - it: gives dev 200k tokens a day at 20k a minute
-    template: litellm.yaml
-    documentIndex: 3
-    values: [../values-dev.yaml, values-test.yaml]
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: MAX_BUDGET, value: "0.2" }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: TPM_LIMIT, value: "20000" }
-  - it: gives LiteLLM its own database and a sealed role password
-    template: postgres.yaml
-    values: [../values-prod.yaml, values-test.yaml]
-    asserts:
-      - equal:
-          path: spec.owner
-          value: litellm
-        documentIndex: 2
-      - equal:
-          path: spec.managed.roles[0].passwordSecret.name
-          value: litellm-db
-        documentIndex: 1
-  # The alias stt sends speech to the stack's ai service. Budgets count money;
-  # at 1e-6 per second, 1 of budget is 1M seconds of audio.
+      - equal: { path: metadata.name, value: litellm-config }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: search\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model: openai/claude-haiku-5-5\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "api_base: http://host.k3d.internal:8317/v1\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "api_key: os.environ/LLM_UPSTREAM_API_KEY\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "input_cost_per_token: 0.000001\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "output_cost_per_token: 0.000001\\n" }
+  # The alias stt sends speech to the stack's ai service. At 1e-6 per second,
+  # 1 of budget is 1M seconds of audio.
   - it: maps the alias stt to the ai service at 1e-6 a second
     template: litellm.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "model_name: stt\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "model: openai/gipformer-1.5\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "api_base: http://ai:8000/v1\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "mode: audio_transcription\\n"
-      - matchRegex:
-          path: data["config.yaml"]
-          pattern: "input_cost_per_second: 0.000001\\n"
-  - it: gives prod's server-stt key 10 hours of audio a day at 60 a minute
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: stt\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model: openai/gipformer-1.5\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "api_base: http://ai:8000/v1\\n      api_key: none" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "mode: audio_transcription\\n" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "input_cost_per_second: 0.000001\\n" }
+  # A search photo passes through LiteLLM; its spend logs keep no body.
+  - it: keeps request bodies out of the spend logs
     template: litellm.yaml
-    documentIndex: 3
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "store_prompts_in_spend_logs: false\\n" }
+  - it: runs the pinned image with the upstream key and rolls on a config change
+    template: litellm.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Deployment }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "ghcr.io/berriai/litellm-database:v1.108.0" }
+      - exists: { path: 'spec.template.metadata.annotations["checksum/config"]' }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LLM_UPSTREAM_API_KEY
+            valueFrom: { secretKeyRef: { name: litellm-secrets, key: LLM_UPSTREAM_API_KEY } }
+  - it: gives prod's server-llm key 2M tokens a day at 100k a minute, after LiteLLM is up
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: litellm-key }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_SERVER_LLM
+            valueFrom: { secretKeyRef: { name: server-secrets, key: LLM_API_KEY } }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: 'upsert server-llm "\$KEY_SERVER_LLM"' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-llm","max_budget":2,"models":\["search"\],"tpm_limit":100000' }
+  - it: gives dev's server-llm key 200k tokens a day at 20k a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-llm","max_budget":0.2,"models":\["search"\],"tpm_limit":20000' }
+  - it: gives prod's server-stt key 10 hours of audio a day at 60 a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: STT_MAX_BUDGET, value: "0.036" }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: STT_RPM_LIMIT, value: "60" }
-      - contains:
-          path: spec.template.spec.containers[0].env
           content:
-            name: STT_KEY
+            name: KEY_SERVER_STT
             valueFrom: { secretKeyRef: { name: server-secrets, key: STT_API_KEY } }
-      - matchRegex:
-          path: spec.template.spec.containers[0].args[0]
-          pattern: 'upsert server-stt .*\\"models\\":\[\\"stt\\"\]'
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-stt","max_budget":0.036,"models":\["stt"\],"rpm_limit":60' }
   - it: gives dev's server-stt key 1 hour of audio a day at 10 a minute
-    template: litellm.yaml
-    documentIndex: 3
+    template: litellm-keys.yaml
+    documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: STT_MAX_BUDGET, value: "0.0036" }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: STT_RPM_LIMIT, value: "10" }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-stt","max_budget":0.0036,"models":\["stt"\],"rpm_limit":10' }
+  - it: refuses a key that names an alias LiteLLM does not have
+    template: litellm-keys.yaml
+    values: [../values-prod.yaml, values-test.yaml, values-bad-alias.yaml]
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.server-stt names the alias nope" }
+  - it: refuses a key over aliases priced in different units
+    template: litellm-keys.yaml
+    values: [../values-prod.yaml, values-test.yaml, values-mixed-units.yaml]
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.server-stt mixes aliases priced by token and by second" }
+  - it: refuses a key with neither tpmLimit nor rpmLimit
+    template: litellm-keys.yaml
+    values: [../values-prod.yaml, values-test.yaml, values-no-limit.yaml]
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.server-llm needs tpmLimit or rpmLimit" }
+  - it: refuses an alias without a model
+    template: litellm.yaml
+    values: [../values-prod.yaml, values-test.yaml, values-no-model.yaml]
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.aliases.search.model is required" }
+  - it: gives LiteLLM its own database and a sealed role password
+    template: postgres.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: spec.owner, value: litellm }
+        documentIndex: 2
+      - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: litellm-db }
+        documentIndex: 1

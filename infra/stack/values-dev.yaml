@@ -7,8 +7,6 @@ server:
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
 litellm:
-  dailyTokens: 200000
-  tpmLimit: 20000
-  stt:
-    dailySeconds: 3600
-    rpmLimit: 10
+  keys:
+    server-llm: { dailyUnits: 200000, tpmLimit: 20000 }
+    server-stt: { dailyUnits: 3600, rpmLimit: 10 }

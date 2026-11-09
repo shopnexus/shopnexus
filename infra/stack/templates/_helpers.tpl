@@ -90,3 +90,21 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- range include "sn.dashboards" . | fromJsonArray }}{{ $pairs = append $pairs (printf "%s=%s" .app .host) }}{{ end }}
 {{- join "," $pairs }}
 {{- end }}
+{{/* The env var of the key Job that holds one key's value: server-llm gives
+     KEY_SERVER_LLM. */}}
+{{- define "sn.keyEnv" -}}
+KEY_{{ . | upper | replace "-" "_" }}
+{{- end }}
+
+{{/* The JSON body of /key/update and /key/generate for one key, without the
+     key's value, which the Job adds at run time. Call with
+     (dict "alias" "server-llm" "k" .Values.litellm.keys.server-llm). */}}
+{{- define "sn.keyBody" -}}
+{{- $k := .k -}}
+{{- $units := required (printf "litellm.keys.%s.dailyUnits is required" .alias) $k.dailyUnits -}}
+{{- $b := dict "key_alias" .alias "models" $k.models "budget_duration" "1d" "max_budget" (divf $units 1000000) -}}
+{{- if hasKey $k "tpmLimit" }}{{ $_ := set $b "tpm_limit" (int $k.tpmLimit) }}{{ end -}}
+{{- if hasKey $k "rpmLimit" }}{{ $_ := set $b "rpm_limit" (int $k.rpmLimit) }}{{ end -}}
+{{- if not (or (hasKey $k "tpmLimit") (hasKey $k "rpmLimit")) }}{{ fail (printf "litellm.keys.%s needs tpmLimit or rpmLimit" .alias) }}{{ end -}}
+{{- toJson $b -}}
+{{- end }}
