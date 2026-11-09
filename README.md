@@ -4,13 +4,14 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 
 ## Components
 
-| Path      | Repository              | Description                |
-| --------- | ----------------------- | -------------------------- |
-| `app`     | `shopnexus/app-android` | Android app (Kotlin)       |
-| `console` | `shopnexus/console`     | Moderation console (React) |
-| `docs`    | `shopnexus/docs`        | Documentation              |
-| `server`  | `shopnexus/server`      | Backend (Go)               |
-| `website` | `shopnexus/website`     | Storefront (Astro)         |
+| Path      | Repository              | Description                            |
+| --------- | ----------------------- | -------------------------------------- |
+| `ai`      | `shopnexus/ai`          | Self-hosted models behind OpenAI's API |
+| `app`     | `shopnexus/app-android` | Android app (Kotlin)                   |
+| `console` | `shopnexus/console`     | Moderation console (React)             |
+| `docs`    | `shopnexus/docs`        | Documentation                          |
+| `server`  | `shopnexus/server`      | Backend (Go)                           |
+| `website` | `shopnexus/website`     | Storefront (Astro)                     |
 
 ## Clone
 
