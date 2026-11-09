@@ -80,3 +80,55 @@ tests:
           path: spec.managed.roles[0].passwordSecret.name
           value: litellm-db
         documentIndex: 1
+  # The alias stt sends speech to the stack's ai service. Budgets count money;
+  # at 1e-6 per second, 1 of budget is 1M seconds of audio.
+  - it: maps the alias stt to the ai service at 1e-6 a second
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "model_name: stt\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "model: openai/gipformer-1.5\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "api_base: http://ai:8000/v1\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "mode: audio_transcription\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "input_cost_per_second: 0.000001\\n"
+  - it: gives prod's server-stt key 10 hours of audio a day at 60 a minute
+    template: litellm.yaml
+    documentIndex: 3
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: STT_MAX_BUDGET, value: "0.036" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: STT_RPM_LIMIT, value: "60" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: STT_KEY
+            valueFrom: { secretKeyRef: { name: server-secrets, key: STT_API_KEY } }
+      - matchRegex:
+          path: spec.template.spec.containers[0].args[0]
+          pattern: 'upsert server-stt .*\\"models\\":\[\\"stt\\"\]'
+  - it: gives dev's server-stt key 1 hour of audio a day at 10 a minute
+    template: litellm.yaml
+    documentIndex: 3
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: STT_MAX_BUDGET, value: "0.0036" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: STT_RPM_LIMIT, value: "10" }

@@ -9,3 +9,6 @@ server:
 litellm:
   dailyTokens: 200000
   tpmLimit: 20000
+  stt:
+    dailySeconds: 3600
+    rpmLimit: 10

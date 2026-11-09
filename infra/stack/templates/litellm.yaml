@@ -1,5 +1,6 @@
-{{- /* The stack's LiteLLM: one alias, "search", over the upstream API, and a
-       virtual key for the server with a daily token budget. */ -}}
+{{- /* The stack's LiteLLM: the alias "search" over the upstream API, the alias
+       "stt" over the stack's ai service, and a virtual key for each with a
+       daily budget. */ -}}
 {{- define "sn.litellmConfig" -}}
 model_list:
   - model_name: search
@@ -11,6 +12,15 @@ model_list:
     model_info:
       input_cost_per_token: 0.000001
       output_cost_per_token: 0.000001
+  - model_name: stt
+    litellm_params:
+      model: {{ required "litellm.stt.model is required" .Values.litellm.stt.model }}
+      api_base: {{ required "litellm.stt.apiBase is required" .Values.litellm.stt.apiBase }}
+      api_key: none   # ai has no authentication; only the stack reaches it
+    # At 1e-6 per second of audio, 1 of budget is 1M seconds.
+    model_info:
+      mode: audio_transcription
+      input_cost_per_second: 0.000001
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
@@ -86,8 +96,8 @@ spec:
   ports:
     - { name: http, port: 4000, targetPort: http }
 ---
-# Makes the server's virtual key exist with this stack's budget: updates it
-# when it exists, creates it with the sealed value when it does not.
+# Makes the server's two virtual keys exist with this stack's budgets: updates
+# each when it exists, creates it with the sealed value when it does not.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -114,14 +124,22 @@ spec:
               valueFrom: { secretKeyRef: { name: server-secrets, key: LLM_API_KEY } }
             - { name: MAX_BUDGET, value: {{ divf (required "litellm.dailyTokens is required" .Values.litellm.dailyTokens) 1000000 | toString | quote }} }
             - { name: TPM_LIMIT, value: {{ required "litellm.tpmLimit is required" .Values.litellm.tpmLimit | int | toString | quote }} }
+            - name: STT_KEY
+              valueFrom: { secretKeyRef: { name: server-secrets, key: STT_API_KEY } }
+            - { name: STT_MAX_BUDGET, value: {{ divf (required "litellm.stt.dailySeconds is required" .Values.litellm.stt.dailySeconds) 1000000 | toString | quote }} }
+            - { name: STT_RPM_LIMIT, value: {{ required "litellm.stt.rpmLimit is required" .Values.litellm.stt.rpmLimit | int | toString | quote }} }
           command: [sh, -ec]
           args:
             - |
-              body="{\"key\":\"$SERVER_KEY\",\"key_alias\":\"server\",\"models\":[\"search\"],\"max_budget\":$MAX_BUDGET,\"budget_duration\":\"1d\",\"tpm_limit\":$TPM_LIMIT}"
               call() { curl -s -o /tmp/out -w '%{http_code}' -X POST "http://litellm:4000/key/$1" \
                 -H "Authorization: Bearer $MASTER_KEY" -H 'Content-Type: application/json' -d "$body"; }
-              code=$(call update)
-              if [ "$code" != 200 ]; then code=$(call generate); fi
-              # The response holds the key, so only its status is logged.
-              echo "litellm key: HTTP $code"
-              [ "$code" = 200 ] || { grep -o '"message":"[^"]*"' /tmp/out; exit 1; }
+              upsert() {
+                body=$2
+                code=$(call update)
+                if [ "$code" != 200 ]; then code=$(call generate); fi
+                # The response holds the key, so only its status is logged.
+                echo "litellm key $1: HTTP $code"
+                [ "$code" = 200 ] || { grep -o '"message":"[^"]*"' /tmp/out; exit 1; }
+              }
+              upsert server "{\"key\":\"$SERVER_KEY\",\"key_alias\":\"server\",\"models\":[\"search\"],\"max_budget\":$MAX_BUDGET,\"budget_duration\":\"1d\",\"tpm_limit\":$TPM_LIMIT}"
+              upsert server-stt "{\"key\":\"$STT_KEY\",\"key_alias\":\"server-stt\",\"models\":[\"stt\"],\"max_budget\":$STT_MAX_BUDGET,\"budget_duration\":\"1d\",\"rpm_limit\":$STT_RPM_LIMIT}"

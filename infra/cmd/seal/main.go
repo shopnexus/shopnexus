@@ -101,6 +101,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"LITELLM_MASTER_KEY", "sk-", 24},
 		{"LITELLM_DB_PASSWORD", "", 24},
 		{"LLM_API_KEY", "sk-", 24}, // the server's virtual key in LiteLLM
+		{"STT_API_KEY", "sk-", 24}, // the server's speech-to-text key in LiteLLM
 	} {
 		if env.get(k.name) == "" {
 			b := make([]byte, k.bytes)
@@ -127,7 +128,7 @@ func seal(stack string, o opts, out io.Writer) error {
 	secrets := []secret{
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
-			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "FCM_CREDENTIALS")},
+			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "STT_API_KEY", "FCM_CREDENTIALS")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),
