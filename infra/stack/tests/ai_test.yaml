@@ -1,0 +1,71 @@
+suite: ai
+templates: [ai.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: runs the pinned image in prod with every AI_ variable from values
+    template: ai.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/shopnexus/ai:0.1.0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_ADDR, value: ":8000" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_STT_MODELS, value: gipformer-1.5=/models/gipformer-1.5 }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_VAD_MODEL, value: /models/silero_vad.onnx }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_NUM_THREADS, value: "4" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_MAX_CONCURRENT, value: "2" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_MAX_UPLOAD_MB, value: "100" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_MAX_AUDIO_SECONDS, value: "300" }
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[0].mountPath
+          value: /tmp
+  - it: follows main in dev
+    template: ai.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/shopnexus/ai:main
+  - it: is reachable in the stack as ai:8000
+    template: ai.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: ai
+      - equal:
+          path: spec.ports[0].port
+          value: 8000

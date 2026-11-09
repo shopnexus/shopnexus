@@ -1,0 +1,61 @@
+{{- /* The stack's provider of self-hosted models (repo shopnexus/ai). LiteLLM's
+       alias stt calls it; from-stack lets LiteLLM in, and it has no Ingress. */ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: ai }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "ai") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: ai
+          image: {{ include "sn.image" .Values.images.ai }}
+          env:
+            - { name: AI_ADDR, value: ":8000" }
+            - { name: AI_STT_MODELS, value: gipformer-1.5=/models/gipformer-1.5 }
+            - { name: AI_VAD_MODEL, value: /models/silero_vad.onnx }
+            - { name: AI_NUM_THREADS, value: {{ required "ai.numThreads is required" .Values.ai.numThreads | toString | quote }} }
+            - { name: AI_MAX_CONCURRENT, value: {{ required "ai.maxConcurrent is required" .Values.ai.maxConcurrent | toString | quote }} }
+            - { name: AI_MAX_UPLOAD_MB, value: {{ required "ai.maxUploadMB is required" .Values.ai.maxUploadMB | toString | quote }} }
+            - { name: AI_MAX_AUDIO_SECONDS, value: {{ required "ai.maxAudioSeconds is required" .Values.ai.maxAudioSeconds | toString | quote }} }
+          ports:
+            - { name: http, containerPort: 8000 }
+          # Loading the model takes a few seconds, and the server listens after it.
+          startupProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          # Uploads wait in /tmp while they decode.
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { memory: 2Gi }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: ai }
+  ports:
+    - { name: http, port: 8000, targetPort: http }

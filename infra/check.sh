@@ -33,7 +33,7 @@ eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sou
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
-for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "console docs server website " "stack-$s images"; done
+for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "ai console docs server website " "stack-$s images"; done
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health
 # so root's waves wait for the platform.

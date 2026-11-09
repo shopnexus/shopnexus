@@ -6,6 +6,7 @@ images:
   website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }
   docs: { repository: ghcr.io/shopnexus/docs, tag: 0.1.0 }
   console: { repository: ghcr.io/shopnexus/console, tag: 0.1.0 }
+  ai: { repository: ghcr.io/shopnexus/ai, tag: 0.1.0 }
 replicas:
   server: 3
   website: 2

@@ -12,6 +12,7 @@ images:
   website: { repository: ghcr.io/shopnexus/website, tag: main }
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
   console: { repository: ghcr.io/shopnexus/console, tag: main }
+  ai: { repository: ghcr.io/shopnexus/ai, tag: main }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
@@ -43,6 +44,14 @@ rustfs:
 # Grafana's dashboards and the telemetry Loki, Tempo and Prometheus keep.
 lgtm:
   storage: 5Gi
+
+# The stack's provider of self-hosted models (repo shopnexus/ai). LiteLLM's
+# alias stt calls it; nothing outside the stack reaches it.
+ai:
+  numThreads: 4
+  maxConcurrent: 2
+  maxUploadMB: 100
+  maxAudioSeconds: 300
 
 # The stack's LiteLLM. The server calls it under the alias "search"; the
 # alias maps to one model of the upstream OpenAI-compatible API. The budget
