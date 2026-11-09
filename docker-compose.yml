@@ -186,7 +186,7 @@ x-server-env: &server-env
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-}
   EMBED_TEXT_VERSION: bge-m3@5617a9f61b028005a4858fdac845db406aefb181
-  EMBED_IMAGE_VERSION: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-int8
+  EMBED_IMAGE_VERSION: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32
   # TEI serves one model and ignores the name; ai checks it.
   EMBED_TEXT_MODEL: bge-m3
   EMBED_IMAGE_MODEL: siglip2-so400m-patch16-384

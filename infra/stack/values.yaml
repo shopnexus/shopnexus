@@ -48,9 +48,10 @@ lgtm:
 
 # The stack's provider of self-hosted models (repo shopnexus/ai). LiteLLM's
 # aliases stt and embed-image call it; nothing outside the stack reaches it.
-# Memory: Gipformer and the idle process take about 1 GiB; SigLIP 2 adds about
-# 1.15 GB in int8 or 4.5 GB in fp32 (plan 1 measures which runs). For fp32 set
-# memoryRequest 6Gi and memoryLimit 8Gi. embedVersion names the SigLIP 2 the
+# Memory: the image carries SigLIP 2 in fp32 (4.5 GB of weights); the int8
+# files gave photo vectors at a cosine of 0.55 to the reference and were
+# dropped (ai's README, Image). Loaded with Gipformer and one photo embedded,
+# the process held 4.34 GiB on 2026-11-10. embedVersion names the SigLIP 2 the
 # image carries; the server stores it with every photo vector, so a new one
 # means a reindex.
 ai:
@@ -61,9 +62,9 @@ ai:
   embedMaxInputs: 16
   embedMaxConcurrent: 2
   embedMaxImageMB: 10
-  embedVersion: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-int8
-  memoryRequest: 2Gi
-  memoryLimit: 4Gi
+  embedVersion: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32
+  memoryRequest: 6Gi
+  memoryLimit: 8Gi
   startupSeconds: 180
 
 # Text embeddings for LiteLLM's alias embed-text: Hugging Face's Text
