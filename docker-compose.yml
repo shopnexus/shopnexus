@@ -22,6 +22,7 @@
 #   grafana    http://grafana.shopnexus.localhost:56481   http://grafana.shopnexus.localhost:56480
 #   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
+#   ai         http://127.0.0.1:56491                     http://127.0.0.1:56490
 #
 # Grafana gets the server's traces, metrics and logs. The dashboards need no
 # sign-in here; in the cluster the console's sign-in guards them.
@@ -117,6 +118,22 @@ x-rustfs-console-env: &rustfs-console-env
 x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
+
+# The stack's provider of self-hosted models (submodule ai). In the cluster
+# LiteLLM's alias stt calls it. Locally the server will call it directly, as
+# it calls the upstream LLM.
+x-ai: &ai
+  image: shopnexus-ai:local
+  build: ./ai
+  environment:
+    AI_ADDR: ":8000"
+    AI_STT_MODELS: gipformer-1.5=/models/gipformer-1.5
+    AI_VAD_MODEL: /models/silero_vad.onnx
+    AI_NUM_THREADS: "4"
+    AI_MAX_CONCURRENT: "2"
+    AI_MAX_UPLOAD_MB: "100"
+    AI_MAX_AUDIO_SECONDS: "300"
+  restart: unless-stopped
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
 # key) in the stack's keys volume, as make run does in server/.env. Keys
@@ -333,6 +350,10 @@ services:
         - { action: rebuild, path: ./console/package.json }
         - { action: rebuild, path: ./console/bun.lock }
 
+  ai-dev:
+    <<: [*dev, *ai]
+    ports: ["127.0.0.1:56491:8000"]
+
   proxy-dev:
     <<: *dev
     image: caddy:2.10.2-alpine
@@ -419,6 +440,10 @@ services:
     image: shopnexus-docs:local
     build: ./docs
     restart: unless-stopped
+
+  ai-prod:
+    <<: [*prod, *ai]
+    ports: ["127.0.0.1:56490:8000"]
 
   proxy-prod:
     <<: *prod
