@@ -59,6 +59,23 @@ awk -v s="$spend" -v w="$want" 'BEGIN { d = s - w; if (d < 0) d = -d; exit !(d <
   || fail "2: spend is $spend, want $want (priced from usage)"
 echo "spend after $calls calls: $spend"
 
+# The key Job's rename (plan 2026-11-09-search-models-infra, review focus 1):
+# /key/update with the same key value and another alias renames the key and
+# keeps its spend; no second key appears.
+code=$(curl -s -o "$OUT_DIR/rename.json" -w '%{http_code}' "$api/key/update" -H "$master" -H 'Content-Type: application/json' \
+  -d "{\"key\":\"$key\",\"key_alias\":\"server-llm\",\"models\":[\"embed-image\"],\"max_budget\":10,\"budget_duration\":\"1d\"}")
+[[ $code == 200 ]] || fail "rename: HTTP $code: $(head -c 300 "$OUT_DIR/rename.json")"
+info=$(curl -fsS "$api/key/info?key=$key" -H "$master")
+alias=$(jq -r '.info.key_alias' <<<"$info")
+renamed_spend=$(jq -r '.info.spend // 0' <<<"$info")
+[[ $alias == server-llm ]] || fail "rename: the alias is $alias"
+awk -v a="$renamed_spend" -v b="$spend" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(d < 0.000001) }' \
+  || fail "rename: spend went from $spend to $renamed_spend"
+keys=$(dc exec -T postgres psql -U litellm -d litellm -Atc \
+  "SELECT count(*) FROM \"LiteLLM_VerificationToken\" WHERE key_alias IN ('probe', 'server-llm')")
+(( keys == 1 )) || fail "rename: $keys keys named probe or server-llm"
+echo "rename: alias $alias, spend $renamed_spend, keys $keys"
+
 # 4. Spend logs exist but hold no input.
 rows=$(dc exec -T postgres psql -U litellm -d litellm -Atc 'SELECT count(*) FROM "LiteLLM_SpendLogs"')
 leaked=$(dc exec -T postgres psql -U litellm -d litellm -Atc \
