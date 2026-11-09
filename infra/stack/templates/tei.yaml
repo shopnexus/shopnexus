@@ -1,0 +1,88 @@
+{{- /* Text embeddings for LiteLLM's alias embed-text: Text Embeddings Inference
+       on CPU, serving BAAI/bge-m3 at a pinned revision. from-stack lets
+       LiteLLM in; it has no Ingress. */ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  # A claim mounts on one node at a time.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: tei }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "tei") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: tei
+          image: {{ include "sn.image" .Values.images.tei }}
+          args:
+            - --model-id
+            - BAAI/bge-m3
+            - --revision
+            - {{ required "tei.revision is required" .Values.tei.revision }}
+            - --port
+            - "80"
+            - --auto-truncate
+            - --max-client-batch-size
+            - {{ required "tei.maxClientBatchSize is required" .Values.tei.maxClientBatchSize | toString | quote }}
+            # Bounds the tokens of one forward pass, and with them the memory
+            # onnxruntime holds: TEI's default 16384 used 8-11 GiB.
+            - --max-batch-tokens
+            - {{ required "tei.maxBatchTokens is required" .Values.tei.maxBatchTokens | toString | quote }}
+          env:
+            - { name: HUGGINGFACE_HUB_CACHE, value: /data }
+          ports:
+            - { name: http, containerPort: 80 }
+          # The first start downloads the weights.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: {{ div (required "tei.startupSeconds is required" .Values.tei.startupSeconds) 10 }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 30
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: "1", memory: {{ required "tei.memoryRequest is required" .Values.tei.memoryRequest }} }
+            limits: { memory: {{ required "tei.memoryLimit is required" .Values.tei.memoryLimit }} }
+      volumes:
+        - name: data
+          {{- if .Values.tei.storage }}
+          persistentVolumeClaim: { claimName: tei-data }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tei
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: tei }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+{{- if .Values.tei.storage }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tei-data
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: {{ .Values.tei.storage }} }
+{{- end }}
