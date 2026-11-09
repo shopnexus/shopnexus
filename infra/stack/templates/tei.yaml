@@ -40,17 +40,23 @@ spec:
             - { name: HUGGINGFACE_HUB_CACHE, value: /data }
           ports:
             - { name: http, containerPort: 80 }
-          # The first start downloads the weights.
+          # The first start downloads the weights. /health waits behind a
+          # forward pass (5.8 s under a 16-text batch on 2026-11-10), so each
+          # probe waits 15 s and liveness gives up after 5 misses.
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 10
+            timeoutSeconds: 15
             failureThreshold: {{ div (required "tei.startupSeconds is required" .Values.tei.startupSeconds) 10 }}
           readinessProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 10
+            timeoutSeconds: 15
           livenessProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 5
           volumeMounts:
             - { name: data, mountPath: /data }
           resources:

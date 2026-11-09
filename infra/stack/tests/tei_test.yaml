@@ -20,6 +20,12 @@ tests:
       - equal: { path: 'spec.template.spec.containers[0].startupProbe.httpGet.path', value: /health }
       - equal: { path: 'spec.template.spec.containers[0].readinessProbe.httpGet.path', value: /health }
       - equal: { path: 'spec.template.spec.containers[0].livenessProbe.httpGet.path', value: /health }
+      # /health waits behind a forward pass (5.8 s measured under a 16-text
+      # batch), so every probe waits 15 s and liveness gives up after 2.5 min.
+      - equal: { path: 'spec.template.spec.containers[0].startupProbe.timeoutSeconds', value: 15 }
+      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.timeoutSeconds', value: 15 }
+      - equal: { path: 'spec.template.spec.containers[0].livenessProbe.timeoutSeconds', value: 15 }
+      - equal: { path: 'spec.template.spec.containers[0].livenessProbe.failureThreshold', value: 5 }
   - it: is reachable in the stack as tei:80
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
