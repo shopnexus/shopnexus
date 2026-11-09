@@ -23,6 +23,7 @@
 #   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
 #   ai         http://127.0.0.1:56491                     http://127.0.0.1:56490
+#   tei        http://127.0.0.1:56493                     http://127.0.0.1:56492
 #
 # Grafana gets the server's traces, metrics and logs. The dashboards need no
 # sign-in here; in the cluster the console's sign-in guards them.
@@ -41,7 +42,9 @@
 #
 # The server needs an OpenAI-compatible API for search in dev and prod:
 # LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, read from server/.env (the Makefile
-# passes --env-file server/.env).
+# passes --env-file server/.env). It calls the stack's TEI and ai directly for
+# embeddings, as it calls the upstream LLM; in the cluster both sit behind
+# LiteLLM.
 # The tests use a stub. The first start of a stack writes the server's keys
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
@@ -133,6 +136,20 @@ x-ai: &ai
     AI_MAX_CONCURRENT: "2"
     AI_MAX_UPLOAD_MB: "100"
     AI_MAX_AUDIO_SECONDS: "300"
+    AI_EMBED_MODELS: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
+    AI_EMBED_MAX_INPUTS: "16"
+    AI_EMBED_MAX_CONCURRENT: "2"
+    AI_EMBED_MAX_IMAGE_MB: "10"
+  restart: unless-stopped
+
+# Text embeddings (bge-m3) for the server, as the alias embed-text gives the
+# cluster. The weights download into the stack's tei volume on first start.
+# --max-batch-tokens bounds the memory onnxruntime holds, as in the chart.
+x-tei: &tei
+  image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
+  command: [--model-id, BAAI/bge-m3, --revision, 5617a9f61b028005a4858fdac845db406aefb181, --port, "80", --auto-truncate, --max-client-batch-size, "16", --max-batch-tokens, "2048"]
+  environment:
+    HUGGINGFACE_HUB_CACHE: /data
   restart: unless-stopped
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
@@ -168,6 +185,18 @@ x-server-env: &server-env
   LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-}
+  EMBED_TEXT_VERSION: bge-m3@5617a9f61b028005a4858fdac845db406aefb181
+  EMBED_IMAGE_VERSION: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-int8
+  # TEI serves one model and ignores the name; ai checks it.
+  EMBED_TEXT_MODEL: bge-m3
+  EMBED_IMAGE_MODEL: siglip2-so400m-patch16-384
+  # TEI and ai have no keys locally.
+  EMBED_INDEX_API_KEY: ""
+  EMBED_SEARCH_API_KEY: ""
+  EMBED_TIMEOUT: 15s
+  EMBED_SLOTS: "2"
+  EMBED_TEXT_MIN_SIMILARITY: "0.45"
+  EMBED_PHOTO_MIN_SIMILARITY: "0.6"
   FIREBASE_PROJECT_ID: shopnexus-26aca
   FIREBASE_PROJECT_NUMBER: "5362373878"
   FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
@@ -187,6 +216,8 @@ x-server-env-dev: &server-env-dev
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
+  EMBED_TEXT_BASE_URL: http://tei-dev:80/v1
+  EMBED_IMAGE_BASE_URL: http://ai-dev:8000/v1
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -199,6 +230,8 @@ x-server-env-prod: &server-env-prod
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
+  EMBED_TEXT_BASE_URL: http://tei-prod:80/v1
+  EMBED_IMAGE_BASE_URL: http://ai-prod:8000/v1
 
 # A web app's dev image: its dependencies, then its source. DIR is the app's
 # directory in the build context; $$ keeps Compose from reading ${DIR} as one
@@ -354,6 +387,11 @@ services:
     <<: [*dev, *ai]
     ports: ["127.0.0.1:56491:8000"]
 
+  tei-dev:
+    <<: [*dev, *tei]
+    ports: ["127.0.0.1:56493:80"]
+    volumes: [tei-dev:/data]
+
   proxy-dev:
     <<: *dev
     image: caddy:2.10.2-alpine
@@ -444,6 +482,11 @@ services:
   ai-prod:
     <<: [*prod, *ai]
     ports: ["127.0.0.1:56490:8000"]
+
+  tei-prod:
+    <<: [*prod, *tei]
+    ports: ["127.0.0.1:56492:80"]
+    volumes: [tei-prod:/data]
 
   proxy-prod:
     <<: *prod
@@ -603,10 +646,12 @@ volumes:
   keys-dev:
   go-build-dev:
   lgtm-dev:
+  tei-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
   lgtm-prod:
+  tei-prod:
   keys-test:
   go-build-test:

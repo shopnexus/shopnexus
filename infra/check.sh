@@ -69,6 +69,15 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 for s in postgres restate rustfs; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
+# TEI and the embedding versions the local server stores follow the chart.
+eq "$(yq '.x-tei.image' ../docker-compose.yml)" "$(yq '.images.tei.repository + ":" + .images.tei.tag' stack/values.yaml)" "compose tei image"
+eq "$(yq '.x-tei.command[3]' ../docker-compose.yml)" "$(yq '.tei.revision' stack/values.yaml)" "compose tei revision"
+eq "$(yq '.x-tei.command[10]' ../docker-compose.yml)" "$(yq '.tei.maxBatchTokens' stack/values.yaml)" "compose tei max batch tokens"
+eq "$(yq '.x-server-env.EMBED_TEXT_VERSION' ../docker-compose.yml)" "bge-m3@$(yq '.tei.revision' stack/values.yaml)" "compose EMBED_TEXT_VERSION"
+eq "$(yq '.x-server-env.EMBED_IMAGE_VERSION' ../docker-compose.yml)" "$(yq '.ai.embedVersion' stack/values.yaml)" "compose EMBED_IMAGE_VERSION"
+for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB; do
+  eq "$(yq ".x-ai.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".ai.${k#*:}" stack/values.yaml)" "compose AI_${k%%:*}"
+done
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
