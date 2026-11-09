@@ -1,5 +1,6 @@
 {{- /* The stack's provider of self-hosted models (repo shopnexus/ai). LiteLLM's
-       alias stt calls it; from-stack lets LiteLLM in, and it has no Ingress. */ -}}
+       aliases stt and embed-image call it; from-stack lets LiteLLM in, and it
+       has no Ingress. */ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,13 +28,17 @@ spec:
             - { name: AI_MAX_CONCURRENT, value: {{ required "ai.maxConcurrent is required" .Values.ai.maxConcurrent | toString | quote }} }
             - { name: AI_MAX_UPLOAD_MB, value: {{ required "ai.maxUploadMB is required" .Values.ai.maxUploadMB | toString | quote }} }
             - { name: AI_MAX_AUDIO_SECONDS, value: {{ required "ai.maxAudioSeconds is required" .Values.ai.maxAudioSeconds | toString | quote }} }
+            - { name: AI_EMBED_MODELS, value: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384 }
+            - { name: AI_EMBED_MAX_INPUTS, value: {{ required "ai.embedMaxInputs is required" .Values.ai.embedMaxInputs | toString | quote }} }
+            - { name: AI_EMBED_MAX_CONCURRENT, value: {{ required "ai.embedMaxConcurrent is required" .Values.ai.embedMaxConcurrent | toString | quote }} }
+            - { name: AI_EMBED_MAX_IMAGE_MB, value: {{ required "ai.embedMaxImageMB is required" .Values.ai.embedMaxImageMB | toString | quote }} }
           ports:
             - { name: http, containerPort: 8000 }
-          # Loading the model takes a few seconds, and the server listens after it.
+          # Loading the models takes seconds to a minute, and the server listens after it.
           startupProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 2
-            failureThreshold: 60
+            failureThreshold: {{ div (required "ai.startupSeconds is required" .Values.ai.startupSeconds) 2 }}
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 10
@@ -44,8 +49,8 @@ spec:
           volumeMounts:
             - { name: tmp, mountPath: /tmp }
           resources:
-            requests: { cpu: "1", memory: 1Gi }
-            limits: { memory: 2Gi }
+            requests: { cpu: "1", memory: {{ required "ai.memoryRequest is required" .Values.ai.memoryRequest }} }
+            limits: { memory: {{ required "ai.memoryLimit is required" .Values.ai.memoryLimit }} }
       volumes:
         - name: tmp
           emptyDir: {}
