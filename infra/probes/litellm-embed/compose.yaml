@@ -1,0 +1,35 @@
+# The pinned LiteLLM over a stub upstream, for run.sh. Images follow
+# infra/stack/values.yaml.
+name: probe-litellm-embed
+services:
+  postgres:
+    image: paradedb/paradedb:0.26.4-pg18
+    environment: { POSTGRES_USER: litellm, POSTGRES_PASSWORD: litellm, POSTGRES_DB: litellm }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U litellm -d litellm"]
+      interval: 2s
+      retries: 30
+  stub:
+    build:
+      context: ./stub
+      dockerfile_inline: |
+        FROM golang:1.27.3 AS build
+        WORKDIR /src
+        COPY main.go .
+        RUN CGO_ENABLED=0 go build -o /stub main.go
+        FROM gcr.io/distroless/static-debian12
+        COPY --from=build /stub /stub
+        ENTRYPOINT ["/stub"]
+    environment: { OUT: /out }
+    volumes: ["${OUT_DIR:?}:/out"]
+  litellm:
+    image: ghcr.io/berriai/litellm-database:v1.108.0
+    command: [--config, /etc/litellm/config.yaml, --port, "4000"]
+    environment:
+      LITELLM_MASTER_KEY: sk-probe-master
+      DATABASE_URL: postgresql://litellm:litellm@postgres:5432/litellm
+    volumes: ["./config.yaml:/etc/litellm/config.yaml:ro"]
+    ports: ["127.0.0.1:56599:4000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      stub: { condition: service_started }
