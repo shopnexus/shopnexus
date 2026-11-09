@@ -1,0 +1,3 @@
+litellm:
+  keys:
+    server-embed-index: { dailyUnits: 500000 }

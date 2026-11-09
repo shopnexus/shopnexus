@@ -83,7 +83,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c3b96e0d260f7b1a
+          value: 4b3a7afa0dd44a67
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -91,4 +91,20 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c3b96e0d260f7b1a
+          value: 4b3a7afa0dd44a67
+  # The server reaches the embedding models only through LiteLLM, under two
+  # aliases, and stores each model's version with its vectors.
+  - it: sets the embedding settings
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.EMBED_TEXT_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
+      - equal: { path: data.EMBED_IMAGE_MODEL, value: embed-image }
+      - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }
+      - equal: { path: data.EMBED_IMAGE_VERSION, value: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-int8 }
+      - equal: { path: data.EMBED_TIMEOUT, value: 15s }
+      - equal: { path: data.EMBED_SLOTS, value: "2" }
+      - equal: { path: data.EMBED_TEXT_MIN_SIMILARITY, value: "0.45" }
+      - equal: { path: data.EMBED_PHOTO_MIN_SIMILARITY, value: "0.6" }

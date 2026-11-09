@@ -39,6 +39,16 @@ OBJECT_STORE_BUCKET: shopnexus
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
 LLM_BASE_URL: http://litellm:4000/v1
 LLM_MODEL: search
+EMBED_TEXT_BASE_URL: http://litellm:4000/v1
+EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
+EMBED_TEXT_MODEL: embed-text
+EMBED_IMAGE_MODEL: embed-image
+EMBED_TEXT_VERSION: {{ printf "bge-m3@%s" (required "tei.revision is required" .Values.tei.revision) | quote }}
+EMBED_IMAGE_VERSION: {{ required "ai.embedVersion is required" .Values.ai.embedVersion | quote }}
+EMBED_TIMEOUT: {{ required "server.embed.timeout is required" .Values.server.embed.timeout | quote }}
+EMBED_SLOTS: {{ required "server.embed.slots is required" .Values.server.embed.slots | toString | quote }}
+EMBED_TEXT_MIN_SIMILARITY: {{ required "server.embed.textMinSimilarity is required" .Values.server.embed.textMinSimilarity | quote }}
+EMBED_PHOTO_MIN_SIMILARITY: {{ required "server.embed.photoMinSimilarity is required" .Values.server.embed.photoMinSimilarity | quote }}
 FIREBASE_PROJECT_ID: {{ .Values.server.firebaseProjectID | quote }}
 FIREBASE_PROJECT_NUMBER: {{ .Values.server.firebaseProjectNumber | quote }}
 FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com

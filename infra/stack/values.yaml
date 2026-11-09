@@ -102,11 +102,31 @@ litellm:
       apiBase: http://ai:8000/v1
       mode: audio_transcription
       price: second
+    embed-text:
+      model: openai/bge-m3   # TEI serves one model and ignores the name
+      apiBase: http://tei:80/v1
+      mode: embedding
+      price: token
+    embed-image:
+      model: openai/siglip2-so400m-patch16-384
+      apiBase: http://ai:8000/v1
+      mode: embedding
+      price: token   # ai counts 576 tokens an image, a text its tokens
   keys:
     server-llm: { secret: LLM_API_KEY, models: [search], dailyUnits: 0, tpmLimit: 0 }   # set per stack
     server-stt: { secret: STT_API_KEY, models: [stt], dailyUnits: 0, rpmLimit: 0 }      # set per stack
+    server-embed-index: { secret: EMBED_INDEX_API_KEY, models: [embed-text, embed-image], dailyUnits: 0, rpmLimit: 0 }    # set per stack
+    server-embed-search: { secret: EMBED_SEARCH_API_KEY, models: [embed-text, embed-image], dailyUnits: 0, rpmLimit: 0 }  # set per stack
 
 server:
+  # The server's embedding settings; the aliases and the versions come from
+  # litellm, tei and ai. The similarity floors are starting values that the
+  # server's search eval tunes.
+  embed:
+    timeout: 15s
+    slots: 2
+    textMinSimilarity: "0.45"
+    photoMinSimilarity: "0.6"
   logLevel: info
   pnvTestNumbers: "true"
   firebaseProjectID: shopnexus-26aca

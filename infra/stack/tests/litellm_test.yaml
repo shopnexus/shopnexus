@@ -114,3 +114,46 @@ tests:
         documentIndex: 2
       - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: litellm-db }
         documentIndex: 1
+  # embed-text goes to the stack's TEI, embed-image to ai; both priced per
+  # token, ai counting 576 tokens an image.
+  - it: maps embed-text to TEI and embed-image to ai at 1e-6 a token
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: embed-text\\n    litellm_params:\\n      model: openai/bge-m3\\n      api_base: http://tei:80/v1\\n      api_key: none" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: embed-image\\n    litellm_params:\\n      model: openai/siglip2-so400m-patch16-384\\n      api_base: http://ai:8000/v1\\n      api_key: none" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "mode: embedding\\n      input_cost_per_token: 0.000001" }
+  - it: gives prod's embed keys their budgets, index apart from search
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_SERVER_EMBED_INDEX
+            valueFrom: { secretKeyRef: { name: server-secrets, key: EMBED_INDEX_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_SERVER_EMBED_SEARCH
+            valueFrom: { secretKeyRef: { name: server-secrets, key: EMBED_SEARCH_API_KEY } }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-embed-index","max_budget":50,"models":\["embed-text","embed-image"\],"rpm_limit":600' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-embed-search","max_budget":10,"models":\["embed-text","embed-image"\],"rpm_limit":600' }
+  - it: gives dev's embed keys their budgets
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-embed-index","max_budget":10,"models":\["embed-text","embed-image"\],"rpm_limit":120' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-embed-search","max_budget":1,"models":\["embed-text","embed-image"\],"rpm_limit":60' }
+  # Helm merges a stack file into values.yaml key by key.
+  - it: leaves the other keys alone when a stack file sets one
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml, values-one-key.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-embed-index","max_budget":0.5,' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-stt","max_budget":0.0036,"models":\["stt"\],"rpm_limit":10' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-llm","max_budget":0.2,"models":\["search"\],"tpm_limit":20000' }
