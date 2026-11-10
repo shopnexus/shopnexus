@@ -69,7 +69,7 @@ func seal(stack string, o opts, out io.Writer) error {
 	pemFile := filepath.Join(dir, stack+".restate.pem")
 
 	// envgen copies example.env on first use and fills in the server's keys:
-	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY and RESTATE_IDENTITY_KEY, with the
+	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY, OTP_KEY and RESTATE_IDENTITY_KEY, with the
 	// pem. It refuses a RESTATE_IDENTITY_KEY whose pem is gone: a new pair would
 	// sign Restate's requests with a key the running server does not know.
 	// It runs as this user, so the files stay this user's.
@@ -121,6 +121,9 @@ func seal(stack string, o opts, out io.Writer) error {
 	if stack == "prod" && env.get("FCM_CREDENTIALS") == "" {
 		return fmt.Errorf("%s: prod needs FCM_CREDENTIALS (APP_ENV=prod refuses to only log pushes)", envFile)
 	}
+	if stack == "prod" && env.get("RESEND_API_KEY") == "" {
+		return fmt.Errorf("%s: prod needs RESEND_API_KEY (EMAIL_SENDER=resend)", envFile)
+	}
 	pem, err := os.ReadFile(pemFile)
 	if err != nil {
 		return err
@@ -131,7 +134,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "STT_API_KEY",
-			"EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS")},
+			"EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "RESEND_API_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),

@@ -4,6 +4,7 @@ appEnv: dev
 server:
   logLevel: debug
   pnvTestNumbers: "true"
+  emailSender: log
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
 litellm:

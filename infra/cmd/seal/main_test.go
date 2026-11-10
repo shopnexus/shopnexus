@@ -114,6 +114,26 @@ func TestSealRefusesProdWithoutFCMCredentials(t *testing.T) {
 	}
 }
 
+// EMAIL_SENDER=resend in prod needs Resend's key.
+func TestSealRefusesProdWithoutResendKey(t *testing.T) {
+	o, dir := setup(t)
+	env := filepath.Join(dir, "prod.env")
+	b, err := os.ReadFile(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filled := strings.Replace(string(b), "\nFCM_CREDENTIALS=\n", "\nFCM_CREDENTIALS=e30=\n", 1)
+	if err = os.WriteFile(env, []byte(filled), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = seal("prod", o, &bytes.Buffer{})
+
+	if err == nil || !strings.Contains(err.Error(), "RESEND_API_KEY") {
+		t.Fatalf("err = %v, want one naming RESEND_API_KEY", err)
+	}
+}
+
 // A restored .env without its .pem must stop, not rotate the Restate key.
 func TestSealRefusesAMissingPem(t *testing.T) {
 	o, dir := setup(t)

@@ -203,6 +203,11 @@ x-server-env: &server-env
   PNV_JWKS_URL: https://fpnv.googleapis.com/v1beta/jwks
   PNV_TEST_NUMBERS: "true"
   FCM_CREDENTIALS: ""
+  EMAIL_SENDER: log
+  RESEND_API_KEY: ""
+  EMAIL_FROM: ShopNexus <no-reply@shopnexus.id.vn>
+  GOOGLE_CLIENT_ID: ""
+  GOOGLE_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
 
 x-server-env-dev: &server-env-dev
   <<: *server-env

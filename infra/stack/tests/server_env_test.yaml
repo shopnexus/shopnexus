@@ -19,6 +19,9 @@ tests:
           path: data.PNV_TEST_NUMBERS
           value: "false"
       - equal:
+          path: data.EMAIL_SENDER
+          value: resend
+      - equal:
           path: data.CONSOLE_ORIGIN
           value: https://console.shopnexus.id.vn
       # The server reaches models only through the stack's LiteLLM, under one alias.
@@ -69,6 +72,9 @@ tests:
       - exists: { path: data.FIREBASE_AUTH_JWKS_URL }
       - exists: { path: data.PNV_JWKS_URL }
       - exists: { path: data.PNV_TEST_NUMBERS }
+      - exists: { path: data.EMAIL_FROM }
+      - exists: { path: data.GOOGLE_CLIENT_ID }
+      - exists: { path: data.GOOGLE_JWKS_URL }
       - exists: { path: data.LLM_BASE_URL }
       - exists: { path: data.LLM_MODEL }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
@@ -83,7 +89,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 88f52aae94879199
+          value: c16ae18f8191b83f
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -91,7 +97,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 88f52aae94879199
+          value: c16ae18f8191b83f
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings

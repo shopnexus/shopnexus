@@ -130,5 +130,12 @@ server:
     photoMinSimilarity: "0.6"
   logLevel: info
   pnvTestNumbers: "true"
+  # How sign-in codes are mailed: log or resend. APP_ENV=prod refuses log.
+  emailSender: log
+  # The sender address; its domain is verified at Resend.
+  emailFrom: "ShopNexus <no-reply@shopnexus.id.vn>"
+  # The Web OAuth client of the Firebase project; empty turns Google
+  # sign-in off.
+  googleClientID: ""
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"

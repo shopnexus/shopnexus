@@ -54,4 +54,8 @@ FIREBASE_PROJECT_NUMBER: {{ .Values.server.firebaseProjectNumber | quote }}
 FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
 PNV_JWKS_URL: https://fpnv.googleapis.com/v1beta/jwks
 PNV_TEST_NUMBERS: {{ .Values.server.pnvTestNumbers | quote }}
+EMAIL_SENDER: {{ .Values.server.emailSender | quote }}
+EMAIL_FROM: {{ .Values.server.emailFrom | quote }}
+GOOGLE_CLIENT_ID: {{ .Values.server.googleClientID | quote }}
+GOOGLE_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
 {{- end }}
