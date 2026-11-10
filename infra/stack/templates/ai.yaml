@@ -1,6 +1,6 @@
 {{- /* The stack's provider of self-hosted models (repo shopnexus/ai). LiteLLM's
-       aliases stt and embed-image call it; from-stack lets LiteLLM in, and it
-       has no Ingress. */ -}}
+       aliases stt and embed-image call it, and the server calls its frames
+       route; from-stack lets both in, and it has no Ingress. */ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,6 +32,9 @@ spec:
             - { name: AI_EMBED_MAX_INPUTS, value: {{ required "ai.embedMaxInputs is required" .Values.ai.embedMaxInputs | toString | quote }} }
             - { name: AI_EMBED_MAX_CONCURRENT, value: {{ required "ai.embedMaxConcurrent is required" .Values.ai.embedMaxConcurrent | toString | quote }} }
             - { name: AI_EMBED_MAX_IMAGE_MB, value: {{ required "ai.embedMaxImageMB is required" .Values.ai.embedMaxImageMB | toString | quote }} }
+            - { name: AI_FRAMES_MAX_CONCURRENT, value: {{ required "ai.framesMaxConcurrent is required" .Values.ai.framesMaxConcurrent | toString | quote }} }
+            - { name: AI_FRAMES_MAX_SECONDS, value: {{ required "ai.framesMaxSeconds is required" .Values.ai.framesMaxSeconds | toString | quote }} }
+            - { name: AI_FRAMES_MIN_SHARPNESS, value: {{ required "ai.framesMinSharpness is required" .Values.ai.framesMinSharpness | toString | quote }} }
           ports:
             - { name: http, containerPort: 8000 }
           # Loading the models takes seconds to a minute, and the server listens after it.

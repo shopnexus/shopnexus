@@ -77,6 +77,12 @@ tests:
       - exists: { path: data.GOOGLE_JWKS_URL }
       - exists: { path: data.LLM_BASE_URL }
       - exists: { path: data.LLM_MODEL }
+      - exists: { path: data.AI_FRAMES_BASE_URL }
+      - exists: { path: data.STT_BASE_URL }
+      - exists: { path: data.STT_MODEL }
+      - exists: { path: data.ASSIST_LLM_BASE_URL }
+      - exists: { path: data.ASSIST_LLM_MODEL }
+      - exists: { path: data.ASSIST_CALL_TIMEOUT }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
@@ -89,7 +95,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c16ae18f8191b83f
+          value: f3d082c04565b3c6
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -97,7 +103,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c16ae18f8191b83f
+          value: f3d082c04565b3c6
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -114,3 +120,15 @@ tests:
       - equal: { path: data.EMBED_SLOTS, value: "2" }
       - equal: { path: data.EMBED_TEXT_MIN_SIMILARITY, value: "0.45" }
       - equal: { path: data.EMBED_PHOTO_MIN_SIMILARITY, value: "0.6" }
+  # A video read calls ai's frames route directly (LiteLLM routes only
+  # OpenAI's API), and speech and the model through LiteLLM's aliases.
+  - it: sets the video read settings
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.AI_FRAMES_BASE_URL, value: http://ai:8000/v1 }
+      - equal: { path: data.STT_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.STT_MODEL, value: stt }
+      - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.ASSIST_LLM_MODEL, value: video-read }
+      - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }

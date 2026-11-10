@@ -11,6 +11,9 @@ litellm:
   keys:
     server-llm: { dailyUnits: 200000, tpmLimit: 20000 }
     server-stt: { dailyUnits: 3600, rpmLimit: 10 }
+    # About 5,500 tokens a read (8 frames at 768 px, the subcategories, the
+    # transcript): 200 reads a day, 10 a minute.
+    server-assist: { dailyUnits: 1200000, tpmLimit: 60000 }
     # 10M tokens: about 1,700 listings of 10 photos a day at 576 tokens a photo.
     server-embed-index: { dailyUnits: 10000000, rpmLimit: 120 }
     server-embed-search: { dailyUnits: 1000000, rpmLimit: 60 }

@@ -29,6 +29,20 @@ tests:
       - matchRegex: { path: 'data["config.yaml"]', pattern: "api_base: http://ai:8000/v1\\n      api_key: none" }
       - matchRegex: { path: 'data["config.yaml"]', pattern: "mode: audio_transcription\\n" }
       - matchRegex: { path: 'data["config.yaml"]', pattern: "input_cost_per_second: 0.000001\\n" }
+  # A video read sends frames and a transcript to the same upstream model as
+  # search, under an alias of its own so either can change model alone.
+  - it: maps the alias video-read to the upstream model at 1e-6 a token
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: video-read\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: http://host.k3d.internal:8317/v1\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
+  - it: passes the upstream key to LiteLLM once for search and video-read
+    template: litellm.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 4 }
   # A search photo passes through LiteLLM; its spend logs keep no body.
   - it: keeps request bodies out of the spend logs
     template: litellm.yaml
@@ -86,6 +100,24 @@ tests:
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-stt","max_budget":0.0036,"models":\["stt"\],"rpm_limit":10' }
+  - it: gives prod's server-assist key 12M tokens a day at 300k a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_SERVER_ASSIST
+            valueFrom: { secretKeyRef: { name: server-secrets, key: ASSIST_LLM_API_KEY } }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: 'upsert server-assist "\$KEY_SERVER_ASSIST"' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-assist","max_budget":12,"models":\["video-read"\],"tpm_limit":300000' }
+  - it: gives dev's server-assist key 1.2M tokens a day at 60k a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-assist","max_budget":1.2,"models":\["video-read"\],"tpm_limit":60000' }
   - it: refuses a key that names an alias LiteLLM does not have
     template: litellm-keys.yaml
     values: [../values-prod.yaml, values-test.yaml, values-bad-alias.yaml]

@@ -75,9 +75,11 @@ eq "$(yq '.x-tei.command[3]' ../docker-compose.yml)" "$(yq '.tei.revision' stack
 eq "$(yq '.x-tei.command[10]' ../docker-compose.yml)" "$(yq '.tei.maxBatchTokens' stack/values.yaml)" "compose tei max batch tokens"
 eq "$(yq '.x-server-env.EMBED_TEXT_VERSION' ../docker-compose.yml)" "bge-m3@$(yq '.tei.revision' stack/values.yaml)" "compose EMBED_TEXT_VERSION"
 eq "$(yq '.x-server-env.EMBED_IMAGE_VERSION' ../docker-compose.yml)" "$(yq '.ai.embedVersion' stack/values.yaml)" "compose EMBED_IMAGE_VERSION"
-for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB; do
+for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB \
+  FRAMES_MAX_CONCURRENT:framesMaxConcurrent FRAMES_MAX_SECONDS:framesMaxSeconds FRAMES_MIN_SHARPNESS:framesMinSharpness; do
   eq "$(yq ".x-ai.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".ai.${k#*:}" stack/values.yaml)" "compose AI_${k%%:*}"
 done
+eq "$(yq '.x-server-env.ASSIST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.assist.callTimeout' stack/values.yaml)" "compose ASSIST_CALL_TIMEOUT"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

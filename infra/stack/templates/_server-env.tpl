@@ -39,6 +39,12 @@ OBJECT_STORE_BUCKET: shopnexus
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
 LLM_BASE_URL: http://litellm:4000/v1
 LLM_MODEL: search
+AI_FRAMES_BASE_URL: http://ai:8000/v1
+STT_BASE_URL: http://litellm:4000/v1
+STT_MODEL: stt
+ASSIST_LLM_BASE_URL: http://litellm:4000/v1
+ASSIST_LLM_MODEL: video-read
+ASSIST_CALL_TIMEOUT: {{ required "server.assist.callTimeout is required" .Values.server.assist.callTimeout | quote }}
 EMBED_TEXT_BASE_URL: http://litellm:4000/v1
 EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
 EMBED_TEXT_MODEL: embed-text

@@ -48,6 +48,15 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: AI_EMBED_MAX_IMAGE_MB, value: "10" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_FRAMES_MAX_CONCURRENT, value: "2" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_FRAMES_MAX_SECONDS, value: "35" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AI_FRAMES_MIN_SHARPNESS, value: "30" }
       - equal: { path: 'spec.template.spec.containers[0].resources.requests.memory', value: 6Gi }
       - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 8Gi }
       - equal: { path: 'spec.template.spec.containers[0].startupProbe.failureThreshold', value: 90 }

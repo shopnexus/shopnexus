@@ -40,8 +40,9 @@
 # The tests container shares Restate's network namespace, so Restate reaches
 # the endpoints the tests serve on 127.0.0.1.
 #
-# The server needs an OpenAI-compatible API for search in dev and prod:
-# LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, read from server/.env (the Makefile
+# The server needs an OpenAI-compatible API for search and video reads in dev
+# and prod: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL and ASSIST_LLM_BASE_URL,
+# ASSIST_LLM_API_KEY, ASSIST_LLM_MODEL, read from server/.env (the Makefile
 # passes --env-file server/.env). It calls the stack's TEI and ai directly for
 # embeddings, as it calls the upstream LLM; in the cluster both sit behind
 # LiteLLM.
@@ -123,8 +124,8 @@ x-server-image: &server-image
   build: ./server
 
 # The stack's provider of self-hosted models (submodule ai). In the cluster
-# LiteLLM's alias stt calls it. Locally the server will call it directly, as
-# it calls the upstream LLM.
+# LiteLLM's aliases stt and embed-image call it. Locally the server calls it
+# directly, for embeddings, speech and video frames.
 x-ai: &ai
   image: shopnexus-ai:local
   build: ./ai
@@ -140,6 +141,9 @@ x-ai: &ai
     AI_EMBED_MAX_INPUTS: "16"
     AI_EMBED_MAX_CONCURRENT: "2"
     AI_EMBED_MAX_IMAGE_MB: "10"
+    AI_FRAMES_MAX_CONCURRENT: "2"
+    AI_FRAMES_MAX_SECONDS: "35"
+    AI_FRAMES_MIN_SHARPNESS: "30"
   restart: unless-stopped
 
 # Text embeddings (bge-m3) for the server, as the alias embed-text gives the
@@ -197,6 +201,14 @@ x-server-env: &server-env
   EMBED_SLOTS: "2"
   EMBED_TEXT_MIN_SIMILARITY: "0.45"
   EMBED_PHOTO_MIN_SIMILARITY: "0.6"
+  # Video reads (module assist). Locally the server calls ai for speech with
+  # its model name and no key, and the LLM in server/.env for the fill.
+  STT_API_KEY: ""
+  STT_MODEL: gipformer-1.5
+  ASSIST_LLM_BASE_URL: ${ASSIST_LLM_BASE_URL:-}
+  ASSIST_LLM_API_KEY: ${ASSIST_LLM_API_KEY:-}
+  ASSIST_LLM_MODEL: ${ASSIST_LLM_MODEL:-}
+  ASSIST_CALL_TIMEOUT: 30s
   FIREBASE_PROJECT_ID: shopnexus-26aca
   FIREBASE_PROJECT_NUMBER: "5362373878"
   FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
@@ -223,6 +235,8 @@ x-server-env-dev: &server-env-dev
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
   EMBED_TEXT_BASE_URL: http://tei-dev:80/v1
   EMBED_IMAGE_BASE_URL: http://ai-dev:8000/v1
+  AI_FRAMES_BASE_URL: http://ai-dev:8000/v1
+  STT_BASE_URL: http://ai-dev:8000/v1
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -237,6 +251,8 @@ x-server-env-prod: &server-env-prod
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
   EMBED_TEXT_BASE_URL: http://tei-prod:80/v1
   EMBED_IMAGE_BASE_URL: http://ai-prod:8000/v1
+  AI_FRAMES_BASE_URL: http://ai-prod:8000/v1
+  STT_BASE_URL: http://ai-prod:8000/v1
 
 # A web app's dev image: its dependencies, then its source. DIR is the app's
 # directory in the build context; $$ keeps Compose from reading ${DIR} as one
