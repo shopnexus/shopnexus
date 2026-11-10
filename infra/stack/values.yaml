@@ -52,9 +52,10 @@ lgtm:
 # Memory: the image carries SigLIP 2 in fp32 (4.5 GB of weights); the int8
 # files gave photo vectors at a cosine of 0.55 to the reference and were
 # dropped (ai's README, Image). Loaded with Gipformer and one photo embedded,
-# the process held 4.34 GiB on 2026-11-10. embedVersion names the SigLIP 2 the
-# image carries; the server stores it with every photo vector, so a new one
-# means a reindex.
+# the process held 4.34 GiB on 2026-11-10. Two frame requests of a 30 s 1080p
+# video and two transcriptions at once peaked at 2.42 GiB on 2026-11-10.
+# embedVersion names the SigLIP 2 the image carries; the server stores it with
+# every photo vector, so a new one means a reindex.
 ai:
   numThreads: 4
   maxConcurrent: 2
