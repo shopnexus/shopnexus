@@ -7,10 +7,10 @@ Authorization: Bearer {{llm_key}}
 {"model": "search", "messages": [{"role": "user", "content": "Reply with the word ok."}], "max_tokens": 5}
 HTTP 200
 
-# video-read: the model reads a photo, the way a video read sends frames.
+# listing-read: the model reads a photo, the way every read sends one.
 POST {{litellm}}/v1/chat/completions
 Authorization: Bearer {{assist_key}}
-{"model": "video-read", "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with the word ok."}, {"type": "image_url", "image_url": {"url": "{{photo}}"}}]}], "max_tokens": 5}
+{"model": "listing-read", "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with the word ok."}, {"type": "image_url", "image_url": {"url": "{{photo}}"}}]}], "max_tokens": 5}
 HTTP 200
 
 # scam-check: the model answers a chat window.
@@ -59,7 +59,7 @@ Authorization: Bearer {{llm_key}}
 {"model": "embed-text", "input": ["x"]}
 HTTP 403
 
-# server-assist reaches video-read only.
+# server-assist reaches listing-read only.
 POST {{litellm}}/v1/chat/completions
 Authorization: Bearer {{assist_key}}
 {"model": "search", "messages": [{"role": "user", "content": "x"}], "max_tokens": 1}
