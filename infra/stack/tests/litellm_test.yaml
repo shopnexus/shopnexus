@@ -37,7 +37,15 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: video-read\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: http://host.k3d.internal:8317/v1\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
-  - it: passes the upstream key to LiteLLM once for search and video-read
+  # A scam check sends a chat window to the same upstream model, under an
+  # alias of its own.
+  - it: maps the alias scam-check to the upstream model at 1e-6 a token
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: scam-check\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: http://host.k3d.internal:8317/v1\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
+  - it: passes the upstream key to LiteLLM once for search, video-read and scam-check
     template: litellm.yaml
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -118,6 +126,24 @@ tests:
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-assist","max_budget":1.2,"models":\["video-read"\],"tpm_limit":60000' }
+  - it: gives prod's server-trust key 6M tokens a day at 150k a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_SERVER_TRUST
+            valueFrom: { secretKeyRef: { name: server-secrets, key: TRUST_LLM_API_KEY } }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: 'upsert server-trust "\$KEY_SERVER_TRUST"' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-trust","max_budget":6,"models":\["scam-check"\],"tpm_limit":150000' }
+  - it: gives dev's server-trust key 600k tokens a day at 30k a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"server-trust","max_budget":0.6,"models":\["scam-check"\],"tpm_limit":30000' }
   - it: refuses a key that names an alias LiteLLM does not have
     template: litellm-keys.yaml
     values: [../values-prod.yaml, values-test.yaml, values-bad-alias.yaml]

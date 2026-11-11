@@ -80,6 +80,7 @@ for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent
   eq "$(yq ".x-ai.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".ai.${k#*:}" stack/values.yaml)" "compose AI_${k%%:*}"
 done
 eq "$(yq '.x-server-env.ASSIST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.assist.callTimeout' stack/values.yaml)" "compose ASSIST_CALL_TIMEOUT"
+eq "$(yq '.x-server-env.TRUST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.trust.callTimeout' stack/values.yaml)" "compose TRUST_CALL_TIMEOUT"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }
