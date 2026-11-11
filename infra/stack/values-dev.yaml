@@ -14,6 +14,9 @@ litellm:
     # About 5,500 tokens a read (8 frames at 768 px, the subcategories, the
     # transcript): 200 reads a day, 10 a minute.
     server-assist: { dailyUnits: 1200000, tpmLimit: 60000 }
+    # About 1,300 tokens a check (the prompt and 20 short messages): 460
+    # checks a day, 23 a minute.
+    server-trust: { dailyUnits: 600000, tpmLimit: 30000 }
     # 10M tokens: about 1,700 listings of 10 photos a day at 576 tokens a photo.
     server-embed-index: { dailyUnits: 10000000, rpmLimit: 120 }
     server-embed-search: { dailyUnits: 1000000, rpmLimit: 60 }

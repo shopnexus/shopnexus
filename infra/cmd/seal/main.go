@@ -103,6 +103,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"LLM_API_KEY", "sk-", 24},          // the server's search key in LiteLLM (server-llm)
 		{"STT_API_KEY", "sk-", 24},          // the server's speech-to-text key in LiteLLM (server-stt)
 		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's video-read key in LiteLLM (server-assist)
+		{"TRUST_LLM_API_KEY", "sk-", 24},    // the server's scam-check key in LiteLLM (server-trust)
 		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
 		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)
 	} {
@@ -135,7 +136,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "STT_API_KEY", "ASSIST_LLM_API_KEY",
-			"EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "RESEND_API_KEY")},
+			"TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "RESEND_API_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),

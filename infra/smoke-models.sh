@@ -23,6 +23,7 @@ hurl --test --file-root "$work" \
   --secret llm_key="$(key LLM_API_KEY)" \
   --secret stt_key="$(key STT_API_KEY)" \
   --secret assist_key="$(key ASSIST_LLM_API_KEY)" \
+  --secret trust_key="$(key TRUST_LLM_API_KEY)" \
   --secret embed_index_key="$(key EMBED_INDEX_API_KEY)" \
   --secret embed_search_key="$(key EMBED_SEARCH_API_KEY)" \
   --variable photo="$(go -C "$root/infra" run ./probes/sample jpeg 256 | tr -d '\n')" \

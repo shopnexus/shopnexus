@@ -83,6 +83,9 @@ tests:
       - exists: { path: data.ASSIST_LLM_BASE_URL }
       - exists: { path: data.ASSIST_LLM_MODEL }
       - exists: { path: data.ASSIST_CALL_TIMEOUT }
+      - exists: { path: data.TRUST_LLM_BASE_URL }
+      - exists: { path: data.TRUST_LLM_MODEL }
+      - exists: { path: data.TRUST_CALL_TIMEOUT }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
@@ -95,7 +98,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: f3d082c04565b3c6
+          value: d8bf44f68e0ab955
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -103,7 +106,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: f3d082c04565b3c6
+          value: d8bf44f68e0ab955
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -132,3 +135,11 @@ tests:
       - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.ASSIST_LLM_MODEL, value: video-read }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
+  # A scam check calls the model through LiteLLM's alias scam-check.
+  - it: sets the scam check settings
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.TRUST_LLM_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.TRUST_LLM_MODEL, value: scam-check }
+      - equal: { path: data.TRUST_CALL_TIMEOUT, value: 20s }

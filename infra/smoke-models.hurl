@@ -13,6 +13,12 @@ Authorization: Bearer {{assist_key}}
 {"model": "video-read", "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with the word ok."}, {"type": "image_url", "image_url": {"url": "{{photo}}"}}]}], "max_tokens": 5}
 HTTP 200
 
+# scam-check: the model answers a chat window.
+POST {{litellm}}/v1/chat/completions
+Authorization: Bearer {{trust_key}}
+{"model": "scam-check", "messages": [{"role": "user", "content": "Reply with the word ok."}], "max_tokens": 5}
+HTTP 200
+
 # stt: a silent clip gives empty text.
 POST {{litellm}}/v1/audio/transcriptions
 Authorization: Bearer {{stt_key}}
@@ -56,5 +62,11 @@ HTTP 403
 # server-assist reaches video-read only.
 POST {{litellm}}/v1/chat/completions
 Authorization: Bearer {{assist_key}}
+{"model": "search", "messages": [{"role": "user", "content": "x"}], "max_tokens": 1}
+HTTP 403
+
+# server-trust reaches scam-check only.
+POST {{litellm}}/v1/chat/completions
+Authorization: Bearer {{trust_key}}
 {"model": "search", "messages": [{"role": "user", "content": "x"}], "max_tokens": 1}
 HTTP 403
