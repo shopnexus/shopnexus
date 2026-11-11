@@ -83,6 +83,8 @@ tests:
       - exists: { path: data.ASSIST_LLM_BASE_URL }
       - exists: { path: data.ASSIST_LLM_MODEL }
       - exists: { path: data.ASSIST_CALL_TIMEOUT }
+      - exists: { path: data.CHOTOT_GATEWAY_URL }
+      - exists: { path: data.CHOTOT_CDN_URL }
       - exists: { path: data.TRUST_LLM_BASE_URL }
       - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
@@ -98,7 +100,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: d8bf44f68e0ab955
+          value: b1946460e58004ca
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -106,7 +108,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: d8bf44f68e0ab955
+          value: b1946460e58004ca
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -135,6 +137,8 @@ tests:
       - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.ASSIST_LLM_MODEL, value: video-read }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
+      - equal: { path: data.CHOTOT_GATEWAY_URL, value: https://gateway.chotot.com }
+      - equal: { path: data.CHOTOT_CDN_URL, value: https://cdn.chotot.com }
   # A scam check calls the model through LiteLLM's alias scam-check.
   - it: sets the scam check settings
     documentIndex: 0
