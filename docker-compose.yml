@@ -210,6 +210,9 @@ x-server-env: &server-env
   ASSIST_LLM_API_KEY: ${ASSIST_LLM_API_KEY:-}
   ASSIST_LLM_MODEL: ${ASSIST_LLM_MODEL:-}
   ASSIST_CALL_TIMEOUT: 30s
+  # Link reads: Chợ Tốt's public gateway and the CDN its photos are on.
+  CHOTOT_GATEWAY_URL: https://gateway.chotot.com
+  CHOTOT_CDN_URL: https://cdn.chotot.com
   # Scam checks (module trust): the LLM in server/.env.
   TRUST_LLM_BASE_URL: ${TRUST_LLM_BASE_URL:-}
   TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}

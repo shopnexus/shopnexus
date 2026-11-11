@@ -150,9 +150,13 @@ server:
     slots: 2
     textMinSimilarity: "0.45"
     photoMinSimilarity: "0.6"
-  # A video read's one call to ai, speech to text or the model.
+  # A read's one call to ai, speech to text, the model or Chợ Tốt. Link
+  # reads call Chợ Tốt's public gateway and the CDN its photos are on; the
+  # server reads no other origin.
   assist:
     callTimeout: 30s
+    chototGatewayURL: https://gateway.chotot.com
+    chototCDNURL: https://cdn.chotot.com
   # A scam check's one call to the model.
   trust:
     callTimeout: 20s
