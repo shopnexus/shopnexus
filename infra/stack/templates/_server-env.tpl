@@ -43,7 +43,7 @@ AI_FRAMES_BASE_URL: http://ai:8000/v1
 STT_BASE_URL: http://litellm:4000/v1
 STT_MODEL: stt
 ASSIST_LLM_BASE_URL: http://litellm:4000/v1
-ASSIST_LLM_MODEL: video-read
+ASSIST_LLM_MODEL: listing-read
 ASSIST_CALL_TIMEOUT: {{ required "server.assist.callTimeout is required" .Values.server.assist.callTimeout | quote }}
 CHOTOT_GATEWAY_URL: {{ required "server.assist.chototGatewayURL is required" .Values.server.assist.chototGatewayURL | quote }}
 CHOTOT_CDN_URL: {{ required "server.assist.chototCDNURL is required" .Values.server.assist.chototCDNURL | quote }}

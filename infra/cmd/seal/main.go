@@ -102,7 +102,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"LITELLM_DB_PASSWORD", "", 24},
 		{"LLM_API_KEY", "sk-", 24},          // the server's search key in LiteLLM (server-llm)
 		{"STT_API_KEY", "sk-", 24},          // the server's speech-to-text key in LiteLLM (server-stt)
-		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's video-read key in LiteLLM (server-assist)
+		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's listing-read key in LiteLLM (server-assist)
 		{"TRUST_LLM_API_KEY", "sk-", 24},    // the server's scam-check key in LiteLLM (server-trust)
 		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
 		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)

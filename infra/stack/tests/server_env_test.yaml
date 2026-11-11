@@ -100,7 +100,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b1946460e58004ca
+          value: eab8b8e33e2a3556
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -108,7 +108,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b1946460e58004ca
+          value: eab8b8e33e2a3556
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -135,7 +135,7 @@ tests:
       - equal: { path: data.STT_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.STT_MODEL, value: stt }
       - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.ASSIST_LLM_MODEL, value: video-read }
+      - equal: { path: data.ASSIST_LLM_MODEL, value: listing-read }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
       - equal: { path: data.CHOTOT_GATEWAY_URL, value: https://gateway.chotot.com }
       - equal: { path: data.CHOTOT_CDN_URL, value: https://cdn.chotot.com }
