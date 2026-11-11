@@ -2,9 +2,10 @@
 # details and the URLs.
 .PHONY: dev prod test down
 
-# dev and prod take LLM_BASE_URL, LLM_API_KEY, LLM_MODEL and the three
-# ASSIST_LLM_ variables from server/.env. Compose uses the file only to fill
-# in ${...} in docker-compose.yml, and those six are the only ones it names.
+# dev and prod take LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, the three
+# ASSIST_LLM_ and the three TRUST_LLM_ variables from server/.env. Compose
+# uses the file only to fill in ${...} in docker-compose.yml, and those nine
+# are the only ones it names.
 COMPOSE_LLM := docker compose --env-file server/.env
 
 # Everything with live reload, behind http://localhost:56481. Stays in the

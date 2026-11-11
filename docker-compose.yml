@@ -40,10 +40,11 @@
 # The tests container shares Restate's network namespace, so Restate reaches
 # the endpoints the tests serve on 127.0.0.1.
 #
-# The server needs an OpenAI-compatible API for search and video reads in dev
-# and prod: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL and ASSIST_LLM_BASE_URL,
-# ASSIST_LLM_API_KEY, ASSIST_LLM_MODEL, read from server/.env (the Makefile
-# passes --env-file server/.env). It calls the stack's TEI and ai directly for
+# The server needs an OpenAI-compatible API for search, video reads and scam
+# checks in dev and prod: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+# ASSIST_LLM_BASE_URL, ASSIST_LLM_API_KEY, ASSIST_LLM_MODEL and
+# TRUST_LLM_BASE_URL, TRUST_LLM_API_KEY, TRUST_LLM_MODEL, read from
+# server/.env (the Makefile passes --env-file server/.env). It calls the stack's TEI and ai directly for
 # embeddings, as it calls the upstream LLM; in the cluster both sit behind
 # LiteLLM.
 # The tests use a stub. The first start of a stack writes the server's keys
@@ -209,6 +210,11 @@ x-server-env: &server-env
   ASSIST_LLM_API_KEY: ${ASSIST_LLM_API_KEY:-}
   ASSIST_LLM_MODEL: ${ASSIST_LLM_MODEL:-}
   ASSIST_CALL_TIMEOUT: 30s
+  # Scam checks (module trust): the LLM in server/.env.
+  TRUST_LLM_BASE_URL: ${TRUST_LLM_BASE_URL:-}
+  TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
+  TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
+  TRUST_CALL_TIMEOUT: 20s
   FIREBASE_PROJECT_ID: shopnexus-26aca
   FIREBASE_PROJECT_NUMBER: "5362373878"
   FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
