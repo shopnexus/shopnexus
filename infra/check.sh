@@ -83,6 +83,7 @@ eq "$(yq '.x-server-env.ASSIST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.ser
 eq "$(yq '.x-server-env.CHOTOT_GATEWAY_URL' ../docker-compose.yml)" "$(yq '.server.assist.chototGatewayURL' stack/values.yaml)" "compose CHOTOT_GATEWAY_URL"
 eq "$(yq '.x-server-env.CHOTOT_CDN_URL' ../docker-compose.yml)" "$(yq '.server.assist.chototCDNURL' stack/values.yaml)" "compose CHOTOT_CDN_URL"
 eq "$(yq '.x-server-env.TRUST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.trust.callTimeout' stack/values.yaml)" "compose TRUST_CALL_TIMEOUT"
+eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

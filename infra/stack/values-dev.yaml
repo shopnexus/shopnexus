@@ -2,6 +2,7 @@ stack: dev
 domain: dev.shopnexus.id.vn
 appEnv: dev
 server:
+  carrier: fake
   logLevel: debug
   pnvTestNumbers: "true"
   emailSender: log

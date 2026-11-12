@@ -88,6 +88,7 @@ tests:
       - exists: { path: data.TRUST_LLM_BASE_URL }
       - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
+      - exists: { path: data.CARRIER }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
@@ -100,7 +101,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: eab8b8e33e2a3556
+          value: aca2551cb9b8f3a6
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -108,7 +109,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: eab8b8e33e2a3556
+          value: aca2551cb9b8f3a6
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -147,3 +148,15 @@ tests:
       - equal: { path: data.TRUST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.TRUST_LLM_MODEL, value: scam-check }
       - equal: { path: data.TRUST_CALL_TIMEOUT, value: 20s }
+  # Production has no carrier until GHTK's client comes; the dev stack runs
+  # the fake, whose dev endpoint moves its shipments.
+  - it: runs production without a carrier
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.CARRIER, value: none }
+  - it: runs the dev stack on the fake carrier
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.CARRIER, value: fake }
