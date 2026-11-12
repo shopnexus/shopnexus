@@ -50,6 +50,7 @@ CHOTOT_CDN_URL: {{ required "server.assist.chototCDNURL is required" .Values.ser
 TRUST_LLM_BASE_URL: http://litellm:4000/v1
 TRUST_LLM_MODEL: scam-check
 TRUST_CALL_TIMEOUT: {{ required "server.trust.callTimeout is required" .Values.server.trust.callTimeout | quote }}
+CARRIER: {{ required "server.carrier is required: fake or none, in the stack's values file" .Values.server.carrier | quote }}
 EMBED_TEXT_BASE_URL: http://litellm:4000/v1
 EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
 EMBED_TEXT_MODEL: embed-text

@@ -160,6 +160,10 @@ server:
   # A scam check's one call to the model.
   trust:
     callTimeout: 20s
+  # carrier: where the server makes and reads shipments, set per stack:
+  # fake in values-dev.yaml (with it the server serves
+  # POST /v1/dev/shipments/{code}/status to anyone), none in
+  # values-prod.yaml. The server refuses fake with APP_ENV=prod.
   logLevel: info
   pnvTestNumbers: "true"
   # How sign-in codes are mailed: log or resend. APP_ENV=prod refuses log.

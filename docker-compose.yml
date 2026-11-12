@@ -218,6 +218,10 @@ x-server-env: &server-env
   TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
   TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
   TRUST_CALL_TIMEOUT: 20s
+  # Shipments (module deal): the fake carrier, as the dev cluster stack
+  # runs it. With it the server serves the dev endpoint that moves its
+  # shipments.
+  CARRIER: fake
   FIREBASE_PROJECT_ID: shopnexus-26aca
   FIREBASE_PROJECT_NUMBER: "5362373878"
   FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
