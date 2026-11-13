@@ -89,6 +89,13 @@ tests:
       - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
       - exists: { path: data.CARRIER }
+      - exists: { path: data.CARRIER_POLL_EVERY }
+      - exists: { path: data.GHTK_API_URL }
+      - exists: { path: data.GHTK_PARTNER_TOKEN }
+      - exists: { path: data.GHTK_CLIENT_SOURCE }
+      - exists: { path: data.GHTK_WEBHOOK_SECRET }
+      - exists: { path: data.GHN_API_URL }
+      - exists: { path: data.GHN_WEBHOOK_SECRET }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
@@ -101,7 +108,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: aca2551cb9b8f3a6
+          value: 5106f8cce316843d
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -109,7 +116,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: aca2551cb9b8f3a6
+          value: 5106f8cce316843d
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
@@ -155,6 +162,8 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal: { path: data.CARRIER, value: none }
+      - equal: { path: data.CARRIER_POLL_EVERY, value: 2h }
+      - equal: { path: data.GHTK_PARTNER_TOKEN, value: "" }
   - it: runs the dev stack on the fake carrier
     documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]

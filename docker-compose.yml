@@ -218,10 +218,18 @@ x-server-env: &server-env
   TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
   TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
   TRUST_CALL_TIMEOUT: 20s
-  # Shipments (module deal): the fake carrier, as the dev cluster stack
-  # runs it. With it the server serves the dev endpoint that moves its
-  # shipments.
+  # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
+  # dev cluster stack runs them. With them the server serves the dev
+  # endpoint that moves their shipments. The token key comes from the keys
+  # service; the GHTK and GHN settings are only for CARRIER=live.
   CARRIER: fake
+  CARRIER_POLL_EVERY: 2h
+  GHTK_API_URL: ""
+  GHTK_PARTNER_TOKEN: ""
+  GHTK_CLIENT_SOURCE: ""
+  GHTK_WEBHOOK_SECRET: ""
+  GHN_API_URL: ""
+  GHN_WEBHOOK_SECRET: ""
   FIREBASE_PROJECT_ID: shopnexus-26aca
   FIREBASE_PROJECT_NUMBER: "5362373878"
   FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
