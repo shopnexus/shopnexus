@@ -51,6 +51,14 @@ TRUST_LLM_BASE_URL: http://litellm:4000/v1
 TRUST_LLM_MODEL: scam-check
 TRUST_CALL_TIMEOUT: {{ required "server.trust.callTimeout is required" .Values.server.trust.callTimeout | quote }}
 CARRIER: {{ required "server.carrier is required: fake or none, in the stack's values file" .Values.server.carrier | quote }}
+CARRIER_POLL_EVERY: {{ required "server.carrierPollEvery is required" .Values.server.carrierPollEvery | quote }}
+{{- /* CARRIER=live is not run in a stack yet; its six settings stay empty. */}}
+GHTK_API_URL: ""
+GHTK_PARTNER_TOKEN: ""
+GHTK_CLIENT_SOURCE: ""
+GHTK_WEBHOOK_SECRET: ""
+GHN_API_URL: ""
+GHN_WEBHOOK_SECRET: ""
 EMBED_TEXT_BASE_URL: http://litellm:4000/v1
 EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
 EMBED_TEXT_MODEL: embed-text
