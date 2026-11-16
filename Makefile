@@ -32,6 +32,7 @@ TRACE := bun docs/scripts/trace/main.ts --server server --docs docs
 
 trace:
 	$(TRACE) build
+	$(TRACE) openapi
 
 # make trace-rename FROM=UC-DEAL-02 TO=UC-DEAL-07 renames one ID everywhere;
 # make trace-rename FROM_WAS=1 replaces every old ID by its current one.

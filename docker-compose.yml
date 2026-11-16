@@ -251,6 +251,8 @@ x-server-env-dev: &server-env-dev
   RESTATE_ENDPOINT_URL: http://server-dev:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-dev:4318
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
+  # The docs site's API playground, here and on a laptop's `bun run dev`.
+  DOCS_ORIGINS: http://docs.shopnexus.localhost:56481,http://localhost:4321
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
@@ -267,6 +269,7 @@ x-server-env-prod: &server-env-prod
   RESTATE_ENDPOINT_URL: http://server-prod:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
+  DOCS_ORIGINS: http://docs.shopnexus.localhost:56480
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
@@ -386,6 +389,9 @@ services:
     environment:
       # true adds the internal pages (the Developers tab).
       DOCS_INTERNAL: ${DOCS_INTERNAL:-true}
+    # The Requirements pages and the API playground read ../registry.
+    volumes:
+      - ./docs/registry:/registry:ro
     restart: unless-stopped
     develop:
       watch:

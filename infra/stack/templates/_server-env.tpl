@@ -32,6 +32,9 @@ JWT_PREVIOUS_KEY_ID: ""
 JWT_PREVIOUS_PUBLIC_KEY: ""
 CONSOLE_ORIGIN: https://{{ include "sn.host" (dict "root" . "sub" "console") }}
 DASHBOARD_HOSTS: {{ include "sn.dashboardHosts" . | quote }}
+# The docs site's API playground calls the API from these origins. Prod adds
+# the GitHub Pages copy; dev adds the docs dev server on a laptop.
+DOCS_ORIGINS: {{ printf "https://%s,%s" (include "sn.host" (dict "root" . "sub" "docs")) (ternary "https://shopnexus.github.io" "http://localhost:4321" (eq .Values.appEnv "prod")) | quote }}
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 OBJECT_STORE_REGION: us-east-1
