@@ -1,6 +1,6 @@
 # The three stacks of docker-compose.yml; README.md, Development, has the
 # details and the URLs.
-.PHONY: dev prod test down
+.PHONY: dev prod test down trace trace-rename
 
 # dev and prod take LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, the three
 # ASSIST_LLM_ and the three TRUST_LLM_ variables from server/.env. Compose
@@ -24,3 +24,16 @@ test:
 # Stops every stack and keeps its data; down -v by hand deletes it.
 down:
 	docker compose --profile dev --profile prod --profile test down
+
+# Checks that server code, tests, OpenAPI and the docs name only IDs from
+# docs/registry/requirements.yaml, then writes docs/registry/trace.json for
+# the report and the docs site. Errors exit 1; warnings list what is missing.
+TRACE := bun docs/scripts/trace/main.ts --server server --docs docs
+
+trace:
+	$(TRACE) build
+
+# make trace-rename FROM=UC-DEAL-02 TO=UC-DEAL-07 renames one ID everywhere;
+# make trace-rename FROM_WAS=1 replaces every old ID by its current one.
+trace-rename:
+	$(if $(FROM_WAS),$(TRACE) rename --from-was,$(TRACE) rename $(FROM) $(TO))
