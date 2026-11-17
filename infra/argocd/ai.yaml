@@ -12,7 +12,12 @@ metadata:
   namespace: argocd
   # After the stack (wave 1), whose Postgres holds the gateway's database and
   # whose sealed secrets hold the keys.
-  annotations: { argocd.argoproj.io/sync-wave: "2" }
+  # Server-side diff compares with what the API server would store, so the
+  # defaults webhooks fill in (CNPG's role fields, a StatefulSet's claim
+  # templates) do not show as drift.
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -59,7 +64,12 @@ metadata:
   namespace: argocd
   # After the stack (wave 1), whose Postgres holds the gateway's database and
   # whose sealed secrets hold the keys.
-  annotations: { argocd.argoproj.io/sync-wave: "2" }
+  # Server-side diff compares with what the API server would store, so the
+  # defaults webhooks fill in (CNPG's role fields, a StatefulSet's claim
+  # templates) do not show as drift.
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
