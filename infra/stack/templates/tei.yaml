@@ -86,7 +86,9 @@ kind: PersistentVolumeClaim
 metadata:
   name: tei-data
   labels: {{- include "sn.labels" . | nindent 4 }}
-  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+  # The Deployment's wave: local-path binds on the first pod, and Argo CD
+  # does not start a later wave while this claim is Pending.
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
 spec:
   accessModes: [ReadWriteOnce]
   resources:

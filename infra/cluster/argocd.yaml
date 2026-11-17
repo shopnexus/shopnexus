@@ -18,6 +18,9 @@ spec:
       # terminates TLS.
       params:
         server.insecure: true
+        # The stacks read only infra/. The umbrella's submodules include
+        # private repos (app-android), and the anonymous clone of those fails.
+        reposerver.enable.git.submodule: false
       rbac:
         policy.default: role:admin
       cm:
