@@ -2,7 +2,7 @@ stack: dev
 domain: dev.shopnexus.id.vn
 appEnv: dev
 server:
-  # ai-models on dev loads no SigLIP 2 (infra/ai/values-dev.yaml), so no
+  # ai-models on dev loads no SigLIP 2 (ai-dev in infra/argocd/ai.yaml), so no
   # photo vectors.
   embed:
     image: false
