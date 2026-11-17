@@ -9,6 +9,7 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 | `agent`   | `shopnexus/agent`       | Console agent (NestJS)                 |
 | `ai`      | `shopnexus/ai`          | Self-hosted models behind OpenAI's API |
 | `app`     | `shopnexus/app-android` | Android app (Kotlin)                   |
+| `brand`   | `shopnexus/brand`       | Mascot art and icons for app and website |
 | `console` | `shopnexus/console`     | Moderation console (React)             |
 | `docs`    | `shopnexus/docs`        | Documentation                          |
 | `server`  | `shopnexus/server`      | Backend (Go)                           |
