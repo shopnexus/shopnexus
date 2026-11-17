@@ -90,11 +90,14 @@ running for the next run; `make down` empties them.
 The server in `dev` and `prod` needs an OpenAI-compatible API for search:
 `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `server/.env`, the file
 `make run` in `server/` also reads. Compose takes those three, the three
-`ASSIST_LLM_`, the three `TRUST_LLM_` and the three `AGENT_LLM_` lines from
-it and nothing else (`--env-file server/.env` in the root `Makefile`). The
+`ASSIST_LLM_`, the three `TRUST_LLM_`, the three `AGENT_LLM_` lines and the
+text embedding settings (`EMBED_TEXT_BASE_URL`, `EMBED_TEXT_MODEL`,
+`EMBED_INDEX_API_KEY`, `EMBED_SEARCH_API_KEY`; OpenRouter's `baai/bge-m3`,
+or an empty model for none) from it and nothing else (`--env-file
+server/.env` in the root `Makefile`). The
 `AGENT_LLM_` lines are not in `server/.env.example`; add them by hand. The console agent calls
 the API in `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY` and `AGENT_LLM_MODEL`
-under that model name; in the cluster it calls LiteLLM's alias
+under that model name; in the cluster it calls `ai-gateway`'s alias
 `console-agent`. It has no host: only the server calls it, and its database
 is `agent` in the stack's Postgres. The first start of a
 stack writes the server's keys into its volume, and
@@ -127,11 +130,14 @@ To run your own copy:
 
 1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
    `infra/argocd/stacks.yaml`. In `infra/stack/values-dev.yaml` and
-   `infra/stack/values-prod.yaml`, set `domain`. Each stack's LiteLLM sends
-   search to `litellm.model` at `litellm.apiBase` (in `values.yaml`), with a
-   daily token budget per stack.
+   `infra/stack/values-prod.yaml`, set `domain`. Each stack's `ai-gateway`
+   (the LiteLLM of the `ai` repo, deployed by `infra/argocd/ai.yaml`) sends
+   every model call to the model its alias names in the `ai` repo's
+   `chart/values.yaml`, mostly on OpenRouter, with a daily budget per key
+   and stack in `infra/argocd/ai.yaml`.
    If your images are not `ghcr.io/shopnexus/*`, change the names in
-   `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
+   `infra/stack/values.yaml`, `infra/argocd/stacks.yaml` and the `ai`
+   chart. The cluster
    pulls them without credentials, so the GHCR packages must be public.
 2. Point DNS at the machine: `<domain>`, `*.<domain>`, `*.dev.<domain>` and
    `dev.<domain>`. The last one is needed because a `*` record does not
