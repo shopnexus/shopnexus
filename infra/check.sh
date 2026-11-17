@@ -47,7 +47,7 @@ done
 
 # ── argo ──
 apps=$(for f in argocd/*.yaml platform/*.yaml; do cat "$f"; echo ---; done 2>/dev/null || true)
-eq "$(q "$apps" 'select(.kind=="Application") | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "applications"
+eq "$(q "$apps" 'select(.kind=="Application") | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater prometheus restate-operator root sealed-secrets stack-dev stack-prod " "applications"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.source.helm.valueFiles[0]')" values-prod.yaml "prod values"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.destination.namespace')" shopnexus-prod "prod namespace"
 eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sources[].repoURL)' | grep github.com | sort -u | tr '\n' ' ')" "https://github.com/shopnexus/ai.git https://github.com/shopnexus/shopnexus.git " "the umbrella's and the ai repo's URLs"
@@ -62,7 +62,7 @@ eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | selec
 # so root's waves wait for the platform.
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-options"]')" SkipDryRunOnMissingResource=true "ImageUpdater survives the dry-run"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 1 "ImageUpdater waits for the platform only"
-eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
+eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater prometheus restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
 ok $(grep -q 'obj.status.health' <<<"$(yq '.spec.valuesContent' cluster/argocd.yaml | yq '.configs.cm["resource.customizations.health.argoproj.io_Application"]')"; echo $?) "Argo CD judges Application health"
 
 # ── edge ──
