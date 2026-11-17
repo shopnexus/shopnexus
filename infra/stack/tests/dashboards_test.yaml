@@ -9,7 +9,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 10
+          count: 11
       - equal:
           path: spec.routes[0].match
           value: Host(`grafana.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
@@ -34,13 +34,22 @@ tests:
           path: spec.routes[5].services[0]
           value: { name: ai-gateway, namespace: shopnexus-prod, port: 4000 }
       - equal:
+          path: spec.routes[7].match
+          value: Host(`s3.shopnexus.id.vn`) && PathPrefix(`/rustfs/console/auth/login`)
+      - equal:
+          path: spec.routes[7].middlewares[0].name
+          value: dashboard-login
+      - equal:
           path: spec.routes[7].services[0]
+          value: { name: server-api, port: 8080 }
+      - equal:
+          path: spec.routes[8].services[0]
           value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
       - equal:
-          path: spec.routes[9].match
+          path: spec.routes[10].match
           value: Host(`argocd.shopnexus.id.vn`)
       - equal:
-          path: spec.routes[9].services[0]
+          path: spec.routes[10].services[0]
           value: { name: argocd-server, namespace: argocd, port: 80 }
   - it: leaves Argo CD to the prod stack by default
     template: dashboards.yaml
@@ -50,7 +59,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 8
+          count: 9
       - equal:
           path: spec.routes[0].match
           value: Host(`grafana.dev.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
@@ -63,15 +72,24 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 10
+          count: 11
       - equal:
-          path: spec.routes[9].match
+          path: spec.routes[10].match
           value: Host(`argocd.dev.shopnexus.id.vn`)
   # Traefik copies only these headers from the server's answer, replacing any
   # the client sent, so a client cannot claim to be a console member.
+  # The server signs the browser in to the RustFS console at /_dashboard/login.
+  - it: sends a dashboard's sign-in page to the server
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: dashboard-login }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.replacePath.path
+          value: /_dashboard/login
   - it: asks the stack's server before every dashboard request
     template: dashboards.yaml
-    documentSelector: { path: kind, value: Middleware }
+    documentSelector: { path: metadata.name, value: dashboard-auth }
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal:

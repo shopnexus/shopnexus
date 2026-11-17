@@ -120,6 +120,17 @@ spec:
     address: http://server-api.{{ $ns }}.svc:8080/v1/console/dashboard-auth
     authResponseHeaders: [X-Console-Email, X-Console-Role]
 ---
+# A dashboard's own sign-in page goes to the server, which signs the
+# browser in when its dashboard cookie lives (the RustFS console's keys).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: dashboard-login
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  replacePath:
+    path: /_dashboard/login
+---
 # Restate's admin UI and Argo CD live in other namespaces, which Traefik
 # reaches with allowCrossNamespace (infra/cluster/k3d-*.yaml).
 apiVersion: traefik.io/v1alpha1
@@ -135,6 +146,14 @@ spec:
       match: Host(`{{ .host }}`) && PathPrefix(`/_dashboard`)
       services:
         - { name: server-api, port: 8080 }
+    {{- if .login }}
+    - kind: Rule
+      match: Host(`{{ .host }}`) && PathPrefix(`{{ .login }}`)
+      middlewares:
+        - { name: dashboard-login }
+      services:
+        - { name: server-api, port: 8080 }
+    {{- end }}
     - kind: Rule
       match: Host(`{{ .host }}`)
       middlewares:
