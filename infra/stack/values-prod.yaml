@@ -25,5 +25,3 @@ server:
   logLevel: info
   pnvTestNumbers: "false"
   emailSender: resend
-  firebaseProjectID: shopnexus-26aca
-  firebaseProjectNumber: "5362373878"

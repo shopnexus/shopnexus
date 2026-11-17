@@ -92,29 +92,24 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 for s in postgres restate rustfs; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
-# The embedding versions the local server stores, and ai-models' settings,
-# follow the charts.
-eq "$(yq '.x-server-env.EMBED_TEXT_VERSION' ../docker-compose.yml)" "$(yq '.server.embed.textVersion' stack/values.yaml)" "compose EMBED_TEXT_VERSION"
-eq "$(yq '.x-server-env.EMBED_IMAGE_VERSION' ../docker-compose.yml)" "$(yq '.server.embed.imageVersion' stack/values.yaml)" "compose EMBED_IMAGE_VERSION"
+# ai-models' settings follow the ai chart.
 for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB \
   FRAMES_MAX_CONCURRENT:framesMaxConcurrent FRAMES_MAX_SECONDS:framesMaxSeconds FRAMES_MIN_SHARPNESS:framesMinSharpness; do
   eq "$(yq ".x-ai-models.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".models.${k#*:}" "$ai_chart/values.yaml")" "compose AI_${k%%:*}"
 done
-eq "$(yq '.x-server-env.ASSIST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.assist.callTimeout' stack/values.yaml)" "compose ASSIST_CALL_TIMEOUT"
-eq "$(yq '.x-server-env.CHOTOT_GATEWAY_URL' ../docker-compose.yml)" "$(yq '.server.assist.chototGatewayURL' stack/values.yaml)" "compose CHOTOT_GATEWAY_URL"
-eq "$(yq '.x-server-env.CHOTOT_CDN_URL' ../docker-compose.yml)" "$(yq '.server.assist.chototCDNURL' stack/values.yaml)" "compose CHOTOT_CDN_URL"
-eq "$(yq '.x-server-env.TRUST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.trust.callTimeout' stack/values.yaml)" "compose TRUST_CALL_TIMEOUT"
 eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
-eq "$(yq '.x-server-env.CARRIER_POLL_EVERY' ../docker-compose.yml)" "$(yq '.server.carrierPollEvery' stack/values.yaml)" "compose CARRIER_POLL_EVERY"
-# The console agent's settings and the server's MCP port follow the chart.
-for k in MAX_TOKENS:maxTokens THINKING_BUDGET:thinkingBudget MAX_TURNS:maxTurns TOOL_OUTPUT_CAP:toolOutputCap \
-  MEMORY_ENTRY_CAP:memoryEntryCap MEMORY_MAX_ENTRIES:memoryMaxEntries CONVERSATION_WINDOW:conversationWindow \
-  HISTORY_TURNS:historyTurns HISTORY_CHARS:historyChars TURN_DEADLINE_MS:turnDeadlineMs SWEEP_INTERVAL_MS:sweepIntervalMs; do
-  eq "$(yq ".x-agent-env.AGENT_${k%%:*}" ../docker-compose.yml)" "$(yq ".agent.${k#*:}" stack/values.yaml)" "compose AGENT_${k%%:*}"
+# The settings every stack shares are in stack/env/*.env, which compose
+# (env_file) and the chart both read; a key there is written nowhere else.
+# The chart fails its render on a key in both; compose would let its own
+# block win, so this catches it.
+for f in server:x-server-env agent:x-agent-env; do
+  for k in $(grep -oE '^[A-Z0-9_]+' "stack/env/${f%%:*}.env"); do
+    for block in $(yq 'keys | .[] | select(test("^'"${f#*:}"'"))' ../docker-compose.yml); do
+      [[ $(yq ".\"$block\" | has(\"$k\")" ../docker-compose.yml) == false ]] ||
+        { echo "FAIL: $k is in stack/env/${f%%:*}.env and in compose's $block" >&2; fails=$((fails + 1)); }
+    done
+  done
 done
-eq "$(yq '.x-agent-env.RETRIEVAL_CONTEXT_CHARS' ../docker-compose.yml)" "$(yq '.agent.retrievalContextChars' stack/values.yaml)" "compose RETRIEVAL_CONTEXT_CHARS"
-eq "$(yq '.x-agent-env.DOCUMENT_CHUNK_CHARS' ../docker-compose.yml)" "$(yq '.agent.documentChunkChars' stack/values.yaml)" "compose DOCUMENT_CHUNK_CHARS"
-eq "$(yq '.x-server-env.AGENT_MCP_ADDR' ../docker-compose.yml)" "$(helm template shopnexus stack -f stack/values-dev.yaml --set secretsDir=tests/secrets -s templates/server.yaml | yq 'select(.kind=="ConfigMap") | .data.AGENT_MCP_ADDR')" "compose AGENT_MCP_ADDR"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

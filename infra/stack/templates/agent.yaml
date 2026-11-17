@@ -4,7 +4,10 @@
        those two paths, and it has no Ingress. Its database is agent in the
        stack's Postgres. */ -}}
 {{- define "sn.agentEnv" -}}
-- { name: PORT, value: "3000" }
+{{- /* env/agent.env, then the settings that differ from compose. */}}
+{{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
+- { name: {{ $k }}, value: {{ $v | quote }} }
+{{- end }}
 - { name: AGENT_MODEL_ID, value: console-agent }
 - { name: LITELLM_BASE_URL, value: http://ai-gateway:4000/v1 }
 - name: LITELLM_API_KEY
@@ -14,26 +17,7 @@
 - name: AGENT_MCP_TOKEN
   valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_MCP_TOKEN } }
 - { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp }
-- { name: AGENT_MAX_TOKENS, value: {{ required "agent.maxTokens is required" .Values.agent.maxTokens | toString | quote }} }
-- { name: AGENT_THINKING_BUDGET, value: {{ required "agent.thinkingBudget is required" .Values.agent.thinkingBudget | toString | quote }} }
-- { name: AGENT_MAX_TURNS, value: {{ required "agent.maxTurns is required" .Values.agent.maxTurns | toString | quote }} }
-- { name: AGENT_TOOL_OUTPUT_CAP, value: {{ required "agent.toolOutputCap is required" .Values.agent.toolOutputCap | toString | quote }} }
-- { name: AGENT_MEMORY_ENTRY_CAP, value: {{ required "agent.memoryEntryCap is required" .Values.agent.memoryEntryCap | toString | quote }} }
-- { name: AGENT_MEMORY_MAX_ENTRIES, value: {{ required "agent.memoryMaxEntries is required" .Values.agent.memoryMaxEntries | toString | quote }} }
-- { name: AGENT_CONVERSATION_WINDOW, value: {{ required "agent.conversationWindow is required" .Values.agent.conversationWindow | toString | quote }} }
-- { name: AGENT_HISTORY_TURNS, value: {{ required "agent.historyTurns is required" .Values.agent.historyTurns | toString | quote }} }
-- { name: AGENT_HISTORY_CHARS, value: {{ required "agent.historyChars is required" .Values.agent.historyChars | toString | quote }} }
-- { name: AGENT_TURN_DEADLINE_MS, value: {{ required "agent.turnDeadlineMs is required" .Values.agent.turnDeadlineMs | toString | quote }} }
-- { name: AGENT_SWEEP_INTERVAL_MS, value: {{ required "agent.sweepIntervalMs is required" .Values.agent.sweepIntervalMs | toString | quote }} }
-- { name: RETRIEVAL_CONTEXT_CHARS, value: {{ required "agent.retrievalContextChars is required" .Values.agent.retrievalContextChars | toString | quote }} }
-- { name: DOCUMENT_CHUNK_CHARS, value: {{ required "agent.documentChunkChars is required" .Values.agent.documentChunkChars | toString | quote }} }
-{{- /* No turn uses retrieval, so no embedding model. */}}
-- { name: EMBEDDING_MODEL_ID, value: "" }
-- { name: FEATURE_LLM, value: "true" }
-- { name: FEATURE_ALL_AGENT, value: "true" }
 - { name: POSTGRES_HOST, value: postgres-rw }
-- { name: POSTGRES_PORT, value: "5432" }
-- { name: POSTGRES_DB, value: agent }
 - { name: POSTGRES_USER, value: agent }
 - name: POSTGRES_PASSWORD
   valueFrom: { secretKeyRef: { name: agent-db, key: password } }

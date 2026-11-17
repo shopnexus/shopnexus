@@ -9,27 +9,30 @@ env:
       secretKeyRef: { name: postgres-app, key: uri }
 {{- end }}
 
-{{/* Non-secret server configuration: the data of ConfigMap server-env. */}}
+{{/* Non-secret server configuration: the data of ConfigMap server-env,
+     env/server.env and the settings below, which differ between stacks or
+     from compose. A key in both fails the render. */}}
 {{- define "sn.serverEnvData" -}}
+{{- $shared := include "sn.envFile" (dict "root" . "file" "env/server.env") | fromJson }}
+{{- $stack := include "sn.serverStackEnv" . | fromYaml }}
+{{- range $k, $_ := $stack }}
+{{- if hasKey $shared $k }}{{ fail (printf "%s is in env/server.env and in _server-env.tpl" $k) }}{{ end }}
+{{- end }}
+{{- toYaml (merge $stack $shared) }}
+{{- end }}
+
+{{- define "sn.serverStackEnv" -}}
 {{- $restate := include "sn.restate" . -}}
 APP_ENV: {{ .Values.appEnv | quote }}
-HTTP_ADDR: ":8080"
 LOG_LEVEL: {{ .Values.server.logLevel | quote }}
 LOG_FORMAT: json
 OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
-SERVICE_NAME: server
 # k3s's pod network; Traefik's X-Forwarded-For is believed.
 TRUSTED_PROXIES: "10.42.0.0/16"
 RESTATE_INGRESS_URL: http://restate.{{ $restate }}:8080
 RESTATE_ADMIN_URL: http://restate.{{ $restate }}:9070
-RESTATE_LISTEN_ADDR: "0.0.0.0:9080"
 RESTATE_ENDPOINT_URL: ""
-RESTATE_SERVICE_PREFIX: ""
 RESTATE_REGISTER: "false"
-JWT_ISSUER: shopnexus
-JWT_AUDIENCE: shopnexus-app
-JWT_PREVIOUS_KEY_ID: ""
-JWT_PREVIOUS_PUBLIC_KEY: ""
 CONSOLE_ORIGIN: https://{{ include "sn.host" (dict "root" . "sub" "console") }}
 DASHBOARD_HOSTS: {{ include "sn.dashboardHosts" . | quote }}
 # The docs site's API playground calls the API from these origins. Prod adds
@@ -37,8 +40,6 @@ DASHBOARD_HOSTS: {{ include "sn.dashboardHosts" . | quote }}
 DOCS_ORIGINS: {{ printf "https://%s,%s" (include "sn.host" (dict "root" . "sub" "docs")) (ternary "https://shopnexus.github.io" "http://localhost:4321" (eq .Values.appEnv "prod")) | quote }}
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
-OBJECT_STORE_REGION: us-east-1
-OBJECT_STORE_BUCKET: shopnexus
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
 LLM_BASE_URL: http://ai-gateway:4000/v1
 LLM_MODEL: search
@@ -47,44 +48,18 @@ STT_BASE_URL: http://ai-gateway:4000/v1
 STT_MODEL: stt
 ASSIST_LLM_BASE_URL: http://ai-gateway:4000/v1
 ASSIST_LLM_MODEL: listing-read
-ASSIST_CALL_TIMEOUT: {{ required "server.assist.callTimeout is required" .Values.server.assist.callTimeout | quote }}
-CHOTOT_GATEWAY_URL: {{ required "server.assist.chototGatewayURL is required" .Values.server.assist.chototGatewayURL | quote }}
-CHOTOT_CDN_URL: {{ required "server.assist.chototCDNURL is required" .Values.server.assist.chototCDNURL | quote }}
 TRUST_LLM_BASE_URL: http://ai-gateway:4000/v1
 TRUST_LLM_MODEL: scam-check
-TRUST_CALL_TIMEOUT: {{ required "server.trust.callTimeout is required" .Values.server.trust.callTimeout | quote }}
 {{- /* The console agent, in-cluster only; its two tokens are in server-secrets. */}}
 AGENT_BASE_URL: http://agent:3000
-AGENT_MCP_ADDR: "0.0.0.0:9090"
 CARRIER: {{ required "server.carrier is required: fake or none, in the stack's values file" .Values.server.carrier | quote }}
-CARRIER_POLL_EVERY: {{ required "server.carrierPollEvery is required" .Values.server.carrierPollEvery | quote }}
-{{- /* CARRIER=live is not run in a stack yet; its six settings stay empty. */}}
-GHTK_API_URL: ""
-GHTK_PARTNER_TOKEN: ""
-GHTK_CLIENT_SOURCE: ""
-GHTK_WEBHOOK_SECRET: ""
-GHN_API_URL: ""
-GHN_WEBHOOK_SECRET: ""
-{{- /* A kind turned off gets empty settings, and the server writes and reads
-       no vectors of it. */}}
+{{- /* A kind turned off gets an empty model, and the server writes and
+       reads no vectors of it. */}}
 {{- $e := .Values.server.embed }}
 EMBED_TEXT_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.text | quote }}
 EMBED_IMAGE_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.image | quote }}
 EMBED_TEXT_MODEL: {{ ternary "embed-text" "" $e.text | quote }}
 EMBED_IMAGE_MODEL: {{ ternary "embed-image" "" $e.image | quote }}
-EMBED_TEXT_VERSION: {{ ternary (required "server.embed.textVersion is required" $e.textVersion) "" $e.text | quote }}
-EMBED_IMAGE_VERSION: {{ ternary (required "server.embed.imageVersion is required" $e.imageVersion) "" $e.image | quote }}
-EMBED_TIMEOUT: {{ required "server.embed.timeout is required" .Values.server.embed.timeout | quote }}
-EMBED_SLOTS: {{ required "server.embed.slots is required" .Values.server.embed.slots | toString | quote }}
-EMBED_TEXT_MIN_SIMILARITY: {{ required "server.embed.textMinSimilarity is required" .Values.server.embed.textMinSimilarity | quote }}
-EMBED_PHOTO_MIN_SIMILARITY: {{ required "server.embed.photoMinSimilarity is required" .Values.server.embed.photoMinSimilarity | quote }}
-FIREBASE_PROJECT_ID: {{ .Values.server.firebaseProjectID | quote }}
-FIREBASE_PROJECT_NUMBER: {{ .Values.server.firebaseProjectNumber | quote }}
-FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
-PNV_JWKS_URL: https://fpnv.googleapis.com/v1beta/jwks
 PNV_TEST_NUMBERS: {{ .Values.server.pnvTestNumbers | quote }}
 EMAIL_SENDER: {{ .Values.server.emailSender | quote }}
-EMAIL_FROM: {{ .Values.server.emailFrom | quote }}
-GOOGLE_CLIENT_ID: {{ .Values.server.googleClientID | quote }}
-GOOGLE_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
 {{- end }}

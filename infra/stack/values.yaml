@@ -54,67 +54,27 @@ lgtm:
   clusterPrometheus: http://prometheus-server.monitoring.svc
 
 # The console agent (repo shopnexus/agent): no Ingress, only the server
-# reaches it, and it reaches only the server's MCP port. Each value is one of
-# the agent's settings (agent/src/config.ts); 0 for maxTurns leaves the
-# tool-use cycles to the model, and the turn deadline bounds them.
+# reaches it, and it reaches only the server's MCP port. Its settings are in
+# env/agent.env, which docker-compose.yml reads too.
 agent:
-  maxTokens: 4096
-  thinkingBudget: 0
-  maxTurns: 0
-  toolOutputCap: 20000
-  memoryEntryCap: 500
-  memoryMaxEntries: 10
-  conversationWindow: 40
-  historyTurns: 20
-  historyChars: 60000
-  turnDeadlineMs: 60000
-  sweepIntervalMs: 60000
-  retrievalContextChars: 12000
-  documentChunkChars: 2000
   memoryRequest: 256Mi
   memoryLimit: 512Mi
 
+# The server's settings that differ between stacks; the ones every stack
+# shares are in env/server.env, which docker-compose.yml reads too.
 server:
-  # The server's embedding settings. The aliases embed-text and embed-image
-  # are ai-gateway's (repo shopnexus/ai); text and image turn each kind of
-  # vector on, and a stack whose ai-models loads no SigLIP 2 sets image false.
-  # The versions name the models behind the aliases and are stored with
-  # every vector, so a new one means a reindex. The similarity floors are
-  # starting values that the server's search eval tunes.
+  # text and image turn each kind of vector on, through ai-gateway's aliases
+  # embed-text and embed-image (repo shopnexus/ai); a stack whose ai-models
+  # loads no SigLIP 2 sets image false.
   embed:
     text: true
     image: true
-    textVersion: bge-m3@5617a9f61b028005a4858fdac845db406aefb181
-    imageVersion: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32
-    timeout: 15s
-    slots: 2
-    textMinSimilarity: "0.45"
-    photoMinSimilarity: "0.6"
-  # A read's one call to ai, speech to text, the model or Chợ Tốt. Link
-  # reads call Chợ Tốt's public gateway and the CDN its photos are on; the
-  # server reads no other origin.
-  assist:
-    callTimeout: 30s
-    chototGatewayURL: https://gateway.chotot.com
-    chototCDNURL: https://cdn.chotot.com
-  # A scam check's one call to the model.
-  trust:
-    callTimeout: 20s
   # carrier: where the server makes and reads shipments, set per stack:
   # fake in values-dev.yaml (with it the server serves
   # POST /v1/dev/shipments/{code}/status to anyone), none in
   # values-prod.yaml. The server refuses fake with APP_ENV=prod. live
   # (GHTK and GHN) waits for the GHTK partner contract.
-  # How often a shipped order's shipment is read from its carrier.
-  carrierPollEvery: 2h
   logLevel: info
   pnvTestNumbers: "true"
   # How sign-in codes are mailed: log or resend. APP_ENV=prod refuses log.
   emailSender: log
-  # The sender address; its domain is verified at Resend.
-  emailFrom: "ShopNexus <no-reply@shopnexus.id.vn>"
-  # The Web OAuth client of the Firebase project; empty turns Google
-  # sign-in off.
-  googleClientID: ""
-  firebaseProjectID: shopnexus-26aca
-  firebaseProjectNumber: "5362373878"

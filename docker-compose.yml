@@ -129,6 +129,7 @@ x-rustfs-console-env: &rustfs-console-env
 x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
+  env_file: [./infra/stack/env/server.env]
 
 # The models the AI hub hosts itself (submodule ai, ai-models). In the
 # cluster ai-gateway's aliases stt and embed-image call it. Locally the
@@ -159,45 +160,32 @@ x-ai-models: &ai-models
 # owns, so the container writes it without root.
 x-keys: &keys
   <<: *server-image
+  env_file: []
   entrypoint: ["/envgen", "-env", "/home/nonroot/.env", "-restate", "/home/nonroot/identity.pem"]
 
-# The server's configuration. Each stack adds the addresses of its own
-# services; the keys come from the .env the keys service wrote.
+# The server's configuration beyond infra/stack/env/server.env, which every
+# container of the server image reads (env_file) and the cluster's chart
+# reads too: what differs from the cluster. Each stack adds the addresses of
+# its own services; the keys come from the .env the keys service wrote.
 x-server-env: &server-env
   APP_ENV: dev
-  HTTP_ADDR: ":8080"
   LOG_LEVEL: info
   LOG_FORMAT: text
-  RESTATE_LISTEN_ADDR: 0.0.0.0:9080
-  RESTATE_SERVICE_PREFIX: ""
   RESTATE_REGISTER: "true"
-  SERVICE_NAME: server
   TRUSTED_PROXIES: ""
   # The ops dashboards are open locally, so the server serves none of them.
   DASHBOARD_HOSTS: ""
-  JWT_ISSUER: shopnexus
-  JWT_AUDIENCE: shopnexus-app
-  JWT_PREVIOUS_KEY_ID: ""
-  JWT_PREVIOUS_PUBLIC_KEY: ""
-  OBJECT_STORE_REGION: us-east-1
   OBJECT_STORE_ACCESS_KEY: shopnexus
   OBJECT_STORE_SECRET_KEY: shopnexus-secret
-  OBJECT_STORE_BUCKET: shopnexus
   LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-}
-  EMBED_TEXT_VERSION: bge-m3@5617a9f61b028005a4858fdac845db406aefb181
-  EMBED_IMAGE_VERSION: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32
   EMBED_TEXT_BASE_URL: ${EMBED_TEXT_BASE_URL:-}
   EMBED_TEXT_MODEL: ${EMBED_TEXT_MODEL:-}
   EMBED_IMAGE_MODEL: siglip2-so400m-patch16-384
   # OpenRouter's key for text; ai-models takes none and ignores it.
   EMBED_INDEX_API_KEY: ${EMBED_INDEX_API_KEY:-}
   EMBED_SEARCH_API_KEY: ${EMBED_SEARCH_API_KEY:-}
-  EMBED_TIMEOUT: 15s
-  EMBED_SLOTS: "2"
-  EMBED_TEXT_MIN_SIMILARITY: "0.45"
-  EMBED_PHOTO_MIN_SIMILARITY: "0.6"
   # Video reads (module assist). Locally the server calls ai for speech with
   # its model name and no key, and the LLM in server/.env for the fill.
   STT_API_KEY: ""
@@ -205,41 +193,19 @@ x-server-env: &server-env
   ASSIST_LLM_BASE_URL: ${ASSIST_LLM_BASE_URL:-}
   ASSIST_LLM_API_KEY: ${ASSIST_LLM_API_KEY:-}
   ASSIST_LLM_MODEL: ${ASSIST_LLM_MODEL:-}
-  ASSIST_CALL_TIMEOUT: 30s
-  # Link reads: Chợ Tốt's public gateway and the CDN its photos are on.
-  CHOTOT_GATEWAY_URL: https://gateway.chotot.com
-  CHOTOT_CDN_URL: https://cdn.chotot.com
   # Scam checks (module trust): the LLM in server/.env.
   TRUST_LLM_BASE_URL: ${TRUST_LLM_BASE_URL:-}
   TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
   TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
-  TRUST_CALL_TIMEOUT: 20s
-  # The console agent's MCP server, on a port of its own that only the
-  # agent reaches. The two agent tokens come from the keys service.
-  AGENT_MCP_ADDR: 0.0.0.0:9090
   # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
   # dev cluster stack runs them. With them the server serves the dev
   # endpoint that moves their shipments. The token key comes from the keys
-  # service; the GHTK and GHN settings are only for CARRIER=live.
+  # service.
   CARRIER: fake
-  CARRIER_POLL_EVERY: 2h
-  GHTK_API_URL: ""
-  GHTK_PARTNER_TOKEN: ""
-  GHTK_CLIENT_SOURCE: ""
-  GHTK_WEBHOOK_SECRET: ""
-  GHN_API_URL: ""
-  GHN_WEBHOOK_SECRET: ""
-  FIREBASE_PROJECT_ID: shopnexus-26aca
-  FIREBASE_PROJECT_NUMBER: "5362373878"
-  FIREBASE_AUTH_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
-  PNV_JWKS_URL: https://fpnv.googleapis.com/v1beta/jwks
   PNV_TEST_NUMBERS: "true"
   FCM_CREDENTIALS: ""
   EMAIL_SENDER: log
   RESEND_API_KEY: ""
-  EMAIL_FROM: ShopNexus <no-reply@shopnexus.id.vn>
-  GOOGLE_CLIENT_ID: ""
-  GOOGLE_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
 
 x-server-env-dev: &server-env-dev
   <<: *server-env
@@ -287,33 +253,15 @@ x-server-env-prod: &server-env-prod
 x-agent-image: &agent-image
   image: shopnexus-agent:local
   build: ./agent
+  # The settings every stack shares with the cluster's chart.
+  env_file: [./infra/stack/env/agent.env]
 
 x-agent-env: &agent-env
-  PORT: "3000"
   AGENT_MODEL_ID: ${AGENT_LLM_MODEL:-}
   LITELLM_BASE_URL: ${AGENT_LLM_BASE_URL:-}
   LITELLM_API_KEY: ${AGENT_LLM_API_KEY:-}
-  AGENT_MAX_TOKENS: "4096"
-  AGENT_THINKING_BUDGET: "0"
-  AGENT_MAX_TURNS: "0"
-  AGENT_TOOL_OUTPUT_CAP: "20000"
-  AGENT_MEMORY_ENTRY_CAP: "500"
-  AGENT_MEMORY_MAX_ENTRIES: "10"
-  AGENT_CONVERSATION_WINDOW: "40"
-  AGENT_HISTORY_TURNS: "20"
-  AGENT_HISTORY_CHARS: "60000"
-  AGENT_TURN_DEADLINE_MS: "60000"
-  AGENT_SWEEP_INTERVAL_MS: "60000"
-  RETRIEVAL_CONTEXT_CHARS: "12000"
-  DOCUMENT_CHUNK_CHARS: "2000"
-  # No turn uses retrieval, so no embedding model.
-  EMBEDDING_MODEL_ID: ""
-  FEATURE_LLM: "true"
-  FEATURE_ALL_AGENT: "true"
   POSTGRES_USER: shopnexus
   POSTGRES_PASSWORD: shopnexus
-  POSTGRES_PORT: "5432"
-  POSTGRES_DB: agent
 
 x-agent-env-dev: &agent-env-dev
   <<: *agent-env
@@ -427,6 +375,7 @@ services:
         COPY . .
         RUN ln -s /keys/.env .env
     command: ["go", "run", "./cmd/server"]
+    env_file: [./infra/stack/env/server.env]
     environment: *server-env-dev
     volumes: [keys-dev:/keys:ro, go-build-dev:/root/.cache/go-build]
     depends_on:

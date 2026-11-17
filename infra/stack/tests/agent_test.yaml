@@ -74,12 +74,18 @@ tests:
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MAX_TURNS, value: "0" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: EMBEDDING_MODEL_ID, value: "" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FEATURE_ALL_AGENT, value: "true" } }
-  - it: refuses to render without a setting
+  # env/agent.env, which compose reads too, holds the shared settings.
+  - it: takes the shared settings from env/agent.env
     template: agent.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
-    set: { agent.turnDeadlineMs: null }
     asserts:
-      - failedTemplate: { errorPattern: "agent.turnDeadlineMs is required" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: EMBEDDING_MODEL_ID, value: "" }
   # Every route needs the service token, so the probes check the port.
   - it: probes the port
     template: agent.yaml
