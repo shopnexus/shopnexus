@@ -3,6 +3,7 @@
 # directory needs its own line.
 /*
 !/.github/
+!/agent
 !/ai
 !/.gitignore
 !/.gitmodules
