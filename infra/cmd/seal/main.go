@@ -101,6 +101,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"OBJECT_STORE_SECRET_KEY", "", 24},
 		{"LITELLM_MASTER_KEY", "sk-", 24},
 		{"LITELLM_DB_PASSWORD", "", 24},
+		{"LITELLM_UI_PASSWORD", "", 24},     // ai-gateway's admin UI, behind the console's sign-in
 		{"LLM_API_KEY", "sk-", 24},          // the server's search key in LiteLLM (server-llm)
 		{"STT_API_KEY", "sk-", 24},          // the server's speech-to-text key in LiteLLM (server-stt)
 		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's listing-read key in LiteLLM (server-assist)
@@ -129,6 +130,9 @@ func seal(stack string, o opts, out io.Writer) error {
 	if env.get("OPENROUTER_API_KEY") == "" {
 		return fmt.Errorf("%s: set OPENROUTER_API_KEY", envFile)
 	}
+	if env.get("LITELLM_UI_USERNAME") == "" {
+		return fmt.Errorf("%s: set LITELLM_UI_USERNAME", envFile)
+	}
 	if stack == "prod" && env.get("FCM_CREDENTIALS") == "" {
 		return fmt.Errorf("%s: prod needs FCM_CREDENTIALS (APP_ENV=prod refuses to only log pushes)", envFile)
 	}
@@ -154,7 +158,7 @@ func seal(stack string, o opts, out io.Writer) error {
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),
 			"AWS_SECRET_ACCESS_KEY": env.get("OBJECT_STORE_SECRET_KEY"),
 		}},
-		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY")},
+		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD")},
 		// CNPG reads a managed role's password from a basic-auth Secret.
 		{name: "litellm-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
 			"username": "litellm",
