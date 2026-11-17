@@ -74,11 +74,15 @@ spec:
   project: default
   source:
     repoURL: https://github.com/shopnexus/ai.git
-    targetRevision: main
+    # The ai commit the umbrella's release names; release.yml writes it and
+    # images.models.tag.
+    targetRevision: 699ef796c819aeae03f09223cea377a2ea5a1c33
     path: chart
     helm:
       valuesObject:
         stack: prod
+        images:
+          models: { repository: ghcr.io/shopnexus/ai, tag: 0.1.0 }
         models:
           embedModels: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
           memoryRequest: 6Gi

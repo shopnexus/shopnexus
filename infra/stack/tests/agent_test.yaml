@@ -10,7 +10,7 @@ tests:
       - isKind: { of: Deployment }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
       - equal: { path: spec.replicas, value: 1 }
-      - equal: { path: 'spec.template.spec.containers[0].image', value: ghcr.io/shopnexus/agent:0.1.0 }
+      - matchRegex: { path: 'spec.template.spec.containers[0].image', pattern: '^ghcr.io/shopnexus/agent:[0-9]+\.[0-9]+\.[0-9]+$' }
       - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
       - equal: { path: spec.template.spec.securityContext.runAsUser, value: 1000 }
       - exists: { path: 'spec.template.metadata.annotations["checksum/secrets"]' }
@@ -28,7 +28,7 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal: { path: 'spec.template.spec.initContainers[0].command', value: [node_modules/.bin/prisma, migrate, deploy] }
-      - equal: { path: 'spec.template.spec.initContainers[0].image', value: ghcr.io/shopnexus/agent:0.1.0 }
+      - matchRegex: { path: 'spec.template.spec.initContainers[0].image', pattern: '^ghcr.io/shopnexus/agent:[0-9]+\.[0-9]+\.[0-9]+$' }
       - contains:
           path: spec.template.spec.initContainers[0].env
           content: { name: DATABASE_URL, value: "postgresql://agent:$(POSTGRES_PASSWORD)@postgres-rw:5432/agent" }

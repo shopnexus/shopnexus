@@ -83,13 +83,13 @@ tests:
     template: web.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/shopnexus/docs:0.1.0
+          pattern: '^ghcr.io/shopnexus/docs:[0-9]+\.[0-9]+\.[0-9]+$'
         documentIndex: 2
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/shopnexus/console:0.1.0
+          pattern: '^ghcr.io/shopnexus/console:[0-9]+\.[0-9]+\.[0-9]+$'
         documentIndex: 4
   - it: runs the dev console from main
     template: web.yaml

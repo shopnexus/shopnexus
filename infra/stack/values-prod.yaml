@@ -2,12 +2,14 @@ stack: prod
 domain: shopnexus.id.vn
 appEnv: prod
 argocdDashboard: true
+# The release workflow (.github/workflows/release.yml) writes these tags:
+# every image of a release has the same X.Y.Z, and stack-prod runs the
+# umbrella tag vX.Y.Z (infra/argocd/stacks.yaml).
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }
   website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }
   docs: { repository: ghcr.io/shopnexus/docs, tag: 0.1.0 }
   console: { repository: ghcr.io/shopnexus/console, tag: 0.1.0 }
-  ai: { repository: ghcr.io/shopnexus/ai, tag: 0.1.0 }
   agent: { repository: ghcr.io/shopnexus/agent, tag: 0.1.0 }
 replicas:
   server: 3
