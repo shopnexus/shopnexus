@@ -1,6 +1,7 @@
 stack: prod
 domain: shopnexus.id.vn
 appEnv: prod
+argocdDashboard: true
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }
   website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }

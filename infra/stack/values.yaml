@@ -40,6 +40,11 @@ restate:
 rustfs:
   storage: 10Gi
 
+# Argo CD has one server per cluster, and one stack routes argocd.<domain>
+# to it behind the console's sign-in: prod's, or dev's on a cluster that
+# runs dev only (the Application sets the parameter).
+argocdDashboard: false
+
 # Grafana's dashboards and the telemetry Loki, Tempo and Prometheus keep.
 lgtm:
   storage: 5Gi

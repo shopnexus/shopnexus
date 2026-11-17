@@ -67,14 +67,14 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 
 {{/* The operations dashboards of the stack as a JSON list of app, host,
      service, namespace (empty: the stack's) and port. Argo CD is one per
-     cluster and sits behind the prod stack. */}}
+     cluster and sits behind the stack whose argocdDashboard is true. */}}
 {{- define "sn.dashboards" -}}
 {{- $l := list
   (dict "app" "grafana" "service" "lgtm" "port" 3000)
   (dict "app" "restate" "service" "restate" "namespace" (include "sn.restate" .) "port" 9070)
   (dict "app" "litellm" "service" "ai-gateway" "port" 4000)
   (dict "app" "s3" "service" "rustfs" "port" 9001) }}
-{{- if eq .Values.stack "prod" }}
+{{- if .Values.argocdDashboard }}
 {{- $l = append $l (dict "app" "argocd" "service" "argocd-server" "namespace" "argocd" "port" 80) }}
 {{- end }}
 {{- $out := list }}

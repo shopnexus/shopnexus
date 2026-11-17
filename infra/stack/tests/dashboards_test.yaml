@@ -42,7 +42,7 @@ tests:
       - equal:
           path: spec.routes[9].services[0]
           value: { name: argocd-server, namespace: argocd, port: 80 }
-  - it: leaves Argo CD to the prod stack
+  - it: leaves Argo CD to the prod stack by default
     template: dashboards.yaml
     documentSelector: { path: kind, value: IngressRoute }
     values: [../values-dev.yaml, values-test.yaml]
@@ -54,6 +54,19 @@ tests:
       - equal:
           path: spec.routes[0].match
           value: Host(`grafana.dev.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
+  - it: routes Argo CD from dev on a cluster that runs dev only
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: IngressRoute }
+    values: [../values-dev.yaml, values-test.yaml]
+    set: { argocdDashboard: true }
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - lengthEqual:
+          path: spec.routes
+          count: 10
+      - equal:
+          path: spec.routes[9].match
+          value: Host(`argocd.dev.shopnexus.id.vn`)
   # Traefik copies only these headers from the server's answer, replacing any
   # the client sent, so a client cannot claim to be a console member.
   - it: asks the stack's server before every dashboard request
