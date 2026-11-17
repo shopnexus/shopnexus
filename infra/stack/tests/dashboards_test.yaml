@@ -134,3 +134,31 @@ tests:
       - contains:
           path: spec.podSelector.matchExpressions[0].values
           content: ai-gateway
+  - it: gives Grafana the cluster's Prometheus
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: lgtm-datasources }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex:
+          path: data["cluster.yaml"]
+          pattern: "url: http://prometheus-server.monitoring.svc"
+  - it: mounts the datasource file where Grafana provisions from
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: Deployment }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: datasources
+            mountPath: /otel-lgtm/grafana/conf/provisioning/datasources/cluster.yaml
+            subPath: cluster.yaml
+  - it: leaves Grafana with lgtm's Prometheus when clusterPrometheus is empty
+    template: dashboards.yaml
+    documentSelector: { path: kind, value: Deployment }
+    values: [../values-prod.yaml, values-test.yaml]
+    set: { lgtm.clusterPrometheus: "" }
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.volumes
+          count: 1

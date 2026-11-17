@@ -43,6 +43,9 @@ rustfs:
 # Grafana's dashboards and the telemetry Loki, Tempo and Prometheus keep.
 lgtm:
   storage: 5Gi
+  # Grafana's second Prometheus, the cluster's (infra/platform/prometheus.yaml).
+  # Empty leaves Grafana with the one inside lgtm.
+  clusterPrometheus: http://prometheus-server.monitoring.svc
 
 # The console agent (repo shopnexus/agent): no Ingress, only the server
 # reaches it, and it reaches only the server's MCP port. Each value is one of

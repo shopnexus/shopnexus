@@ -4,6 +4,29 @@
        which turns the console's one-time ticket into the host's cookie.
        docs/superpowers/specs/2026-11-05-ops-dashboards-design.md */ -}}
 {{- $ns := .Release.Namespace }}
+{{- define "sn.grafanaDatasources" -}}
+apiVersion: 1
+datasources:
+  - name: Cluster
+    type: prometheus
+    uid: cluster
+    url: {{ .Values.lgtm.clusterPrometheus }}
+    editable: false
+{{- end }}
+{{- if .Values.lgtm.clusterPrometheus }}
+# The Prometheus of infra/platform/prometheus.yaml, which scrapes the nodes,
+# the containers and kube-state-metrics. Grafana lists it next to the
+# Prometheus inside lgtm, which holds the server's own metrics.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lgtm-datasources
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  cluster.yaml: |
+    {{- include "sn.grafanaDatasources" . | nindent 4 }}
+---
+{{- end }}
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector; the
 # server sends its traces, metrics and logs to port 4318. Grafana takes the
 # console member from the headers the forwardAuth answer sets.
@@ -21,6 +44,10 @@ spec:
   template:
     metadata:
       labels: {{- include "sn.podLabels" (dict "root" . "name" "lgtm") | nindent 8 }}
+      {{- if .Values.lgtm.clusterPrometheus }}
+      annotations:
+        checksum/datasources: {{ include "sn.grafanaDatasources" . | sha256sum | trunc 16 }}
+      {{- end }}
     spec:
       affinity:
         {{- include "sn.preferRole" "stateful" | nindent 8 }}
@@ -42,12 +69,21 @@ spec:
             httpGet: { path: /api/health, port: grafana }
           volumeMounts:
             - { name: data, mountPath: /data }
+            {{- if .Values.lgtm.clusterPrometheus }}
+            - name: datasources
+              mountPath: /otel-lgtm/grafana/conf/provisioning/datasources/cluster.yaml
+              subPath: cluster.yaml
+            {{- end }}
           resources:
             requests: { cpu: 100m, memory: 512Mi }
             limits: { memory: 2Gi }
       volumes:
         - name: data
           persistentVolumeClaim: { claimName: lgtm }
+        {{- if .Values.lgtm.clusterPrometheus }}
+        - name: datasources
+          configMap: { name: lgtm-datasources }
+        {{- end }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
