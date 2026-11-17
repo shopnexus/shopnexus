@@ -6,6 +6,7 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 
 | Path      | Repository              | Description                            |
 | --------- | ----------------------- | -------------------------------------- |
+| `agent`   | `shopnexus/agent`       | Console agent (NestJS)                 |
 | `ai`      | `shopnexus/ai`          | Self-hosted models behind OpenAI's API |
 | `app`     | `shopnexus/app-android` | Android app (Kotlin)                   |
 | `console` | `shopnexus/console`     | Moderation console (React)             |
@@ -88,8 +89,14 @@ running for the next run; `make down` empties them.
 
 The server in `dev` and `prod` needs an OpenAI-compatible API for search:
 `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `server/.env`, the file
-`make run` in `server/` also reads. Compose takes only those three from it
-(`--env-file server/.env` in the root `Makefile`). The first start of a
+`make run` in `server/` also reads. Compose takes those three, the three
+`ASSIST_LLM_`, the three `TRUST_LLM_` and the three `AGENT_LLM_` lines from
+it and nothing else (`--env-file server/.env` in the root `Makefile`). The
+`AGENT_LLM_` lines are not in `server/.env.example`; add them by hand. The console agent calls
+the API in `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY` and `AGENT_LLM_MODEL`
+under that model name; in the cluster it calls LiteLLM's alias
+`console-agent`. It has no host: only the server calls it, and its database
+is `agent` in the stack's Postgres. The first start of a
 stack writes the server's keys into its volume, and
 `docker compose --profile <stack> down -v` deletes the stack's data and keys.
 
@@ -112,7 +119,9 @@ Each stack serves the website on its domain and `api.`, `media.`,
 `docs.` and `console.` (the moderation console) below it. Argo CD syncs the Helm chart in `infra/stack` once per
 stack, and Argo CD Image Updater moves the image tags. Postgres runs on
 CloudNativePG, Restate on restate-operator; prod runs two Postgres instances
-and three Restate nodes.
+and three Restate nodes. The console agent runs in each stack with no host:
+NetworkPolicies let only the server reach it and only the agent reach the
+server's MCP port, 9090.
 
 To run your own copy:
 

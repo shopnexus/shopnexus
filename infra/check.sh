@@ -33,7 +33,7 @@ eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sou
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
-for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "ai console docs server website " "stack-$s images"; done
+for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "agent ai console docs server website " "stack-$s images"; done
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health
 # so root's waves wait for the platform.
@@ -85,6 +85,15 @@ eq "$(yq '.x-server-env.CHOTOT_CDN_URL' ../docker-compose.yml)" "$(yq '.server.a
 eq "$(yq '.x-server-env.TRUST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.trust.callTimeout' stack/values.yaml)" "compose TRUST_CALL_TIMEOUT"
 eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
 eq "$(yq '.x-server-env.CARRIER_POLL_EVERY' ../docker-compose.yml)" "$(yq '.server.carrierPollEvery' stack/values.yaml)" "compose CARRIER_POLL_EVERY"
+# The console agent's settings and the server's MCP port follow the chart.
+for k in MAX_TOKENS:maxTokens THINKING_BUDGET:thinkingBudget MAX_TURNS:maxTurns TOOL_OUTPUT_CAP:toolOutputCap \
+  MEMORY_ENTRY_CAP:memoryEntryCap MEMORY_MAX_ENTRIES:memoryMaxEntries CONVERSATION_WINDOW:conversationWindow \
+  HISTORY_TURNS:historyTurns HISTORY_CHARS:historyChars TURN_DEADLINE_MS:turnDeadlineMs SWEEP_INTERVAL_MS:sweepIntervalMs; do
+  eq "$(yq ".x-agent-env.AGENT_${k%%:*}" ../docker-compose.yml)" "$(yq ".agent.${k#*:}" stack/values.yaml)" "compose AGENT_${k%%:*}"
+done
+eq "$(yq '.x-agent-env.RETRIEVAL_CONTEXT_CHARS' ../docker-compose.yml)" "$(yq '.agent.retrievalContextChars' stack/values.yaml)" "compose RETRIEVAL_CONTEXT_CHARS"
+eq "$(yq '.x-agent-env.DOCUMENT_CHUNK_CHARS' ../docker-compose.yml)" "$(yq '.agent.documentChunkChars' stack/values.yaml)" "compose DOCUMENT_CHUNK_CHARS"
+eq "$(yq '.x-server-env.AGENT_MCP_ADDR' ../docker-compose.yml)" "$(helm template shopnexus stack -f stack/values-dev.yaml --set secretsDir=tests/secrets -s templates/server.yaml | yq 'select(.kind=="ConfigMap") | .data.AGENT_MCP_ADDR')" "compose AGENT_MCP_ADDR"
 
 # ── end of checks ──
 (( fails == 0 )) || { echo "$fails check(s) failed" >&2; exit 1; }

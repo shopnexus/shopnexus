@@ -94,6 +94,8 @@ tests:
       - exists: { path: data.TRUST_LLM_BASE_URL }
       - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
+      - exists: { path: data.AGENT_BASE_URL }
+      - exists: { path: data.AGENT_MCP_ADDR }
       - exists: { path: data.CARRIER }
       - exists: { path: data.CARRIER_POLL_EVERY }
       - exists: { path: data.GHTK_API_URL }
@@ -115,7 +117,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 89a091341cc5e249
+          value: 30bcf99520069b36
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -123,7 +125,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 89a091341cc5e249
+          value: 30bcf99520069b36
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings

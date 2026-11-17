@@ -75,11 +75,12 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"litellm-db", "litellm-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-db", "agent-secrets", "litellm-db", "litellm-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY", "STT_API_KEY",
-		"ASSIST_LLM_API_KEY", "TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "private.pem", "LITELLM_MASTER_KEY"} {
+		"ASSIST_LLM_API_KEY", "TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "private.pem", "LITELLM_MASTER_KEY",
+		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
 		}

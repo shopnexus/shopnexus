@@ -21,3 +21,4 @@ litellm:
     # 10M tokens: about 1,700 listings of 10 photos a day at 576 tokens a photo.
     server-embed-index: { dailyUnits: 10000000, rpmLimit: 120 }
     server-embed-search: { dailyUnits: 1000000, rpmLimit: 60 }
+    agent: { tpmLimit: 100000 }

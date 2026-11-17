@@ -56,6 +56,7 @@ spec:
         - { alias: website, imageName: "ghcr.io/shopnexus/website:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.website.repository, tag: images.website.tag } } }
         - { alias: docs, imageName: "ghcr.io/shopnexus/docs:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }
         - { alias: console, imageName: "ghcr.io/shopnexus/console:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.console.repository, tag: images.console.tag } } }
+        - { alias: agent, imageName: "ghcr.io/shopnexus/agent:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.agent.repository, tag: images.agent.tag } } }
     - namePattern: stack-prod
       images:
         - { alias: ai, imageName: "ghcr.io/shopnexus/ai", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.ai.repository, tag: images.ai.tag } } }
@@ -63,3 +64,4 @@ spec:
         - { alias: website, imageName: "ghcr.io/shopnexus/website", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.website.repository, tag: images.website.tag } } }
         - { alias: docs, imageName: "ghcr.io/shopnexus/docs", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }
         - { alias: console, imageName: "ghcr.io/shopnexus/console", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.console.repository, tag: images.console.tag } } }
+        - { alias: agent, imageName: "ghcr.io/shopnexus/agent", commonUpdateSettings: { updateStrategy: semver }, manifestTargets: { helm: { name: images.agent.repository, tag: images.agent.tag } } }

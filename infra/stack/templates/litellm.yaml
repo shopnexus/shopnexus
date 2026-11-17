@@ -1,5 +1,5 @@
 {{- /* The stack's LiteLLM: one model_list entry per litellm.aliases, priced so
-       budgets count tokens or seconds. Its virtual keys are the Job in
+       budgets count tokens, seconds or dollars. Its virtual keys are the Job in
        litellm-keys.yaml. */ -}}
 {{- define "sn.litellmConfig" -}}
 model_list:
@@ -22,8 +22,11 @@ model_list:
       output_cost_per_token: 0.000001
       {{- else if eq $a.price "second" }}
       input_cost_per_second: 0.000001
+      {{- else if eq $a.price "usd" }}
+      input_cost_per_token: {{ required (printf "litellm.aliases.%s.inputCostPerToken is required" $name) $a.inputCostPerToken }}
+      output_cost_per_token: {{ required (printf "litellm.aliases.%s.outputCostPerToken is required" $name) $a.outputCostPerToken }}
       {{- else }}
-      {{- fail (printf "litellm.aliases.%s.price must be token or second" $name) }}
+      {{- fail (printf "litellm.aliases.%s.price must be token, second or usd" $name) }}
       {{- end }}
 {{- end }}
 general_settings:

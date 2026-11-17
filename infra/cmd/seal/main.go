@@ -5,7 +5,7 @@
 // It keeps the stack's keys in the git-ignored stack/secrets/<stack>.env and
 // <stack>.restate.pem. On first use it copies example.env; every run makes
 // the keys still missing, so a second run seals the same values. Then it
-// writes four Secrets, sealed by kubeseal for the cluster kubectl points at,
+// writes six Secrets, sealed by kubeseal for the cluster kubectl points at,
 // to stack/secrets/<stack>/. -dry-run prints the plain Secrets instead and
 // needs no cluster.
 package main
@@ -69,7 +69,8 @@ func seal(stack string, o opts, out io.Writer) error {
 	pemFile := filepath.Join(dir, stack+".restate.pem")
 
 	// envgen copies example.env on first use and fills in the server's keys:
-	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY, OTP_KEY, CARRIER_TOKEN_KEY and RESTATE_IDENTITY_KEY, with the
+	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY, OTP_KEY, CARRIER_TOKEN_KEY,
+	// AGENT_SERVICE_TOKEN, AGENT_MCP_TOKEN and RESTATE_IDENTITY_KEY, with the
 	// pem. It refuses a RESTATE_IDENTITY_KEY whose pem is gone: a new pair would
 	// sign Restate's requests with a key the running server does not know.
 	// It runs as this user, so the files stay this user's.
@@ -106,6 +107,8 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"TRUST_LLM_API_KEY", "sk-", 24},    // the server's scam-check key in LiteLLM (server-trust)
 		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
 		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)
+		{"AGENT_LLM_API_KEY", "sk-", 24},    // the console agent's key in LiteLLM (agent)
+		{"AGENT_DB_PASSWORD", "", 24},       // the console agent's database role
 	} {
 		if env.get(k.name) == "" {
 			b := make([]byte, k.bytes)
@@ -117,6 +120,12 @@ func seal(stack string, o opts, out io.Writer) error {
 		return err
 	}
 
+	// An older server image has no agent tokens in envgen.
+	for _, k := range []string{"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN"} {
+		if env.get(k) == "" {
+			return fmt.Errorf("%s: envgen in %s wrote no %s; pull a newer server image", envFile, o.image, k)
+		}
+	}
 	if env.get("LLM_UPSTREAM_API_KEY") == "" {
 		return fmt.Errorf("%s: set LLM_UPSTREAM_API_KEY", envFile)
 	}
@@ -137,7 +146,9 @@ func seal(stack string, o opts, out io.Writer) error {
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "STT_API_KEY", "ASSIST_LLM_API_KEY",
 			"TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
-			"RESEND_API_KEY")},
+			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
+		// The console agent has the server's two tokens and its own LiteLLM key.
+		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),
@@ -148,6 +159,10 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "litellm-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
 			"username": "litellm",
 			"password": env.get("LITELLM_DB_PASSWORD"),
+		}},
+		{name: "agent-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
+			"username": "agent",
+			"password": env.get("AGENT_DB_PASSWORD"),
 		}},
 	}
 

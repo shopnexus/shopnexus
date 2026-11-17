@@ -1,0 +1,102 @@
+{{- /* The console agent (repo shopnexus/agent). The server calls it at
+       agent:3000 and it calls the server's MCP at server-mcp:9090; the
+       NetworkPolicies server-to-agent and agent-to-server-mcp allow only
+       those two paths, and it has no Ingress. Its database is agent in the
+       stack's Postgres. */ -}}
+{{- define "sn.agentEnv" -}}
+- { name: PORT, value: "3000" }
+- { name: AGENT_MODEL_ID, value: console-agent }
+- { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 }
+- name: LITELLM_API_KEY
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } }
+- name: AGENT_SERVICE_TOKEN
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_SERVICE_TOKEN } }
+- name: AGENT_MCP_TOKEN
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_MCP_TOKEN } }
+- { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp }
+- { name: AGENT_MAX_TOKENS, value: {{ required "agent.maxTokens is required" .Values.agent.maxTokens | toString | quote }} }
+- { name: AGENT_THINKING_BUDGET, value: {{ required "agent.thinkingBudget is required" .Values.agent.thinkingBudget | toString | quote }} }
+- { name: AGENT_MAX_TURNS, value: {{ required "agent.maxTurns is required" .Values.agent.maxTurns | toString | quote }} }
+- { name: AGENT_TOOL_OUTPUT_CAP, value: {{ required "agent.toolOutputCap is required" .Values.agent.toolOutputCap | toString | quote }} }
+- { name: AGENT_MEMORY_ENTRY_CAP, value: {{ required "agent.memoryEntryCap is required" .Values.agent.memoryEntryCap | toString | quote }} }
+- { name: AGENT_MEMORY_MAX_ENTRIES, value: {{ required "agent.memoryMaxEntries is required" .Values.agent.memoryMaxEntries | toString | quote }} }
+- { name: AGENT_CONVERSATION_WINDOW, value: {{ required "agent.conversationWindow is required" .Values.agent.conversationWindow | toString | quote }} }
+- { name: AGENT_HISTORY_TURNS, value: {{ required "agent.historyTurns is required" .Values.agent.historyTurns | toString | quote }} }
+- { name: AGENT_HISTORY_CHARS, value: {{ required "agent.historyChars is required" .Values.agent.historyChars | toString | quote }} }
+- { name: AGENT_TURN_DEADLINE_MS, value: {{ required "agent.turnDeadlineMs is required" .Values.agent.turnDeadlineMs | toString | quote }} }
+- { name: AGENT_SWEEP_INTERVAL_MS, value: {{ required "agent.sweepIntervalMs is required" .Values.agent.sweepIntervalMs | toString | quote }} }
+- { name: RETRIEVAL_CONTEXT_CHARS, value: {{ required "agent.retrievalContextChars is required" .Values.agent.retrievalContextChars | toString | quote }} }
+- { name: DOCUMENT_CHUNK_CHARS, value: {{ required "agent.documentChunkChars is required" .Values.agent.documentChunkChars | toString | quote }} }
+{{- /* No turn uses retrieval, so no embedding model. */}}
+- { name: EMBEDDING_MODEL_ID, value: "" }
+- { name: FEATURE_LLM, value: "true" }
+- { name: FEATURE_ALL_AGENT, value: "true" }
+- { name: POSTGRES_HOST, value: postgres-rw }
+- { name: POSTGRES_PORT, value: "5432" }
+- { name: POSTGRES_DB, value: agent }
+- { name: POSTGRES_USER, value: agent }
+- name: POSTGRES_PASSWORD
+  valueFrom: { secretKeyRef: { name: agent-db, key: password } }
+{{- /* Read by the Prisma CLI only. */}}
+- { name: DATABASE_URL, value: "postgresql://agent:$(POSTGRES_PASSWORD)@postgres-rw:5432/agent" }
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas.agent }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: agent }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "agent") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      # The migrations run before every start; prisma migrate deploy applies
+      # only those not yet recorded, under an advisory lock.
+      initContainers:
+        - name: migrate
+          image: {{ include "sn.image" .Values.images.agent }}
+          command: [node_modules/.bin/prisma, migrate, deploy]
+          env: {{- include "sn.agentEnv" . | nindent 12 }}
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+      containers:
+        - name: agent
+          image: {{ include "sn.image" .Values.images.agent }}
+          env: {{- include "sn.agentEnv" . | nindent 12 }}
+          ports:
+            - { name: http, containerPort: 3000 }
+          # The agent has no health route and every route needs the service
+          # token, so the probes check that the port accepts connections.
+          readinessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: {{ required "agent.memoryRequest is required" .Values.agent.memoryRequest }} }
+            limits: { memory: {{ required "agent.memoryLimit is required" .Values.agent.memoryLimit }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: agent }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

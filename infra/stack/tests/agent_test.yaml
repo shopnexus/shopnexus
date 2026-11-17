@@ -1,0 +1,113 @@
+suite: agent
+templates: [agent.yaml, server.yaml]
+release: { namespace: shopnexus-prod }
+tests:
+  - it: runs the pinned image in prod in wave 2, as a non-root user
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Deployment }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+      - equal: { path: spec.replicas, value: 1 }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: ghcr.io/shopnexus/agent:0.1.0 }
+      - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.template.spec.securityContext.runAsUser, value: 1000 }
+      - exists: { path: 'spec.template.metadata.annotations["checksum/secrets"]' }
+  - it: follows main in dev
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: 'spec.template.spec.containers[0].image', value: ghcr.io/shopnexus/agent:main }
+  # prisma migrate deploy applies the migrations the database has not
+  # recorded, with the same image and settings as the agent.
+  - it: runs the agent's migrations before it starts
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].command', value: [node_modules/.bin/prisma, migrate, deploy] }
+      - equal: { path: 'spec.template.spec.initContainers[0].image', value: ghcr.io/shopnexus/agent:0.1.0 }
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content: { name: DATABASE_URL, value: "postgresql://agent:$(POSTGRES_PASSWORD)@postgres-rw:5432/agent" }
+  - it: calls the console-agent alias, the server's MCP and its own database
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PORT, value: "3000" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MODEL_ID, value: console-agent } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_HOST, value: postgres-rw } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_DB, value: agent } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_USER, value: agent } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: agent-db, key: password } } }
+  - it: takes the two tokens and its LiteLLM key from agent-secrets
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AGENT_SERVICE_TOKEN, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_SERVICE_TOKEN } } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AGENT_MCP_TOKEN, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_MCP_TOKEN } } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LITELLM_API_KEY, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } } }
+  # Configuration has no defaults: the 26 settings of agent/src/config.ts
+  # (all but the CLI's two), the two kill switches and Prisma's DATABASE_URL.
+  - it: sets every setting the agent reads
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 29 }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_SWEEP_INTERVAL_MS, value: "60000" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MAX_TURNS, value: "0" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: EMBEDDING_MODEL_ID, value: "" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FEATURE_ALL_AGENT, value: "true" } }
+  - it: refuses to render without a setting
+    template: agent.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    set: { agent.turnDeadlineMs: null }
+    asserts:
+      - failedTemplate: { errorPattern: "agent.turnDeadlineMs is required" }
+  # Every route needs the service token, so the probes check the port.
+  - it: probes the port
+    template: agent.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.tcpSocket.port', value: http }
+      - equal: { path: 'spec.template.spec.containers[0].livenessProbe.tcpSocket.port', value: http }
+  - it: is reachable in the stack as agent:3000, the address the server calls
+    template: agent.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Service }
+      - equal: { path: metadata.name, value: agent }
+      - equal: { path: 'spec.ports[0].port', value: 3000 }
+  - it: serves the server's MCP as server-mcp:9090, the port of AGENT_MCP_ADDR
+    template: server.yaml
+    documentIndex: 3
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Service }
+      - equal: { path: metadata.name, value: server-mcp }
+      - equal: { path: spec.selector, value: { app.kubernetes.io/name: server } }
+      - equal: { path: 'spec.ports[0]', value: { name: mcp, port: 9090, targetPort: mcp } }
+  - it: opens the MCP port on the server pods
+    template: server.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].ports', content: { name: mcp, containerPort: 9090 } }

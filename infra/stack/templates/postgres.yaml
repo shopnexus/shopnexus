@@ -36,6 +36,11 @@ spec:
         ensure: present
         login: true
         passwordSecret: { name: litellm-db }
+      # The console agent's database.
+      - name: agent
+        ensure: present
+        login: true
+        passwordSecret: { name: agent-db }
   bootstrap:
     initdb:
       database: app
@@ -60,3 +65,21 @@ spec:
   name: litellm
   owner: litellm
   cluster: { name: postgres }
+---
+# The console agent's database. The operator creates pgvector and pg_trgm as
+# the superuser; the agent's migrations (prisma migrate deploy, before the
+# agent starts) find them present and create the schema on the empty
+# database.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: agent
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  name: agent
+  owner: agent
+  cluster: { name: postgres }
+  extensions:
+    - { name: vector, ensure: present }
+    - { name: pg_trgm, ensure: present }

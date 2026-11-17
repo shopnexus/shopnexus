@@ -25,6 +25,9 @@
 #   ai         http://127.0.0.1:56491                     http://127.0.0.1:56490
 #   tei        http://127.0.0.1:56493                     http://127.0.0.1:56492
 #
+# The console agent (agent-dev, agent-prod) has no host or port: only the
+# server calls it, and it calls the server's MCP port 9090.
+#
 # Grafana gets the server's traces, metrics and logs. The dashboards need no
 # sign-in here; in the cluster the console's sign-in guards them.
 #
@@ -44,7 +47,9 @@
 # checks in dev and prod: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
 # ASSIST_LLM_BASE_URL, ASSIST_LLM_API_KEY, ASSIST_LLM_MODEL and
 # TRUST_LLM_BASE_URL, TRUST_LLM_API_KEY, TRUST_LLM_MODEL, read from
-# server/.env (the Makefile passes --env-file server/.env). It calls the stack's TEI and ai directly for
+# server/.env (the Makefile passes --env-file server/.env). The console agent
+# reads AGENT_LLM_BASE_URL, AGENT_LLM_API_KEY and AGENT_LLM_MODEL from the
+# same file. It calls the stack's TEI and ai directly for
 # embeddings, as it calls the upstream LLM; in the cluster both sit behind
 # LiteLLM.
 # The tests use a stub. The first start of a stack writes the server's keys
@@ -218,6 +223,9 @@ x-server-env: &server-env
   TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
   TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
   TRUST_CALL_TIMEOUT: 20s
+  # The console agent's MCP server, on a port of its own that only the
+  # agent reaches. The two agent tokens come from the keys service.
+  AGENT_MCP_ADDR: 0.0.0.0:9090
   # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
   # dev cluster stack runs them. With them the server serves the dev
   # endpoint that moves their shipments. The token key comes from the keys
@@ -260,6 +268,7 @@ x-server-env-dev: &server-env-dev
   EMBED_IMAGE_BASE_URL: http://ai-dev:8000/v1
   AI_FRAMES_BASE_URL: http://ai-dev:8000/v1
   STT_BASE_URL: http://ai-dev:8000/v1
+  AGENT_BASE_URL: http://agent-dev:3000
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -277,6 +286,70 @@ x-server-env-prod: &server-env-prod
   EMBED_IMAGE_BASE_URL: http://ai-prod:8000/v1
   AI_FRAMES_BASE_URL: http://ai-prod:8000/v1
   STT_BASE_URL: http://ai-prod:8000/v1
+  AGENT_BASE_URL: http://agent-prod:3000
+
+# The console agent (submodule agent). Its database is `agent` in the
+# stack's Postgres: agent-db-* creates it, agent-migrate-* runs
+# `prisma migrate deploy` on it, and the agent then starts. The agent takes
+# AGENT_SERVICE_TOKEN and AGENT_MCP_TOKEN, and nothing else, from the .env
+# the keys service wrote. There is no LiteLLM locally, so the agent calls the
+# OpenAI-compatible API in server/.env: AGENT_LLM_BASE_URL, AGENT_LLM_API_KEY
+# and AGENT_LLM_MODEL; in the cluster it calls LiteLLM's alias console-agent.
+x-agent-image: &agent-image
+  image: shopnexus-agent:local
+  build: ./agent
+
+x-agent-env: &agent-env
+  PORT: "3000"
+  AGENT_MODEL_ID: ${AGENT_LLM_MODEL:-}
+  LITELLM_BASE_URL: ${AGENT_LLM_BASE_URL:-}
+  LITELLM_API_KEY: ${AGENT_LLM_API_KEY:-}
+  AGENT_MAX_TOKENS: "4096"
+  AGENT_THINKING_BUDGET: "0"
+  AGENT_MAX_TURNS: "0"
+  AGENT_TOOL_OUTPUT_CAP: "20000"
+  AGENT_MEMORY_ENTRY_CAP: "500"
+  AGENT_MEMORY_MAX_ENTRIES: "10"
+  AGENT_CONVERSATION_WINDOW: "40"
+  AGENT_HISTORY_TURNS: "20"
+  AGENT_HISTORY_CHARS: "60000"
+  AGENT_TURN_DEADLINE_MS: "60000"
+  AGENT_SWEEP_INTERVAL_MS: "60000"
+  RETRIEVAL_CONTEXT_CHARS: "12000"
+  DOCUMENT_CHUNK_CHARS: "2000"
+  # No turn uses retrieval, so no embedding model.
+  EMBEDDING_MODEL_ID: ""
+  FEATURE_LLM: "true"
+  FEATURE_ALL_AGENT: "true"
+  POSTGRES_USER: shopnexus
+  POSTGRES_PASSWORD: shopnexus
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: agent
+
+x-agent-env-dev: &agent-env-dev
+  <<: *agent-env
+  POSTGRES_HOST: postgres-dev
+  DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-dev:5432/agent
+  MCP_SERVER_URL: http://server-dev:9090/mcp
+
+x-agent-env-prod: &agent-env-prod
+  <<: *agent-env
+  POSTGRES_HOST: postgres-prod
+  DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-prod:5432/agent
+  MCP_SERVER_URL: http://server-prod:9090/mcp
+
+# Creates the database agent when it is missing; pgvector and pg_trgm come
+# with the agent's first migration.
+x-agent-db: &agent-db
+  image: paradedb/paradedb:0.26.4-pg18
+  entrypoint: ["sh", "-ec"]
+  restart: "no"
+
+# Exports the two tokens from the keys volume, then starts the agent; a
+# .env without them stops the start.
+x-agent-run: &agent-run
+  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); export $$tokens; exec node dist/main.js"]
+  restart: unless-stopped
 
 # A web app's dev image: its dependencies, then its source. DIR is the app's
 # directory in the build context; $$ keeps Compose from reading ${DIR} as one
@@ -440,6 +513,42 @@ services:
     ports: ["127.0.0.1:56493:80"]
     volumes: [tei-dev:/data]
 
+  agent-db-dev:
+    <<: [*dev, *agent-db]
+    environment: { PGPASSWORD: shopnexus }
+    command:
+      - |
+        psql -h postgres-dev -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE DATABASE agent' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent') \gexec
+        SQL
+    depends_on:
+      postgres-dev: { condition: service_healthy }
+
+  agent-migrate-dev:
+    <<: [*dev, *agent-image]
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment: *agent-env-dev
+    depends_on:
+      agent-db-dev: { condition: service_completed_successfully }
+    develop:
+      watch:
+        - { action: rebuild, path: ./agent/prisma }
+
+  # The keys service's user, which owns the .env (mode 600).
+  agent-dev:
+    <<: [*dev, *agent-image, *agent-run]
+    user: "65532:65532"
+    environment: *agent-env-dev
+    volumes: [keys-dev:/keys:ro]
+    depends_on:
+      keys-dev: { condition: service_completed_successfully }
+      agent-migrate-dev: { condition: service_completed_successfully }
+    develop:
+      watch:
+        - { action: rebuild, path: ./agent/src }
+        - { action: rebuild, path: ./agent/package.json }
+        - { action: rebuild, path: ./agent/package-lock.json }
+
   proxy-dev:
     <<: *dev
     image: caddy:2.10.2-alpine
@@ -535,6 +644,34 @@ services:
     <<: [*prod, *tei]
     ports: ["127.0.0.1:56492:80"]
     volumes: [tei-prod:/data]
+
+  agent-db-prod:
+    <<: [*prod, *agent-db]
+    environment: { PGPASSWORD: shopnexus }
+    command:
+      - |
+        psql -h postgres-prod -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE DATABASE agent' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent') \gexec
+        SQL
+    depends_on:
+      postgres-prod: { condition: service_healthy }
+
+  agent-migrate-prod:
+    <<: [*prod, *agent-image]
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment: *agent-env-prod
+    depends_on:
+      agent-db-prod: { condition: service_completed_successfully }
+
+  # The keys service's user, which owns the .env (mode 600).
+  agent-prod:
+    <<: [*prod, *agent-image, *agent-run]
+    user: "65532:65532"
+    environment: *agent-env-prod
+    volumes: [keys-prod:/keys:ro]
+    depends_on:
+      keys-prod: { condition: service_completed_successfully }
+      agent-migrate-prod: { condition: service_completed_successfully }
 
   proxy-prod:
     <<: *prod

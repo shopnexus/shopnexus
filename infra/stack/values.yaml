@@ -13,6 +13,7 @@ images:
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
   console: { repository: ghcr.io/shopnexus/console, tag: main }
   ai: { repository: ghcr.io/shopnexus/ai, tag: main }
+  agent: { repository: ghcr.io/shopnexus/agent, tag: main }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
@@ -30,6 +31,7 @@ replicas:
   website: 1
   docs: 1
   console: 1
+  agent: 1
 
 postgres:
   instances: 1
@@ -100,7 +102,8 @@ tei:
 # an edit of this block. Budgets count money: a token and a second of audio
 # are each priced at 1e-6, so 1 of budget is 1M tokens or 1M seconds. A key's
 # dailyUnits is in the unit of its aliases' price; the chart divides it by 1M
-# for max_budget. A key has tpmLimit or rpmLimit.
+# for max_budget. A key has tpmLimit or rpmLimit. A key's value is in
+# server-secrets unless secretName names another Secret.
 litellm:
   aliases:
     search:
@@ -133,6 +136,16 @@ litellm:
       apiBase: http://ai:8000/v1
       mode: embedding
       price: token   # ai counts 576 tokens an image, a text its tokens
+    # The console agent's model. price usd counts dollars at the model's
+    # list price (2 and 10 USD per 1M tokens in and out), so its key's
+    # dailyUnits are millionths of a dollar.
+    console-agent:
+      model: openai/claude-sonnet-5-5
+      apiBase: http://host.k3d.internal:8317/v1   # cli-proxy-api on the host, as search
+      apiKeySecret: LLM_UPSTREAM_API_KEY
+      price: usd
+      inputCostPerToken: "0.000002"   # a string: Helm prints a float as 2e-06
+      outputCostPerToken: "0.00001"
   keys:
     server-llm: { secret: LLM_API_KEY, models: [search], dailyUnits: 0, tpmLimit: 0 }   # set per stack
     server-stt: { secret: STT_API_KEY, models: [stt], dailyUnits: 0, rpmLimit: 0 }      # set per stack
@@ -140,6 +153,29 @@ litellm:
     server-trust: { secret: TRUST_LLM_API_KEY, models: [scam-check], dailyUnits: 0, tpmLimit: 0 }   # set per stack
     server-embed-index: { secret: EMBED_INDEX_API_KEY, models: [embed-text, embed-image], dailyUnits: 0, rpmLimit: 0 }    # set per stack
     server-embed-search: { secret: EMBED_SEARCH_API_KEY, models: [embed-text, embed-image], dailyUnits: 0, rpmLimit: 0 }  # set per stack
+    # The console agent's key, in agent-secrets: 20 USD a day in every stack.
+    agent: { secret: AGENT_LLM_API_KEY, secretName: agent-secrets, models: [console-agent], dailyUnits: 20000000, tpmLimit: 0 }  # tpmLimit per stack
+
+# The console agent (repo shopnexus/agent): no Ingress, only the server
+# reaches it, and it reaches only the server's MCP port. Each value is one of
+# the agent's settings (agent/src/config.ts); 0 for maxTurns leaves the
+# tool-use cycles to the model, and the turn deadline bounds them.
+agent:
+  maxTokens: 4096
+  thinkingBudget: 0
+  maxTurns: 0
+  toolOutputCap: 20000
+  memoryEntryCap: 500
+  memoryMaxEntries: 10
+  conversationWindow: 40
+  historyTurns: 20
+  historyChars: 60000
+  turnDeadlineMs: 60000
+  sweepIntervalMs: 60000
+  retrievalContextChars: 12000
+  documentChunkChars: 2000
+  memoryRequest: 256Mi
+  memoryLimit: 512Mi
 
 server:
   # The server's embedding settings; the aliases and the versions come from

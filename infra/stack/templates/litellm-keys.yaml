@@ -8,7 +8,7 @@
 {{- if not (hasKey $aliases $m) }}{{ fail (printf "litellm.keys.%s names the alias %s, which litellm.aliases does not have" $name $m) }}{{ end }}
 {{- $_ := set $prices (get (get $aliases $m) "price") true }}
 {{- end }}
-{{- if gt (len $prices) 1 }}{{ fail (printf "litellm.keys.%s mixes aliases priced by token and by second" $name) }}{{ end }}
+{{- if gt (len $prices) 1 }}{{ fail (printf "litellm.keys.%s mixes aliases priced in different units" $name) }}{{ end }}
 {{- end }}
 apiVersion: batch/v1
 kind: Job
@@ -34,7 +34,7 @@ spec:
               valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY } }
             {{- range $name, $k := .Values.litellm.keys }}
             - name: {{ include "sn.keyEnv" $name }}
-              valueFrom: { secretKeyRef: { name: server-secrets, key: {{ required (printf "litellm.keys.%s.secret is required" $name) $k.secret }} } }
+              valueFrom: { secretKeyRef: { name: {{ $k.secretName | default "server-secrets" }}, key: {{ required (printf "litellm.keys.%s.secret is required" $name) $k.secret }} } }
             {{- end }}
           command: [sh, -ec]
           args:

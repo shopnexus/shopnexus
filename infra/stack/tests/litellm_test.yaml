@@ -45,6 +45,37 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: scam-check\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: http://host.k3d.internal:8317/v1\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
+  # The console agent's alias goes to Sonnet at its list price, so its key's
+  # budget is in dollars.
+  - it: maps the alias console-agent to claude-sonnet-5-5 at its price in dollars
+    template: litellm.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: console-agent\\n    litellm_params:\\n      model: openai/claude-sonnet-5-5\\n      api_base: http://host.k3d.internal:8317/v1\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY\\n    model_info:\\n      input_cost_per_token: 0.000002\\n      output_cost_per_token: 0.00001\\n" }
+  - it: gives prod's agent key 20 USD a day at 200k tokens a minute, from agent-secrets
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEY_AGENT
+            valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } }
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"agent","max_budget":20,"models":\["console-agent"\],"tpm_limit":200000' }
+  - it: gives dev's agent key 20 USD a day at 100k tokens a minute
+    template: litellm-keys.yaml
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - matchRegex: { path: 'spec.template.spec.containers[0].args[0]', pattern: '"key_alias":"agent","max_budget":20,"models":\["console-agent"\],"tpm_limit":100000' }
+  - it: refuses a dollar-priced alias without its prices
+    template: litellm.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    set: { litellm.aliases.console-agent.outputCostPerToken: null }
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.aliases.console-agent.outputCostPerToken is required" }
   - it: passes the upstream key to LiteLLM once for search, listing-read and scam-check
     template: litellm.yaml
     documentIndex: 1
@@ -153,7 +184,7 @@ tests:
     template: litellm-keys.yaml
     values: [../values-prod.yaml, values-test.yaml, values-mixed-units.yaml]
     asserts:
-      - failedTemplate: { errorPattern: "litellm.keys.server-stt mixes aliases priced by token and by second" }
+      - failedTemplate: { errorPattern: "litellm.keys.server-stt mixes aliases priced in different units" }
   - it: refuses a key with neither tpmLimit nor rpmLimit
     template: litellm-keys.yaml
     values: [../values-prod.yaml, values-test.yaml, values-no-limit.yaml]

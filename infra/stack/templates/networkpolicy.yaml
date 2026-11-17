@@ -10,15 +10,18 @@ spec:
   podSelector: {}
   policyTypes: [Ingress]
 ---
-# Pods of this stack reach each other: server to postgres and rustfs, website
-# to server-api, the jobs, postgres replication.
+# Pods of this stack reach each other: server to postgres and rustfs, the
+# jobs, postgres replication. The server and the agent take only the ports
+# to-server and to-agent open.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: from-stack
   labels: {{- include "sn.labels" . | nindent 4 }}
 spec:
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent] }
   ingress:
     - from:
         - podSelector: {}
@@ -31,7 +34,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, server, rustfs, lgtm, litellm] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, litellm] }
   ingress:
     - from:
         - namespaceSelector:
@@ -52,7 +55,7 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: cnpg-system }
 ---
-# Restate invokes the server's endpoint and writes snapshots to rustfs.
+# Restate writes snapshots to rustfs; to-server lets it invoke the server.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -60,9 +63,56 @@ metadata:
   labels: {{- include "sn.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [server, rustfs] }
+    matchLabels: { app.kubernetes.io/name: rustfs }
   ingress:
     - from:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
+---
+# The server's three ports: the API (8080) from the stack and Traefik, the
+# Restate endpoint (9080) from the stack and its Restate, and the MCP server
+# (9090, AGENT_MCP_ADDR) from the agent only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-server
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: server }
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: traefik }
+      ports:
+        - { protocol: TCP, port: 8080 }
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
+      ports:
+        - { protocol: TCP, port: 9080 }
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: agent }
+      ports:
+        - { protocol: TCP, port: 9090 }
+---
+# The agent takes requests from the server only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-agent
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: agent }
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: server }
+      ports:
+        - { protocol: TCP, port: 3000 }
