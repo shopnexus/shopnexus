@@ -114,3 +114,13 @@ tests:
           content:
             name: OBJECT_STORE_BUCKET
             value: restate-snapshots
+  # ai-gateway (repo shopnexus/ai) keeps its keys and spend in a database of
+  # its own in the stack's Postgres.
+  - it: gives the gateway its own database and a sealed role password
+    template: postgres.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: spec.owner, value: litellm }
+        documentIndex: 2
+      - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: litellm-db }
+        documentIndex: 1

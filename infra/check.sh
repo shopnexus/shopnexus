@@ -2,7 +2,9 @@
 # Checks infra/. The facts about the stack chart are unit tests in
 # stack/tests (helm-unittest); this script lints the chart, validates its
 # manifests, runs those tests, and checks the files outside the chart: the
-# Argo CD Applications, the Traefik edge and the root compose file.
+# Argo CD Applications, the ai chart with each stack's values, the Traefik
+# edge and the root compose file. The ai chart is read from AI_CHART, the
+# ai submodule's chart/ by default.
 # Run from anywhere: infra/check.sh
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,22 +26,43 @@ for s in dev prod; do
 done
 helm unittest stack || fails=$((fails + 1))
 
+# ── ai ──
+# argocd/ai.yaml deploys the ai repo's chart into each stack with the values
+# it holds; they render, validate, and keep the stack's photo vectors off when
+# ai-models loads no SigLIP 2.
+ai_chart=${AI_CHART:-../ai/chart}
+[[ -f $ai_chart/Chart.yaml ]] || { echo "FAIL: no ai chart at $ai_chart (git submodule update --init ai, or set AI_CHART)" >&2; exit 1; }
+for s in dev prod; do
+  vals=$(yq "select(.metadata.name==\"ai-$s\") | .spec.source.helm.valuesObject" argocd/ai.yaml)
+  helm lint --quiet "$ai_chart" -f <(echo "$vals") >/dev/null
+  helm template ai "$ai_chart" -f <(echo "$vals") --namespace "shopnexus-$s" \
+    | kubeconform -strict -ignore-missing-schemas -summary -schema-location default - >/dev/null
+  eq "$(yq '.stack' <<<"$vals")" "$s" "ai-$s stack"
+  eq "$(yq "select(.metadata.name==\"ai-$s\") | .spec.destination.namespace" argocd/ai.yaml)" "shopnexus-$s" "ai-$s namespace"
+  embed=$(yq '.models.embedModels' <<<"$vals")
+  image=$(yq '.server.embed.image' "stack/values-$s.yaml")
+  [[ $image == null ]] && image=$(yq '.server.embed.image' stack/values.yaml)
+  eq "$([[ -n $embed ]] && echo true || echo false)" "$image" "$s: photo vectors on exactly when ai-models loads SigLIP 2"
+done
+
 # ── argo ──
 apps=$(for f in argocd/*.yaml platform/*.yaml; do cat "$f"; echo ---; done 2>/dev/null || true)
-eq "$(q "$apps" 'select(.kind=="Application") | .metadata.name' | sort | tr '\n' ' ')" "cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "applications"
+eq "$(q "$apps" 'select(.kind=="Application") | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "applications"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.source.helm.valueFiles[0]')" values-prod.yaml "prod values"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.destination.namespace')" shopnexus-prod "prod namespace"
-eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sources[].repoURL)' | grep github.com | sort -u | wc -l | tr -d ' ')" 1 "one repo URL for the umbrella"
+eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sources[].repoURL)' | grep github.com | sort -u | tr '\n' ' ')" "https://github.com/shopnexus/ai.git https://github.com/shopnexus/shopnexus.git " "the umbrella's and the ai repo's URLs"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "prod by semver"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
-for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "agent ai console docs server website " "stack-$s images"; done
+for s in dev prod; do eq "$(q "$apps" "select(.kind==\"ImageUpdater\") | .spec.applicationRefs[] | select(.namePattern==\"stack-$s\") | .images[].alias" | sort | tr '\n' ' ')" "agent console docs server website " "stack-$s images"; done
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="ai-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "ai-dev by digest"
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="ai-prod") | .images[0].commonUpdateSettings.updateStrategy')" semver "ai-prod by semver"
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health
 # so root's waves wait for the platform.
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-options"]')" SkipDryRunOnMissingResource=true "ImageUpdater survives the dry-run"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 1 "ImageUpdater waits for the platform only"
-eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
+eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "ai-dev ai-prod cnpg image-updater restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
 ok $(grep -q 'obj.status.health' <<<"$(yq '.spec.valuesContent' cluster/argocd.yaml | yq '.configs.cm["resource.customizations.health.argoproj.io_Application"]')"; echo $?) "Argo CD judges Application health"
 
 # ── edge ──
@@ -69,15 +92,13 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 for s in postgres restate rustfs; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
-# TEI and the embedding versions the local server stores follow the chart.
-eq "$(yq '.x-tei.image' ../docker-compose.yml)" "$(yq '.images.tei.repository + ":" + .images.tei.tag' stack/values.yaml)" "compose tei image"
-eq "$(yq '.x-tei.command[3]' ../docker-compose.yml)" "$(yq '.tei.revision' stack/values.yaml)" "compose tei revision"
-eq "$(yq '.x-tei.command[10]' ../docker-compose.yml)" "$(yq '.tei.maxBatchTokens' stack/values.yaml)" "compose tei max batch tokens"
-eq "$(yq '.x-server-env.EMBED_TEXT_VERSION' ../docker-compose.yml)" "bge-m3@$(yq '.tei.revision' stack/values.yaml)" "compose EMBED_TEXT_VERSION"
-eq "$(yq '.x-server-env.EMBED_IMAGE_VERSION' ../docker-compose.yml)" "$(yq '.ai.embedVersion' stack/values.yaml)" "compose EMBED_IMAGE_VERSION"
+# The embedding versions the local server stores, and ai-models' settings,
+# follow the charts.
+eq "$(yq '.x-server-env.EMBED_TEXT_VERSION' ../docker-compose.yml)" "$(yq '.server.embed.textVersion' stack/values.yaml)" "compose EMBED_TEXT_VERSION"
+eq "$(yq '.x-server-env.EMBED_IMAGE_VERSION' ../docker-compose.yml)" "$(yq '.server.embed.imageVersion' stack/values.yaml)" "compose EMBED_IMAGE_VERSION"
 for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB \
   FRAMES_MAX_CONCURRENT:framesMaxConcurrent FRAMES_MAX_SECONDS:framesMaxSeconds FRAMES_MIN_SHARPNESS:framesMinSharpness; do
-  eq "$(yq ".x-ai.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".ai.${k#*:}" stack/values.yaml)" "compose AI_${k%%:*}"
+  eq "$(yq ".x-ai-models.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".models.${k#*:}" "$ai_chart/values.yaml")" "compose AI_${k%%:*}"
 done
 eq "$(yq '.x-server-env.ASSIST_CALL_TIMEOUT' ../docker-compose.yml)" "$(yq '.server.assist.callTimeout' stack/values.yaml)" "compose ASSIST_CALL_TIMEOUT"
 eq "$(yq '.x-server-env.CHOTOT_GATEWAY_URL' ../docker-compose.yml)" "$(yq '.server.assist.chototGatewayURL' stack/values.yaml)" "compose CHOTOT_GATEWAY_URL"

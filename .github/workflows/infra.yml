@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # check.sh renders the ai repo's chart with each stack's values
+      # (infra/argocd/ai.yaml), at main as Argo CD does.
+      - uses: actions/checkout@v7
+        with: { repository: shopnexus/ai, path: ai }
       - uses: azure/setup-helm@v5
       - name: Install yq and kubeconform
         run: |

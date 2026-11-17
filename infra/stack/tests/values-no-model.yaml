@@ -1,3 +1,0 @@
-litellm:
-  aliases:
-    search: { model: "" }

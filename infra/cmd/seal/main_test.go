@@ -12,7 +12,7 @@ import (
 )
 
 // setup returns a secrets directory with dev.env and prod.env made from
-// example.env, LLM_UPSTREAM_API_KEY filled in, and the server image to run
+// example.env, OPENROUTER_API_KEY filled in, and the server image to run
 // envgen from (SERVER_IMAGE, or the one CI pushes).
 func setup(t *testing.T) (opts, string) {
 	t.Helper()
@@ -24,7 +24,7 @@ func setup(t *testing.T) (opts, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	filled := strings.Replace(string(example), "\nLLM_UPSTREAM_API_KEY=\n", "\nLLM_UPSTREAM_API_KEY=test\n", 1)
+	filled := strings.Replace(string(example), "\nOPENROUTER_API_KEY=\n", "\nOPENROUTER_API_KEY=test\n", 1)
 	for _, s := range []string{"dev", "prod"} {
 		if err := os.WriteFile(filepath.Join(dir, s+".env"), []byte(filled), 0o600); err != nil {
 			t.Fatal(err)

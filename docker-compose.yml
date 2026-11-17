@@ -22,8 +22,7 @@
 #   grafana    http://grafana.shopnexus.localhost:56481   http://grafana.shopnexus.localhost:56480
 #   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
-#   ai         http://127.0.0.1:56491                     http://127.0.0.1:56490
-#   tei        http://127.0.0.1:56493                     http://127.0.0.1:56492
+#   ai-models  http://127.0.0.1:56491                     http://127.0.0.1:56490
 #
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
@@ -49,9 +48,11 @@
 # TRUST_LLM_BASE_URL, TRUST_LLM_API_KEY, TRUST_LLM_MODEL, read from
 # server/.env (the Makefile passes --env-file server/.env). The console agent
 # reads AGENT_LLM_BASE_URL, AGENT_LLM_API_KEY and AGENT_LLM_MODEL from the
-# same file. It calls the stack's TEI and ai directly for
-# embeddings, as it calls the upstream LLM; in the cluster both sit behind
-# LiteLLM.
+# same file. For text embeddings the server reads EMBED_TEXT_BASE_URL,
+# EMBED_TEXT_MODEL, EMBED_INDEX_API_KEY and EMBED_SEARCH_API_KEY from it too
+# (OpenRouter's baai/bge-m3; an empty model turns text vectors off). It
+# calls the stack's ai-models directly for photo vectors, speech and frames.
+# In the cluster every model sits behind ai-gateway (submodule ai).
 # The tests use a stub. The first start of a stack writes the server's keys
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
@@ -129,10 +130,10 @@ x-server-image: &server-image
   image: shopnexus-server:local
   build: ./server
 
-# The stack's provider of self-hosted models (submodule ai). In the cluster
-# LiteLLM's aliases stt and embed-image call it. Locally the server calls it
-# directly, for embeddings, speech and video frames.
-x-ai: &ai
+# The models the AI hub hosts itself (submodule ai, ai-models). In the
+# cluster ai-gateway's aliases stt and embed-image call it. Locally the
+# server calls it directly, for photo vectors, speech and video frames.
+x-ai-models: &ai-models
   image: shopnexus-ai:local
   build: ./ai
   environment:
@@ -150,16 +151,6 @@ x-ai: &ai
     AI_FRAMES_MAX_CONCURRENT: "2"
     AI_FRAMES_MAX_SECONDS: "35"
     AI_FRAMES_MIN_SHARPNESS: "30"
-  restart: unless-stopped
-
-# Text embeddings (bge-m3) for the server, as the alias embed-text gives the
-# cluster. The weights download into the stack's tei volume on first start.
-# --max-batch-tokens bounds the memory onnxruntime holds, as in the chart.
-x-tei: &tei
-  image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
-  command: [--model-id, BAAI/bge-m3, --revision, 5617a9f61b028005a4858fdac845db406aefb181, --port, "80", --auto-truncate, --max-client-batch-size, "16", --max-batch-tokens, "2048"]
-  environment:
-    HUGGINGFACE_HUB_CACHE: /data
   restart: unless-stopped
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
@@ -197,12 +188,12 @@ x-server-env: &server-env
   LLM_MODEL: ${LLM_MODEL:-}
   EMBED_TEXT_VERSION: bge-m3@5617a9f61b028005a4858fdac845db406aefb181
   EMBED_IMAGE_VERSION: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32
-  # TEI serves one model and ignores the name; ai checks it.
-  EMBED_TEXT_MODEL: bge-m3
+  EMBED_TEXT_BASE_URL: ${EMBED_TEXT_BASE_URL:-}
+  EMBED_TEXT_MODEL: ${EMBED_TEXT_MODEL:-}
   EMBED_IMAGE_MODEL: siglip2-so400m-patch16-384
-  # TEI and ai have no keys locally.
-  EMBED_INDEX_API_KEY: ""
-  EMBED_SEARCH_API_KEY: ""
+  # OpenRouter's key for text; ai-models takes none and ignores it.
+  EMBED_INDEX_API_KEY: ${EMBED_INDEX_API_KEY:-}
+  EMBED_SEARCH_API_KEY: ${EMBED_SEARCH_API_KEY:-}
   EMBED_TIMEOUT: 15s
   EMBED_SLOTS: "2"
   EMBED_TEXT_MIN_SIMILARITY: "0.45"
@@ -264,10 +255,9 @@ x-server-env-dev: &server-env-dev
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
-  EMBED_TEXT_BASE_URL: http://tei-dev:80/v1
-  EMBED_IMAGE_BASE_URL: http://ai-dev:8000/v1
-  AI_FRAMES_BASE_URL: http://ai-dev:8000/v1
-  STT_BASE_URL: http://ai-dev:8000/v1
+  EMBED_IMAGE_BASE_URL: http://ai-models-dev:8000/v1
+  AI_FRAMES_BASE_URL: http://ai-models-dev:8000/v1
+  STT_BASE_URL: http://ai-models-dev:8000/v1
   AGENT_BASE_URL: http://agent-dev:3000
 
 x-server-env-prod: &server-env-prod
@@ -282,10 +272,9 @@ x-server-env-prod: &server-env-prod
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
-  EMBED_TEXT_BASE_URL: http://tei-prod:80/v1
-  EMBED_IMAGE_BASE_URL: http://ai-prod:8000/v1
-  AI_FRAMES_BASE_URL: http://ai-prod:8000/v1
-  STT_BASE_URL: http://ai-prod:8000/v1
+  EMBED_IMAGE_BASE_URL: http://ai-models-prod:8000/v1
+  AI_FRAMES_BASE_URL: http://ai-models-prod:8000/v1
+  STT_BASE_URL: http://ai-models-prod:8000/v1
   AGENT_BASE_URL: http://agent-prod:3000
 
 # The console agent (submodule agent). Its database is `agent` in the
@@ -504,14 +493,9 @@ services:
         - { action: rebuild, path: ./console/package.json }
         - { action: rebuild, path: ./console/bun.lock }
 
-  ai-dev:
-    <<: [*dev, *ai]
+  ai-models-dev:
+    <<: [*dev, *ai-models]
     ports: ["127.0.0.1:56491:8000"]
-
-  tei-dev:
-    <<: [*dev, *tei]
-    ports: ["127.0.0.1:56493:80"]
-    volumes: [tei-dev:/data]
 
   agent-db-dev:
     <<: [*dev, *agent-db]
@@ -636,14 +620,9 @@ services:
     build: ./docs
     restart: unless-stopped
 
-  ai-prod:
-    <<: [*prod, *ai]
+  ai-models-prod:
+    <<: [*prod, *ai-models]
     ports: ["127.0.0.1:56490:8000"]
-
-  tei-prod:
-    <<: [*prod, *tei]
-    ports: ["127.0.0.1:56492:80"]
-    volumes: [tei-prod:/data]
 
   agent-db-prod:
     <<: [*prod, *agent-db]
@@ -831,12 +810,10 @@ volumes:
   keys-dev:
   go-build-dev:
   lgtm-dev:
-  tei-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
   lgtm-prod:
-  tei-prod:
   keys-test:
   go-build-test:

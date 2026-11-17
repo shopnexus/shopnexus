@@ -32,7 +32,7 @@ tests:
           value: { name: restate, namespace: restate-prod, port: 9070 }
       - equal:
           path: spec.routes[5].services[0]
-          value: { name: litellm, namespace: shopnexus-prod, port: 4000 }
+          value: { name: ai-gateway, namespace: shopnexus-prod, port: 4000 }
       - equal:
           path: spec.routes[7].services[0]
           value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
@@ -133,4 +133,4 @@ tests:
           content: lgtm
       - contains:
           path: spec.podSelector.matchExpressions[0].values
-          content: litellm
+          content: ai-gateway

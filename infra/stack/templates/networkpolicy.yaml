@@ -34,7 +34,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, litellm] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, ai-gateway] }
   ingress:
     - from:
         - namespaceSelector:

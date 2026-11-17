@@ -40,17 +40,17 @@ OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" 
 OBJECT_STORE_REGION: us-east-1
 OBJECT_STORE_BUCKET: shopnexus
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
-LLM_BASE_URL: http://litellm:4000/v1
+LLM_BASE_URL: http://ai-gateway:4000/v1
 LLM_MODEL: search
-AI_FRAMES_BASE_URL: http://ai:8000/v1
-STT_BASE_URL: http://litellm:4000/v1
+AI_FRAMES_BASE_URL: http://ai-models:8000/v1
+STT_BASE_URL: http://ai-gateway:4000/v1
 STT_MODEL: stt
-ASSIST_LLM_BASE_URL: http://litellm:4000/v1
+ASSIST_LLM_BASE_URL: http://ai-gateway:4000/v1
 ASSIST_LLM_MODEL: listing-read
 ASSIST_CALL_TIMEOUT: {{ required "server.assist.callTimeout is required" .Values.server.assist.callTimeout | quote }}
 CHOTOT_GATEWAY_URL: {{ required "server.assist.chototGatewayURL is required" .Values.server.assist.chototGatewayURL | quote }}
 CHOTOT_CDN_URL: {{ required "server.assist.chototCDNURL is required" .Values.server.assist.chototCDNURL | quote }}
-TRUST_LLM_BASE_URL: http://litellm:4000/v1
+TRUST_LLM_BASE_URL: http://ai-gateway:4000/v1
 TRUST_LLM_MODEL: scam-check
 TRUST_CALL_TIMEOUT: {{ required "server.trust.callTimeout is required" .Values.server.trust.callTimeout | quote }}
 {{- /* The console agent, in-cluster only; its two tokens are in server-secrets. */}}
@@ -65,12 +65,15 @@ GHTK_CLIENT_SOURCE: ""
 GHTK_WEBHOOK_SECRET: ""
 GHN_API_URL: ""
 GHN_WEBHOOK_SECRET: ""
-EMBED_TEXT_BASE_URL: http://litellm:4000/v1
-EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
-EMBED_TEXT_MODEL: embed-text
-EMBED_IMAGE_MODEL: embed-image
-EMBED_TEXT_VERSION: {{ printf "bge-m3@%s" (required "tei.revision is required" .Values.tei.revision) | quote }}
-EMBED_IMAGE_VERSION: {{ required "ai.embedVersion is required" .Values.ai.embedVersion | quote }}
+{{- /* A kind turned off gets empty settings, and the server writes and reads
+       no vectors of it. */}}
+{{- $e := .Values.server.embed }}
+EMBED_TEXT_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.text | quote }}
+EMBED_IMAGE_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.image | quote }}
+EMBED_TEXT_MODEL: {{ ternary "embed-text" "" $e.text | quote }}
+EMBED_IMAGE_MODEL: {{ ternary "embed-image" "" $e.image | quote }}
+EMBED_TEXT_VERSION: {{ ternary (required "server.embed.textVersion is required" $e.textVersion) "" $e.text | quote }}
+EMBED_IMAGE_VERSION: {{ ternary (required "server.embed.imageVersion is required" $e.imageVersion) "" $e.image | quote }}
 EMBED_TIMEOUT: {{ required "server.embed.timeout is required" .Values.server.embed.timeout | quote }}
 EMBED_SLOTS: {{ required "server.embed.slots is required" .Values.server.embed.slots | toString | quote }}
 EMBED_TEXT_MIN_SIMILARITY: {{ required "server.embed.textMinSimilarity is required" .Values.server.embed.textMinSimilarity | quote }}

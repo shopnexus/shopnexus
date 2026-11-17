@@ -26,12 +26,3 @@ server:
   emailSender: resend
   firebaseProjectID: shopnexus-26aca
   firebaseProjectNumber: "5362373878"
-litellm:
-  keys:
-    server-llm: { dailyUnits: 2000000, tpmLimit: 100000 }
-    server-stt: { dailyUnits: 36000, rpmLimit: 60 }
-    server-assist: { dailyUnits: 12000000, tpmLimit: 300000 }   # 2,000 reads a day, 50 a minute
-    server-trust: { dailyUnits: 6000000, tpmLimit: 150000 }     # 4,600 checks a day, 115 a minute
-    server-embed-index: { dailyUnits: 50000000, rpmLimit: 600 }
-    server-embed-search: { dailyUnits: 10000000, rpmLimit: 600 }
-    agent: { tpmLimit: 200000 }

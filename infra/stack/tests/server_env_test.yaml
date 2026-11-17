@@ -30,7 +30,7 @@ tests:
       # The server reaches models only through the stack's LiteLLM, under one alias.
       - equal:
           path: data.LLM_BASE_URL
-          value: http://litellm:4000/v1
+          value: http://ai-gateway:4000/v1
       - equal:
           path: data.LLM_MODEL
           value: search
@@ -117,7 +117,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 30bcf99520069b36
+          value: 1cac39d8648da23b
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -125,15 +125,15 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 30bcf99520069b36
+          value: 1cac39d8648da23b
   # The server reaches the embedding models only through LiteLLM, under two
   # aliases, and stores each model's version with its vectors.
   - it: sets the embedding settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.EMBED_TEXT_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.EMBED_TEXT_BASE_URL, value: http://ai-gateway:4000/v1 }
+      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: http://ai-gateway:4000/v1 }
       - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
       - equal: { path: data.EMBED_IMAGE_MODEL, value: embed-image }
       - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }
@@ -148,10 +148,10 @@ tests:
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.AI_FRAMES_BASE_URL, value: http://ai:8000/v1 }
-      - equal: { path: data.STT_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.AI_FRAMES_BASE_URL, value: http://ai-models:8000/v1 }
+      - equal: { path: data.STT_BASE_URL, value: http://ai-gateway:4000/v1 }
       - equal: { path: data.STT_MODEL, value: stt }
-      - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://ai-gateway:4000/v1 }
       - equal: { path: data.ASSIST_LLM_MODEL, value: listing-read }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
       - equal: { path: data.CHOTOT_GATEWAY_URL, value: https://gateway.chotot.com }
@@ -161,7 +161,7 @@ tests:
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.TRUST_LLM_BASE_URL, value: http://litellm:4000/v1 }
+      - equal: { path: data.TRUST_LLM_BASE_URL, value: http://ai-gateway:4000/v1 }
       - equal: { path: data.TRUST_LLM_MODEL, value: scam-check }
       - equal: { path: data.TRUST_CALL_TIMEOUT, value: 20s }
   # Production has no carrier until GHTK's client comes; the dev stack runs
@@ -178,3 +178,13 @@ tests:
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - equal: { path: data.CARRIER, value: fake }
+  # dev's ai-models loads no SigLIP 2, so photo vectors are off there.
+  - it: turns photo vectors off on dev and keeps text vectors
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.EMBED_IMAGE_MODEL, value: "" }
+      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: "" }
+      - equal: { path: data.EMBED_IMAGE_VERSION, value: "" }
+      - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
+      - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }

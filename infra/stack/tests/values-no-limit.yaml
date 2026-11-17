@@ -1,4 +1,0 @@
-# null removes the key from the merged values.
-litellm:
-  keys:
-    server-llm: { tpmLimit: null }

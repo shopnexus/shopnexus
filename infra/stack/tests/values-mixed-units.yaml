@@ -1,3 +1,0 @@
-litellm:
-  keys:
-    server-stt: { models: [stt, search] }

@@ -1,0 +1,89 @@
+# ai (repo shopnexus/ai, chart/) in the dev stack, as the Application ai-dev
+# deploys it into shopnexus-dev. The chart's values.yaml holds the aliases
+# and models; valuesObject sets what is the stack's: its name, the keys'
+# budgets and ai-models' memory.
+# ai-models loads no SigLIP 2 on dev: the machine has no room for its 4.5 GB
+# (2026-11-17), so photo vectors are off (stack server.embed.image). Speech
+# and frames alone peaked at 2.42 GiB on 2026-11-10.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-dev
+  namespace: argocd
+  # After the stack (wave 1), whose Postgres holds the gateway's database and
+  # whose sealed secrets hold the keys.
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/ai.git
+    targetRevision: main
+    path: chart
+    helm:
+      valuesObject:
+        stack: dev
+        models:
+          embedModels: ""
+          memoryRequest: 2Gi
+          memoryLimit: 3Gi
+        gateway:
+          keys:
+            server-llm: { dailyUnits: 200000, tpmLimit: 20000 }
+            server-stt: { dailyUnits: 3600, rpmLimit: 10 }
+            # About 5,500 tokens a read (8 frames at 768 px, the subcategories, the
+            # transcript): 200 reads a day, 10 a minute.
+            server-assist: { dailyUnits: 1200000, tpmLimit: 60000 }
+            # About 1,300 tokens a check (the prompt and 20 short messages): 460
+            # checks a day, 23 a minute.
+            server-trust: { dailyUnits: 600000, tpmLimit: 30000 }
+            # 10M tokens: about 1,700 listings of 10 photos a day at 576 tokens a photo.
+            server-embed-index: { dailyUnits: 10000000, rpmLimit: 120 }
+            server-embed-search: { dailyUnits: 1000000, rpmLimit: 60 }
+            agent: { tpmLimit: 100000 }
+  destination: { server: https://kubernetes.default.svc, namespace: shopnexus-dev }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
+---
+# ai (repo shopnexus/ai, chart/) in the prod stack, as the Application
+# ai-prod deploys it into shopnexus-prod. The chart's values.yaml holds the
+# aliases and models; valuesObject sets what is the stack's: its name, the
+# keys' budgets and ai-models' memory.
+# ai-models with SigLIP 2 held 4.0 GiB idle and 5.3 GiB on 16 photos
+# (2026-11-10).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-prod
+  namespace: argocd
+  # After the stack (wave 1), whose Postgres holds the gateway's database and
+  # whose sealed secrets hold the keys.
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shopnexus/ai.git
+    targetRevision: main
+    path: chart
+    helm:
+      valuesObject:
+        stack: prod
+        models:
+          embedModels: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
+          memoryRequest: 6Gi
+          memoryLimit: 8Gi
+        gateway:
+          keys:
+            server-llm: { dailyUnits: 2000000, tpmLimit: 100000 }
+            server-stt: { dailyUnits: 36000, rpmLimit: 60 }
+            server-assist: { dailyUnits: 12000000, tpmLimit: 300000 }   # 2,000 reads a day, 50 a minute
+            server-trust: { dailyUnits: 6000000, tpmLimit: 150000 }     # 4,600 checks a day, 115 a minute
+            server-embed-index: { dailyUnits: 50000000, rpmLimit: 600 }
+            server-embed-search: { dailyUnits: 10000000, rpmLimit: 600 }
+            agent: { tpmLimit: 200000 }
+  destination: { server: https://kubernetes.default.svc, namespace: shopnexus-prod }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }

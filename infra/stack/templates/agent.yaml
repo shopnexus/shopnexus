@@ -6,7 +6,7 @@
 {{- define "sn.agentEnv" -}}
 - { name: PORT, value: "3000" }
 - { name: AGENT_MODEL_ID, value: console-agent }
-- { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 }
+- { name: LITELLM_BASE_URL, value: http://ai-gateway:4000/v1 }
 - name: LITELLM_API_KEY
   valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } }
 - name: AGENT_SERVICE_TOKEN
