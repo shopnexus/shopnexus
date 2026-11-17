@@ -3,6 +3,7 @@
 # directory needs its own line.
 /*
 !/.github/
+!/AGENTS.md
 !/CLAUDE.md
 !/agent
 !/ai
