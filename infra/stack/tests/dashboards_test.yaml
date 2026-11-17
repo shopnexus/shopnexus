@@ -9,7 +9,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 10
+          count: 12
       - equal:
           path: spec.routes[0].match
           value: Host(`grafana.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
@@ -37,10 +37,13 @@ tests:
           path: spec.routes[7].services[0]
           value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
       - equal:
-          path: spec.routes[9].match
+          path: spec.routes[9].services[0]
+          value: { name: pgweb, namespace: shopnexus-prod, port: 8081 }
+      - equal:
+          path: spec.routes[11].match
           value: Host(`argocd.shopnexus.id.vn`)
       - equal:
-          path: spec.routes[9].services[0]
+          path: spec.routes[11].services[0]
           value: { name: argocd-server, namespace: argocd, port: 80 }
   - it: leaves Argo CD to the prod stack by default
     template: dashboards.yaml
@@ -50,7 +53,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 8
+          count: 10
       - equal:
           path: spec.routes[0].match
           value: Host(`grafana.dev.shopnexus.id.vn`) && PathPrefix(`/_dashboard`)
@@ -63,9 +66,9 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.routes
-          count: 10
+          count: 12
       - equal:
-          path: spec.routes[9].match
+          path: spec.routes[11].match
           value: Host(`argocd.dev.shopnexus.id.vn`)
   # Traefik copies only these headers from the server's answer, replacing any
   # the client sent, so a client cannot claim to be a console member.
@@ -82,7 +85,7 @@ tests:
           value: [X-Console-Email, X-Console-Role]
   - it: signs Grafana's users in from the gate's headers
     template: dashboards.yaml
-    documentSelector: { path: kind, value: Deployment }
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: lgtm }
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains:
@@ -104,7 +107,7 @@ tests:
     asserts:
       - equal:
           path: data.DASHBOARD_HOSTS
-          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,litellm=litellm.shopnexus.id.vn,s3=s3.shopnexus.id.vn,argocd=argocd.shopnexus.id.vn
+          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,litellm=litellm.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn,argocd=argocd.shopnexus.id.vn
       - equal:
           path: data.OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://lgtm:4318
@@ -115,7 +118,7 @@ tests:
     asserts:
       - equal:
           path: data.DASHBOARD_HOSTS
-          value: grafana=grafana.dev.shopnexus.id.vn,restate=restate.dev.shopnexus.id.vn,litellm=litellm.dev.shopnexus.id.vn,s3=s3.dev.shopnexus.id.vn
+          value: grafana=grafana.dev.shopnexus.id.vn,restate=restate.dev.shopnexus.id.vn,litellm=litellm.dev.shopnexus.id.vn,s3=s3.dev.shopnexus.id.vn,db=db.dev.shopnexus.id.vn
   - it: serves RustFS's console on port 9001
     template: rustfs.yaml
     values: [../values-prod.yaml, values-test.yaml]
@@ -136,7 +139,7 @@ tests:
       - equal:
           path: spec.security.networkPeers.admin[1].podSelector.matchLabels["app.kubernetes.io/name"]
           value: traefik
-  - it: admits Traefik to Grafana and LiteLLM
+  - it: admits Traefik to Grafana, LiteLLM and pgweb
     template: networkpolicy.yaml
     documentSelector: { path: metadata.name, value: from-traefik }
     values: [../values-prod.yaml, values-test.yaml]
@@ -147,6 +150,9 @@ tests:
       - contains:
           path: spec.podSelector.matchExpressions[0].values
           content: ai-gateway
+      - contains:
+          path: spec.podSelector.matchExpressions[0].values
+          content: pgweb
   - it: gives Grafana the cluster's Prometheus
     template: dashboards.yaml
     documentSelector: { path: metadata.name, value: lgtm-datasources }
@@ -157,7 +163,7 @@ tests:
           pattern: "url: http://prometheus-server.monitoring.svc"
   - it: mounts the datasource file where Grafana provisions from
     template: dashboards.yaml
-    documentSelector: { path: kind, value: Deployment }
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: lgtm }
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains:
@@ -168,10 +174,22 @@ tests:
             subPath: cluster.yaml
   - it: leaves Grafana with lgtm's Prometheus when clusterPrometheus is empty
     template: dashboards.yaml
-    documentSelector: { path: kind, value: Deployment }
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: lgtm }
     values: [../values-prod.yaml, values-test.yaml]
     set: { lgtm.clusterPrometheus: "" }
     asserts:
       - lengthEqual:
           path: spec.template.spec.volumes
           count: 1
+  # pgweb asks for no sign-in, so it stays on the stack's database.
+  - it: keeps pgweb on the stack's database
+    template: dashboards.yaml
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: pgweb }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --lock-session
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: postgres-app, key: uri } } }

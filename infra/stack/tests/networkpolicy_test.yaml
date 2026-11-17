@@ -44,11 +44,11 @@ tests:
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
   # The server and the agent are left to to-server and to-agent, which open
   # each port to its callers only.
-  - it: leaves the server and the agent out of from-stack, from-traefik and from-restate
+  - it: leaves the server, the agent and pgweb out of from-stack, and the server out of from-traefik
     asserts:
       - equal:
           path: spec.podSelector.matchExpressions[0]
-          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent] }
+          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent, pgweb] }
         documentSelector: { path: metadata.name, value: from-stack }
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: server }
         documentSelector: { path: metadata.name, value: from-traefik }

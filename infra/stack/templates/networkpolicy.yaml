@@ -12,7 +12,8 @@ spec:
 ---
 # Pods of this stack reach each other: server to postgres and rustfs, the
 # jobs, postgres replication. The server and the agent take only the ports
-# to-server and to-agent open.
+# to-server and to-agent open. pgweb asks for no sign-in, so only Traefik,
+# behind the console's gate, reaches it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -21,7 +22,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent, pgweb] }
   ingress:
     - from:
         - podSelector: {}
@@ -34,7 +35,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, ai-gateway] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, ai-gateway, pgweb] }
   ingress:
     - from:
         - namespaceSelector:

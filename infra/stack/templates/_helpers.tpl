@@ -73,7 +73,8 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
   (dict "app" "grafana" "service" "lgtm" "port" 3000)
   (dict "app" "restate" "service" "restate" "namespace" (include "sn.restate" .) "port" 9070)
   (dict "app" "litellm" "service" "ai-gateway" "port" 4000)
-  (dict "app" "s3" "service" "rustfs" "port" 9001) }}
+  (dict "app" "s3" "service" "rustfs" "port" 9001)
+  (dict "app" "db" "service" "pgweb" "port" 8081) }}
 {{- if .Values.argocdDashboard }}
 {{- $l = append $l (dict "app" "argocd" "service" "argocd-server" "namespace" "argocd" "port" 80) }}
 {{- end }}

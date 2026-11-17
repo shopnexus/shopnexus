@@ -107,6 +107,51 @@ spec:
     - { name: grafana, port: 3000, targetPort: grafana }
     - { name: otlp-http, port: 4318, targetPort: otlp-http }
 ---
+# pgweb on the stack's database as its owner, the dashboard db. It asks for
+# no sign-in: the console's gate admits admins only, and the network
+# policies let only Traefik reach it. --lock-session keeps it on this one
+# database.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgweb
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: pgweb }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "pgweb") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: pgweb
+          image: {{ include "sn.image" .Values.images.pgweb }}
+          args: [--bind=0.0.0.0, --listen=8081, --lock-session, --skip-open]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: postgres-app, key: uri } }
+          ports:
+            - { name: http, containerPort: 8081 }
+          readinessProbe:
+            tcpSocket: { port: http }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgweb
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: pgweb }
+  ports:
+    - { name: http, port: 8081, targetPort: http }
+---
 # The server answers 200 with the console member in X-Console-Email and
 # X-Console-Role, or sends the browser to the console. Traefik copies only
 # those two headers onto the request, replacing any the client sent.
