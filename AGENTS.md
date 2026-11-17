@@ -11,7 +11,8 @@ the same change written twice, once in compose and once in the chart.
   migrate service and the cluster's migrate hook both run. Behaviour goes in
   the app's code.
 - A setting that is the same in compose and in every cluster stack goes in
-  `infra/stack/env/server.env` or `infra/stack/env/agent.env`. The chart
+  `infra/stack/env/server.env`, `infra/stack/env/agent.env` or, for
+  ai-models, `ai/chart/env/models.env` (in the ai repo). The chart
   reads them with `.Files.Get` and compose with `env_file`. Only a setting
   that differs between stacks, or between compose and the cluster, goes in
   `_server-env.tpl`, `agent.yaml` and compose's `x-server-env*` and

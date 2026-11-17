@@ -92,21 +92,17 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 for s in postgres restate rustfs; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
-# ai-models' settings follow the ai chart.
-for k in EMBED_MAX_INPUTS:embedMaxInputs EMBED_MAX_CONCURRENT:embedMaxConcurrent EMBED_MAX_IMAGE_MB:embedMaxImageMB \
-  FRAMES_MAX_CONCURRENT:framesMaxConcurrent FRAMES_MAX_SECONDS:framesMaxSeconds FRAMES_MIN_SHARPNESS:framesMinSharpness; do
-  eq "$(yq ".x-ai-models.environment.AI_${k%%:*}" ../docker-compose.yml)" "$(yq ".models.${k#*:}" "$ai_chart/values.yaml")" "compose AI_${k%%:*}"
-done
 eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
-# The settings every stack shares are in stack/env/*.env, which compose
-# (env_file) and the chart both read; a key there is written nowhere else.
+# The settings every stack shares are in stack/env/*.env and the ai chart's
+# env/models.env, which compose (env_file) and the charts both read; a key
+# there is written nowhere else.
 # The chart fails its render on a key in both; compose would let its own
 # block win, so this catches it.
-for f in server:x-server-env agent:x-agent-env; do
-  for k in $(grep -oE '^[A-Z0-9_]+' "stack/env/${f%%:*}.env"); do
+for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env "$ai_chart/env/models.env:x-ai-models"; do
+  for k in $(grep -oE '^[A-Z0-9_]+' "${f%%:*}"); do
     for block in $(yq 'keys | .[] | select(test("^'"${f#*:}"'"))' ../docker-compose.yml); do
-      [[ $(yq ".\"$block\" | has(\"$k\")" ../docker-compose.yml) == false ]] ||
-        { echo "FAIL: $k is in stack/env/${f%%:*}.env and in compose's $block" >&2; fails=$((fails + 1)); }
+      [[ $(yq ".\"$block\" | (.environment // .) | has(\"$k\")" ../docker-compose.yml) == false ]] ||
+        { echo "FAIL: $k is in ${f%%:*} and in compose's $block" >&2; fails=$((fails + 1)); }
     done
   done
 done

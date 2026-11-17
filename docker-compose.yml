@@ -137,21 +137,10 @@ x-server-image: &server-image
 x-ai-models: &ai-models
   image: shopnexus-ai:local
   build: ./ai
+  # The settings every stack shares with the ai chart (submodule ai).
+  env_file: [./ai/chart/env/models.env]
   environment:
-    AI_ADDR: ":8000"
-    AI_STT_MODELS: gipformer-1.5=/models/gipformer-1.5
-    AI_VAD_MODEL: /models/silero_vad.onnx
-    AI_NUM_THREADS: "4"
-    AI_MAX_CONCURRENT: "2"
-    AI_MAX_UPLOAD_MB: "100"
-    AI_MAX_AUDIO_SECONDS: "300"
     AI_EMBED_MODELS: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
-    AI_EMBED_MAX_INPUTS: "16"
-    AI_EMBED_MAX_CONCURRENT: "2"
-    AI_EMBED_MAX_IMAGE_MB: "10"
-    AI_FRAMES_MAX_CONCURRENT: "2"
-    AI_FRAMES_MAX_SECONDS: "35"
-    AI_FRAMES_MIN_SHARPNESS: "30"
   restart: unless-stopped
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
