@@ -132,7 +132,7 @@ spec:
           image: {{ include "sn.image" .Values.images.pgweb }}
           args: [--bind=0.0.0.0, --listen=8081, --lock-session, --skip-open]
           env:
-            - name: DATABASE_URL
+            - name: PGWEB_DATABASE_URL
               valueFrom: { secretKeyRef: { name: postgres-app, key: uri } }
           ports:
             - { name: http, containerPort: 8081 }

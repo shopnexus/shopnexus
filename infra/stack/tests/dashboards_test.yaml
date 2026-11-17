@@ -192,4 +192,4 @@ tests:
           content: --lock-session
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: postgres-app, key: uri } } }
+          content: { name: PGWEB_DATABASE_URL, valueFrom: { secretKeyRef: { name: postgres-app, key: uri } } }
