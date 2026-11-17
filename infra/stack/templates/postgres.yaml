@@ -41,6 +41,11 @@ spec:
         ensure: present
         login: true
         passwordSecret: { name: agent-db }
+      # pgweb's role: rows only, never the schema; jobs.yaml grants it.
+      - name: pgweb
+        ensure: present
+        login: true
+        passwordSecret: { name: pgweb-db }
   bootstrap:
     initdb:
       database: app

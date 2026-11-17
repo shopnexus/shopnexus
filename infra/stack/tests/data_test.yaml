@@ -80,7 +80,7 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - hasDocuments:
-          count: 3
+          count: 5
       - equal:
           path: metadata.name
           value: migrate
@@ -124,3 +124,27 @@ tests:
         documentIndex: 2
       - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: litellm-db }
         documentIndex: 1
+  # pgweb's role owns nothing, so it cannot drop a table; the grants job
+  # runs after migrate and keeps the console's tables read-only to it.
+  - it: gives pgweb a role of its own, granted rows only after migrate
+    template: jobs.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: pgweb-grants }
+        documentIndex: 4
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+        documentIndex: 4
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
+        documentIndex: 4
+      - matchRegex: { path: 'data["grants.sql"]', pattern: "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO pgweb" }
+        documentIndex: 3
+      - matchRegex: { path: 'data["grants.sql"]', pattern: "REVOKE INSERT, UPDATE, DELETE ON public.%I FROM pgweb" }
+        documentIndex: 3
+  - it: manages the pgweb role
+    template: postgres.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: spec.managed.roles[2]
+          value: { name: pgweb, ensure: present, login: true, passwordSecret: { name: pgweb-db } }

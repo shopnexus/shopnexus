@@ -110,6 +110,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)
 		{"AGENT_LLM_API_KEY", "sk-", 24},    // the console agent's key in LiteLLM (agent)
 		{"AGENT_DB_PASSWORD", "", 24},       // the console agent's database role
+		{"PGWEB_DB_PASSWORD", "", 24},       // pgweb's database role, which cannot change the schema
 	} {
 		if env.get(k.name) == "" {
 			b := make([]byte, k.bytes)
@@ -167,6 +168,10 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "agent-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
 			"username": "agent",
 			"password": env.get("AGENT_DB_PASSWORD"),
+		}},
+		{name: "pgweb-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
+			"username": "pgweb",
+			"password": env.get("PGWEB_DB_PASSWORD"),
 		}},
 	}
 

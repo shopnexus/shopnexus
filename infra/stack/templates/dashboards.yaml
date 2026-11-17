@@ -107,10 +107,10 @@ spec:
     - { name: grafana, port: 3000, targetPort: grafana }
     - { name: otlp-http, port: 4318, targetPort: otlp-http }
 ---
-# pgweb on the stack's database as its owner, the dashboard db. It asks for
-# no sign-in: the console's gate admits admins only, and the network
-# policies let only Traefik reach it. --lock-session keeps it on this one
-# database.
+# pgweb on the stack's database as the role pgweb (rows only, see
+# jobs.yaml), the dashboard db. It asks for no sign-in: the console's gate
+# admits admins only, and the network policies let only Traefik reach it.
+# --lock-session keeps it on this one database.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -132,8 +132,9 @@ spec:
           image: {{ include "sn.image" .Values.images.pgweb }}
           args: [--bind=0.0.0.0, --listen=8081, --lock-session, --skip-open]
           env:
-            - name: PGWEB_DATABASE_URL
-              valueFrom: { secretKeyRef: { name: postgres-app, key: uri } }
+            - name: PGWEB_PASSWORD
+              valueFrom: { secretKeyRef: { name: pgweb-db, key: password } }
+            - { name: PGWEB_DATABASE_URL, value: "postgresql://pgweb:$(PGWEB_PASSWORD)@postgres-rw:5432/app?options=-c%20statement_timeout%3D30s" }
           ports:
             - { name: http, containerPort: 8081 }
           readinessProbe:
