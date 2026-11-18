@@ -2,22 +2,14 @@
 # details and the URLs.
 .PHONY: dev prod test down trace trace-rename
 
-# dev and prod take LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, the three
-# ASSIST_LLM_, the three TRUST_LLM_, the console agent's three AGENT_LLM_
-# variables, and EMBED_TEXT_BASE_URL, EMBED_TEXT_MODEL, EMBED_INDEX_API_KEY
-# and EMBED_SEARCH_API_KEY from server/.env. Compose uses the file only to
-# fill in ${...} in docker-compose.yml, and those sixteen are the only ones
-# it names.
-COMPOSE_LLM := docker compose --env-file server/.env
-
 # Everything with live reload, behind http://localhost:56481. Stays in the
 # foreground and prints the logs.
 dev:
-	$(COMPOSE_LLM) --profile dev up --build --watch
+	docker compose --profile dev up --build --watch
 
 # The images the cluster runs, behind http://localhost:56480.
 prod:
-	$(COMPOSE_LLM) --profile prod up -d --build
+	docker compose --profile prod up -d --build
 
 # The server's Go tests, on tmpfs.
 test:

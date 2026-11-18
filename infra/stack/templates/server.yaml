@@ -39,6 +39,9 @@ spec:
         - name: server
           image: {{ include "sn.image" .Values.images.server }}
           {{- include "sn.serverEnv" . | nindent 10 }}
+            # Module ai runs in server-ai (server-ai.yaml); these pods load no
+            # models and call it through Restate.
+            - { name: SERVER_ROLE, value: api }
           ports:
             - { name: http, containerPort: 8080 }
             - { name: restate, containerPort: 9080 }

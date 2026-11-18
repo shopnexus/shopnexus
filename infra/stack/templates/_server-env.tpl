@@ -48,9 +48,8 @@ CARRIER: {{ required "server.carrier is required: fake or none, in the stack's v
        reads no vectors of it. */}}
 {{- $e := .Values.server.embed }}
 EMBED_TEXT_BASE_URL: {{ ternary "http://litellm:4000/v1" "" $e.text | quote }}
-EMBED_IMAGE_BASE_URL: {{ ternary "http://litellm:4000/v1" "" $e.image | quote }}
 EMBED_TEXT_MODEL: {{ ternary "embed-text" "" $e.text | quote }}
-EMBED_IMAGE_MODEL: {{ ternary "embed-image" "" $e.image | quote }}
+AI_EMBED_MODELS: {{ ternary "siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384" "" $e.image | quote }}
 PNV_TEST_NUMBERS: {{ .Values.server.pnvTestNumbers | quote }}
 EMAIL_SENDER: {{ .Values.server.emailSender | quote }}
 {{- end }}

@@ -103,7 +103,6 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"LITELLM_DB_PASSWORD", "", 24},
 		{"LITELLM_UI_PASSWORD", "", 24},     // ai-gateway's admin UI, behind the console's sign-in
 		{"LLM_API_KEY", "sk-", 24},          // the server's search key in LiteLLM (server-llm)
-		{"STT_API_KEY", "sk-", 24},          // the server's speech-to-text key in LiteLLM (server-stt)
 		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's listing-read key in LiteLLM (server-assist)
 		{"TRUST_LLM_API_KEY", "sk-", 24},    // the server's scam-check key in LiteLLM (server-trust)
 		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
@@ -151,7 +150,7 @@ func seal(stack string, o opts, out io.Writer) error {
 	secrets := []secret{
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
-			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "STT_API_KEY", "ASSIST_LLM_API_KEY",
+			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "ASSIST_LLM_API_KEY",
 			"TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
 			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
 		// The console agent has the server's two tokens and its own LiteLLM key.

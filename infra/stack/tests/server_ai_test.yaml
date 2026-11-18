@@ -1,0 +1,58 @@
+suite: server-ai
+templates: [server-ai.yaml, server.yaml]
+release: { namespace: shopnexus-prod }
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  # Module ai runs in server-ai alone: the same image with SERVER_ROLE=ai,
+  # registered with the stack's Restate as a deployment of its own.
+  - it: runs the server image as SERVER_ROLE=ai, registered with Restate
+    template: server-ai.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: RestateDeployment }
+      - equal: { path: metadata.name, value: server-ai }
+      - equal: { path: spec.replicas, value: 1 }
+      - equal: { path: spec.restate.register.cluster, value: restate-prod }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "ghcr.io/shopnexus/server:0.1.0" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: SERVER_ROLE, value: ai }
+      - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 8Gi }
+      - equal: { path: 'spec.template.spec.containers[0].volumeMounts[0]', value: { name: models, mountPath: /models, readOnly: true } }
+  # The models live on a PVC; the initContainer fetches what is missing,
+  # SigLIP 2 only where photo vectors are on.
+  - it: fills the PVC models with the image's fetch script, SigLIP 2 included in prod
+    template: server-ai.yaml
+    asserts:
+      - equal: { path: spec.resources.requests.storage, value: 10Gi }
+        documentIndex: 0
+      - equal: { path: 'spec.template.spec.initContainers[0].command', value: [/fetch-models.sh, /models] }
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content: { name: FETCH_EMBED, value: "1" }
+        documentIndex: 1
+      - equal: { path: spec.template.spec.securityContext.fsGroup, value: 65532 }
+        documentIndex: 1
+  - it: fetches no SigLIP 2 on dev, where photo vectors are off, and fits dev's memory
+    template: server-ai.yaml
+    documentIndex: 1
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content: { name: FETCH_EMBED, value: "0" }
+      - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 3Gi }
+  # The API pods load no models and call module ai through Restate.
+  - it: runs the API pods as SERVER_ROLE=api
+    template: server.yaml
+    documentIndex: 1
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: SERVER_ROLE, value: api }
+  - it: refuses a stack without server-ai's memory
+    template: server-ai.yaml
+    set: { serverAi.memoryLimit: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "serverAi.memoryLimit is required" }

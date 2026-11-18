@@ -1,9 +1,10 @@
 # LiteLLM's config, the same in every stack: the stack chart's ConfigMap
-# litellm-config holds this file as is, and docker-compose.yml mounts it. Clients ask for a model_name (an alias) with a key from
-# keys.txt.
+# litellm-config holds this file as is, and docker-compose.yml mounts it.
+# Clients ask for a model_name (an alias) with a key from keys.txt.
 #
-# A key's budget counts the cost below: 1e-6 a token or a second of audio,
-# so 1 of budget is 1M units; console-agent costs Claude
+# LiteLLM serves the remote models only; speech, photo vectors and video
+# frames are the server's module ai. A key's budget counts the cost below:
+# 1e-6 a token, so 1 of budget is 1M tokens; console-agent costs Claude
 # Sonnet 5.5's list price, so its key's budget is dollars. The chart refuses
 # a key over aliases with different costs. An api_key of os.environ/NAME is
 # the key NAME in Secret litellm-secrets, and in compose the variable NAME
@@ -58,25 +59,6 @@ model_list:
       mode: embedding
       input_cost_per_token: 0.000001
       output_cost_per_token: 0.000001
-  # ai-models takes no key. It counts 576 tokens a photo and a text its
-  # tokens.
-  - model_name: embed-image
-    litellm_params:
-      model: openai/siglip2-so400m-patch16-384
-      api_base: http://ai-models:8000/v1
-      api_key: none
-    model_info:
-      mode: embedding
-      input_cost_per_token: 0.000001
-      output_cost_per_token: 0.000001
-  - model_name: stt
-    litellm_params:
-      model: openai/gipformer-1.5
-      api_base: http://ai-models:8000/v1
-      api_key: none
-    model_info:
-      mode: audio_transcription
-      input_cost_per_second: 0.000001
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL

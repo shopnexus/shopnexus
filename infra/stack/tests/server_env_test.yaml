@@ -83,9 +83,9 @@ tests:
       - exists: { path: data.GOOGLE_JWKS_URL }
       - exists: { path: data.LLM_BASE_URL }
       - exists: { path: data.LLM_MODEL }
-      - exists: { path: data.AI_FRAMES_BASE_URL }
-      - exists: { path: data.STT_BASE_URL }
-      - exists: { path: data.STT_MODEL }
+      - exists: { path: data.AI_STT_MODELS }
+      - exists: { path: data.AI_VAD_MODEL }
+      - exists: { path: data.AI_FRAMES_MAX_SECONDS }
       - exists: { path: data.ASSIST_LLM_BASE_URL }
       - exists: { path: data.ASSIST_LLM_MODEL }
       - exists: { path: data.ASSIST_CALL_TIMEOUT }
@@ -117,7 +117,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 22c2f7c65dde0ba6
+          value: 66e6a038dd0b9b3b
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -125,32 +125,30 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 22c2f7c65dde0ba6
-  # The server reaches the embedding models only through LiteLLM, under two
-  # aliases, and stores each model's version with its vectors.
+          value: 66e6a038dd0b9b3b
+  # Text vectors come from LiteLLM's alias embed-text and photo vectors from
+  # module ai's SigLIP 2; each model's version is stored with its vectors.
   - it: sets the embedding settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal: { path: data.EMBED_TEXT_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
-      - equal: { path: data.EMBED_IMAGE_MODEL, value: embed-image }
+      - equal: { path: data.AI_EMBED_MODELS, value: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384 }
       - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }
       - equal: { path: data.EMBED_IMAGE_VERSION, value: siglip2-so400m-patch16-384@29f74e673c298fd07482d8e20138179282001eb7-fp32 }
       - equal: { path: data.EMBED_TIMEOUT, value: 15s }
       - equal: { path: data.EMBED_SLOTS, value: "2" }
       - equal: { path: data.EMBED_TEXT_MIN_SIMILARITY, value: "0.45" }
       - equal: { path: data.EMBED_PHOTO_MIN_SIMILARITY, value: "0.6" }
-  # A video read calls ai's frames route directly (LiteLLM routes only
-  # OpenAI's API), and speech and the model through LiteLLM's aliases.
+  # A video read cuts frames and transcribes in module ai, from the model
+  # files under /models, and fills the listing through LiteLLM's alias.
   - it: sets the video read settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.AI_FRAMES_BASE_URL, value: http://ai-models:8000/v1 }
-      - equal: { path: data.STT_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.STT_MODEL, value: stt }
+      - equal: { path: data.AI_STT_MODELS, value: gipformer-1.5=/models/gipformer-1.5 }
+      - equal: { path: data.AI_VAD_MODEL, value: /models/silero_vad.onnx }
       - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.ASSIST_LLM_MODEL, value: listing-read }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
@@ -178,12 +176,11 @@ tests:
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - equal: { path: data.CARRIER, value: fake }
-  # dev's ai-models loads no SigLIP 2, so photo vectors are off there.
+  # dev's server-ai loads no SigLIP 2, so photo vectors are off there.
   - it: turns photo vectors off on dev and keeps text vectors
     documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.EMBED_IMAGE_MODEL, value: "" }
-      - equal: { path: data.EMBED_IMAGE_BASE_URL, value: "" }
+      - equal: { path: data.AI_EMBED_MODELS, value: "" }
       - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
       - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }

@@ -13,9 +13,6 @@
 [submodule "console"]
 	path = console
 	url = https://github.com/shopnexus/console.git
-[submodule "ai"]
-	path = ai
-	url = https://github.com/shopnexus/ai.git
 [submodule "agent"]
 	path = agent
 	url = https://github.com/shopnexus/agent.git

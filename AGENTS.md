@@ -11,12 +11,12 @@ the same change written twice, once in compose and once in the chart.
   migrate service and the cluster's migrate hook both run. Behaviour goes in
   the app's code.
 - A setting that is the same in compose and in every cluster stack goes in
-  `infra/stack/env/server.env`, `infra/stack/env/agent.env` or, for
-  ai-models, `ai/chart/env/models.env` (in the ai repo). The chart
+  `infra/stack/env/server.env`, `infra/stack/env/agent.env` or
+  `infra/stack/env/litellm.env`. The chart
   reads them with `.Files.Get` and compose with `env_file`. Only a setting
   that differs between stacks, or between compose and the cluster, goes in
-  `_server-env.tpl`, `agent.yaml` and compose's `x-server-env*` and
-  `x-agent-env*` blocks. A key in both places fails the chart's render and
+  `_server-env.tpl`, `agent.yaml` and compose's `x-server-env*`,
+  `x-agent-env*` and `x-litellm` blocks. A key in both places fails the chart's render and
   `infra/check.sh`.
 - A change only one side can have (Traefik routes, NetworkPolicies,
   SealedSecrets, Argo CD options, Caddy on the server) stays on that side and

@@ -7,9 +7,8 @@
 # budget and rate limit are the stack's (litellm.keys in the chart's
 # values, LIMITS_DEFAULT in compose).
 server-llm          server-secrets  LLM_API_KEY           search
-server-stt          server-secrets  STT_API_KEY           stt
 server-assist       server-secrets  ASSIST_LLM_API_KEY    listing-read
 server-trust        server-secrets  TRUST_LLM_API_KEY     scam-check
-server-embed-index  server-secrets  EMBED_INDEX_API_KEY   embed-text,embed-image
-server-embed-search server-secrets  EMBED_SEARCH_API_KEY  embed-text,embed-image
+server-embed-index  server-secrets  EMBED_INDEX_API_KEY   embed-text
+server-embed-search server-secrets  EMBED_SEARCH_API_KEY  embed-text
 agent               agent-secrets   AGENT_LLM_API_KEY     console-agent

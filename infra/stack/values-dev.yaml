@@ -2,18 +2,18 @@ stack: dev
 domain: dev.shopnexus.id.vn
 appEnv: dev
 server:
-  # ai-models on dev loads no SigLIP 2 (ai-dev in infra/argocd/ai.yaml), so no
-  # photo vectors.
+  # server-ai on dev loads no SigLIP 2: the machine has no room for its
+  # 4.5 GB (2026-11-17), so no photo vectors.
   embed:
     image: false
   carrier: fake
   logLevel: debug
   pnvTestNumbers: "true"
   emailSender: log
+serverAi: { memoryRequest: 2Gi, memoryLimit: 3Gi }
 litellm:
   keys:
     server-llm: { dailyUnits: 200000, tpmLimit: 20000 }
-    server-stt: { dailyUnits: 3600, rpmLimit: 10 }
     # About 5,500 tokens a read (8 frames at 768 px, the subcategories, the
     # transcript): 200 reads a day, 10 a minute.
     server-assist: { dailyUnits: 1200000, tpmLimit: 60000 }

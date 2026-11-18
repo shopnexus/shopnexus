@@ -1,15 +1,15 @@
 name: Release
 
 # A prod release of the whole system: the commits the umbrella's submodules
-# point at on main. For each of server, website, docs, console, agent and ai
+# point at on main. For each of server, website, docs, console and agent
 # it adds the tag X.Y.Z to the image CI built for that commit
 # (ghcr.io/shopnexus/<repo>:sha-<commit>), without a rebuild. Then it writes
 # the release into infra/ (values-prod.yaml, stack-prod's targetRevision
-# vX.Y.Z, ai-prod's ai commit and image tag), commits "release X.Y.Z" on
+# vX.Y.Z), commits "release X.Y.Z" on
 # main, tags that commit vX.Y.Z and pushes both; Argo CD deploys prod from
 # them. Rollback: revert the release commit on main.
 #
-# Each of the six GHCR packages must grant this repository write access
+# Each of the five GHCR packages must grant this repository write access
 # (package settings, Manage Actions access), so that GITHUB_TOKEN can tag it.
 on:
   workflow_dispatch:
@@ -62,7 +62,7 @@ jobs:
       - name: Find each submodule's image
         run: |
           : > images.txt
-          for repo in server website docs console agent ai; do
+          for repo in server website docs console agent; do
             commit=$(git rev-parse "HEAD:$repo")
             image="ghcr.io/shopnexus/$repo:sha-$commit"
             if ! docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
@@ -83,10 +83,8 @@ jobs:
       # then reads them back.
       - name: Write the release into infra
         run: |
-          ai=$(awk '$1 == "ai" { print $2 }' images.txt)
           sed -Ei "s/^(  (server|website|docs|console|agent): \{ repository: [^,]+, tag: )[^ ]+( \})$/\1$VERSION\3/" infra/stack/values-prod.yaml
           sed -Ei "s/^(    targetRevision: )v[0-9]+\.[0-9]+\.[0-9]+$/\1v$VERSION/" infra/argocd/stacks.yaml
-          sed -Ei "s/^(    targetRevision: )[0-9a-f]{40}$/\1$ai/; s/^(          models: \{ repository: ghcr.io\/shopnexus\/ai, tag: )[^ ]+( \})$/\1$VERSION\2/" infra/argocd/ai.yaml
           rm images.txt
           fail=0
           check() { [[ $2 == "$3" ]] || { echo "::error::$1 is $2, want $3"; fail=1; }; }
@@ -94,8 +92,6 @@ jobs:
             check "values-prod $repo" "$(yq ".images.$repo.tag" infra/stack/values-prod.yaml)" "$VERSION"
           done
           check "stack-prod targetRevision" "$(yq 'select(.metadata.name == "stack-prod") | .spec.source.targetRevision' infra/argocd/stacks.yaml)" "v$VERSION"
-          check "ai-prod targetRevision" "$(yq 'select(.metadata.name == "ai-prod") | .spec.source.targetRevision' infra/argocd/ai.yaml)" "$ai"
-          check "ai-prod models tag" "$(yq 'select(.metadata.name == "ai-prod") | .spec.source.helm.valuesObject.images.models.tag' infra/argocd/ai.yaml)" "$VERSION"
           (( fail == 0 ))
           git diff --stat
 

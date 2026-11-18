@@ -22,7 +22,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, agent, pgweb] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb] }
   ingress:
     - from:
         - podSelector: {}
@@ -101,6 +101,24 @@ spec:
             matchLabels: { app.kubernetes.io/name: agent }
       ports:
         - { protocol: TCP, port: 9090 }
+---
+# server-ai's Restate endpoint (9080) from the stack and its Restate; it
+# serves no API beyond its probes.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-server-ai
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: server-ai }
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
+      ports:
+        - { protocol: TCP, port: 9080 }
 ---
 # The agent takes requests from the server only.
 apiVersion: networking.k8s.io/v1

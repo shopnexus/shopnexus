@@ -69,7 +69,3 @@ spec:
         - { alias: docs, imageName: "ghcr.io/shopnexus/docs:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }
         - { alias: console, imageName: "ghcr.io/shopnexus/console:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.console.repository, tag: images.console.tag } } }
         - { alias: agent, imageName: "ghcr.io/shopnexus/agent:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.agent.repository, tag: images.agent.tag } } }
-    # ai-models, in the Applications of argocd/ai.yaml.
-    - namePattern: ai-dev
-      images:
-        - { alias: models, imageName: "ghcr.io/shopnexus/ai:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.models.repository, tag: images.models.tag } } }

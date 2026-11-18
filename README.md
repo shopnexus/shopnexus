@@ -7,7 +7,6 @@ Umbrella repository for ShopNexus. Each component lives in its own git submodule
 | Path      | Repository              | Description                            |
 | --------- | ----------------------- | -------------------------------------- |
 | `agent`   | `shopnexus/agent`       | Console agent (NestJS)                 |
-| `ai`      | `shopnexus/ai`          | Self-hosted models behind OpenAI's API |
 | `app`     | `shopnexus/app-android` | Android app (Kotlin)                   |
 | `brand`   | `shopnexus/brand`       | Mascot art and icons for app and website |
 | `console` | `shopnexus/console`     | Moderation console (React)             |
@@ -88,19 +87,18 @@ is empty in dev, because only `bun run build` makes the Pagefind index.
 and RustFS on tmpfs. `run` exits with the tests' status and leaves the three
 running for the next run; `make down` empties them.
 
-The server in `dev` and `prod` needs an OpenAI-compatible API for search:
-`LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `server/.env`, the file
-`make run` in `server/` also reads. Compose takes those three, the three
-`ASSIST_LLM_`, the three `TRUST_LLM_`, the three `AGENT_LLM_` lines and the
-text embedding settings (`EMBED_TEXT_BASE_URL`, `EMBED_TEXT_MODEL`,
-`EMBED_INDEX_API_KEY`, `EMBED_SEARCH_API_KEY`; OpenRouter's `baai/bge-m3`,
-or an empty model for none) from it and nothing else (`--env-file
-server/.env` in the root `Makefile`). The
-`AGENT_LLM_` lines are not in `server/.env.example`; add them by hand. The console agent calls
-the API in `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY` and `AGENT_LLM_MODEL`
-under that model name; in the cluster it calls `ai-gateway`'s alias
-`console-agent`. It has no host: only the server calls it, and its database
-is `agent` in the stack's Postgres. The first start of a
+In `dev` and `prod` the server and the console agent call the remote models
+through the stack's LiteLLM (`litellm`), as in the cluster, with the config
+in `infra/stack/litellm/` and one key per purpose that the stack generates.
+LiteLLM reads its two upstream keys from
+`infra/stack/secrets/compose.env`, which you create:
+`LLM_UPSTREAM_API_KEY` for the OpenAI-compatible API at
+`LLM_UPSTREAM_BASE_URL` (`infra/stack/env/litellm.env`) and
+`OPENROUTER_API_KEY` for `embed-text`. Speech, photo vectors and video
+frames run in the server itself (module `ai`), with about 4.5 GB of model
+files that `fetch-models-*` downloads into the stack's `models` volume on
+the first start. The console agent has no host: only the server calls it,
+and its database is `agent` in the stack's Postgres. The first start of a
 stack writes the server's keys into its volume, and
 `docker compose --profile <stack> down -v` deletes the stack's data and keys.
 
@@ -131,14 +129,12 @@ To run your own copy:
 
 1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
    `infra/argocd/stacks.yaml`. In `infra/stack/values-dev.yaml` and
-   `infra/stack/values-prod.yaml`, set `domain`. Each stack's `ai-gateway`
-   (the LiteLLM of the `ai` repo, deployed by `infra/argocd/ai.yaml`) sends
-   every model call to the model its alias names in the `ai` repo's
-   `chart/values.yaml`, mostly on OpenRouter, with a daily budget per key
-   and stack in `infra/argocd/ai.yaml`.
+   `infra/stack/values-prod.yaml`, set `domain`. Each stack's LiteLLM
+   sends every model call to the model its alias names in
+   `infra/stack/litellm/config.yaml`, with a daily budget per key in the
+   stack's values file.
    If your images are not `ghcr.io/shopnexus/*`, change the names in
-   `infra/stack/values.yaml`, `infra/argocd/stacks.yaml` and the `ai`
-   chart. The cluster
+   `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
    pulls them without credentials, so the GHCR packages must be public.
 2. Point DNS at the machine: `<domain>`, `*.<domain>`, `*.dev.<domain>` and
    `dev.<domain>`. The last one is needed because a `*` record does not

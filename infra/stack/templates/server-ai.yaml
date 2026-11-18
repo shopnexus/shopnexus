@@ -1,0 +1,81 @@
+{{- /* server-ai: the server image with SERVER_ROLE=ai, so module ai (speech,
+       photo vectors, video frames) runs here and nowhere else in the
+       cluster. It binds only Restate service ai; the server's other pods
+       (SERVER_ROLE=api) call it through Restate. Its models are on the PVC
+       models, which the initContainer fills with /fetch-models.sh; a file
+       already there with the right checksum is kept. */ -}}
+{{- $restate := include "sn.restate" . }}
+{{- $a := .Values.serverAi }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: {{ required "serverAi.modelsStorage is required" $a.modelsStorage }} }
+---
+apiVersion: restate.dev/v1beta1
+kind: RestateDeployment
+metadata:
+  name: server-ai
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  restate:
+    register:
+      cluster: {{ $restate }}
+    useHttp11: true
+  selector:
+    matchLabels: { app.kubernetes.io/name: server-ai }
+  template:
+    metadata:
+      labels:
+        {{- include "sn.podLabels" (dict "root" . "name" "server-ai") | nindent 8 }}
+        {{- include "sn.restateAllow" . | nindent 8 }}
+      annotations:
+        checksum/env: {{ include "sn.serverEnvData" . | sha256sum | trunc 16 }}
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+    spec:
+      # The image's user, 65532, writes the models into the PVC.
+      securityContext: { fsGroup: 65532 }
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      initContainers:
+        - name: fetch-models
+          image: {{ include "sn.image" .Values.images.server }}
+          command: [/fetch-models.sh, /models]
+          env:
+            - { name: FETCH_EMBED, value: {{ ternary "1" "0" .Values.server.embed.image | quote }} }
+          volumeMounts:
+            - { name: models, mountPath: /models }
+      containers:
+        - name: server
+          image: {{ include "sn.image" .Values.images.server }}
+          {{- include "sn.serverEnv" . | nindent 10 }}
+            - { name: SERVER_ROLE, value: ai }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: restate, containerPort: 9080 }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          # Loading the models takes a while; startupSeconds bounds it.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: {{ div (int $a.startupSeconds) 5 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - { name: models, mountPath: /models, readOnly: true }
+          resources:
+            requests: { cpu: 500m, memory: {{ required "serverAi.memoryRequest is required" $a.memoryRequest }} }
+            limits: { memory: {{ required "serverAi.memoryLimit is required" $a.memoryLimit }} }
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: models }

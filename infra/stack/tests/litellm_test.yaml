@@ -61,9 +61,6 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: LIMITS_SERVER_LLM, value: '"max_budget":2,"tpm_limit":100000' }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: LIMITS_SERVER_STT, value: '"max_budget":0.036,"rpm_limit":60' }
   - it: makes the console agent's key from agent-secrets with 20 USD a day
     documentIndex: 4
     asserts:
