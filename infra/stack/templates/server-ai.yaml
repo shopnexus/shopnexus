@@ -11,7 +11,10 @@ kind: PersistentVolumeClaim
 metadata:
   name: models
   labels: {{- include "sn.labels" . | nindent 4 }}
-  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+  # local-path binds a claim only once a pod uses it (WaitForFirstConsumer),
+  # so the claim shares server-ai's wave: Argo CD waits on a wave's health
+  # before the next, and an earlier wave would wait for ever.
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
 spec:
   accessModes: [ReadWriteOnce]
   resources:

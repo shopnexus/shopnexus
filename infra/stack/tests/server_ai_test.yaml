@@ -26,6 +26,9 @@ tests:
     asserts:
       - equal: { path: spec.resources.requests.storage, value: 10Gi }
         documentIndex: 0
+      # local-path binds on first use, so the claim waits in server-ai's wave.
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+        documentIndex: 0
       - equal: { path: 'spec.template.spec.initContainers[0].command', value: [/fetch-models.sh, /models] }
         documentIndex: 1
       - contains:
