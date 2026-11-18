@@ -54,7 +54,10 @@ tests:
       - equal: { path: metadata.name, value: litellm-models }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
       - matchRegex: { path: 'data["search.json"]', pattern: '"model": "openai/claude-haiku-5-5",\n *"api_base": "os.environ/LLM_UPSTREAM_BASE_URL",\n *"api_key": "os.environ/LLM_UPSTREAM_API_KEY"' }
-      - matchRegex: { path: 'data["console-agent.json"]', pattern: '"input_cost_per_token": 0.000002,\n *"output_cost_per_token": 0.00001' }
+      # Prices in litellm_params: LiteLLM drops a stored deployment's
+      # model_info prices and prices its calls at 0.
+      - matchRegex: { path: 'data["console-agent.json"]', pattern: '"api_key": "os.environ/LLM_UPSTREAM_API_KEY",\n *"input_cost_per_token": 0.000002,\n *"output_cost_per_token": 0.00001\n *},' }
+      - matchRegex: { path: 'data["search.json"]', pattern: '"input_cost_per_token": 0.000001,\n *"output_cost_per_token": 0.000001\n *},' }
       - matchRegex: { path: 'data["embed-text.json"]', pattern: '"api_key": "os.environ/OPENROUTER_API_KEY"' }
       - exists: { path: 'data["listing-read.json"]' }
       - exists: { path: 'data["scam-check.json"]' }

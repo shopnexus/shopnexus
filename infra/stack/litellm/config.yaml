@@ -10,7 +10,8 @@
 #
 # LiteLLM serves the remote models only; speech, photo vectors and video
 # frames are the server's module ai. A key's budget counts the cost in
-# models/: 1e-6 a token, so 1 of budget is 1M tokens; console-agent costs
+# each file's litellm_params (LiteLLM drops prices in a stored deployment's
+# model_info): 1e-6 a token, so 1 of budget is 1M tokens; console-agent costs
 # Claude Sonnet 5.5's list price (2 and 10 USD per 1M tokens in and out), so
 # its key's budget is dollars. The chart refuses a key over aliases with
 # different costs. An api_key of os.environ/NAME is the key NAME in Secret

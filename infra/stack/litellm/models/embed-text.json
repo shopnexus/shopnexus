@@ -11,12 +11,12 @@
         ],
         "allow_fallbacks": false
       }
-    }
+    },
+    "input_cost_per_token": 0.000001,
+    "output_cost_per_token": 0.000001
   },
   "model_info": {
     "id": "seed-embed-text",
-    "mode": "embedding",
-    "input_cost_per_token": 0.000001,
-    "output_cost_per_token": 0.000001
+    "mode": "embedding"
   }
 }

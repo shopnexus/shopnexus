@@ -123,12 +123,18 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 
 {{/* Every alias of litellm/models/ with its cost, as a JSON object of
      name to cost. A key's budget counts in one unit only when every alias
-     it calls costs the same. */}}
+     it calls costs the same. The prices are in litellm_params: LiteLLM
+     drops the ones in model_info of a deployment it stores, and prices its
+     calls at 0. */}}
 {{- define "sn.litellmCosts" -}}
 {{- $out := dict }}
 {{- range $m := include "sn.litellmModels" . | fromJsonArray }}
-{{- $i := $m.model_info | default dict }}
-{{- $_ := set $out $m.model_name (printf "token %v/%v second %v" ($i.input_cost_per_token | default 0) ($i.output_cost_per_token | default 0) ($i.input_cost_per_second | default 0)) }}
+{{- $p := $m.litellm_params }}
+{{- range $k, $_ := $m.model_info | default dict }}
+{{- if contains "cost" $k }}{{ fail (printf "litellm/models/%s.json: %s is in model_info, where LiteLLM drops it; put it in litellm_params" $m.model_name $k) }}{{ end }}
+{{- end }}
+{{- if not (or $p.input_cost_per_token $p.input_cost_per_second) }}{{ fail (printf "litellm/models/%s.json: litellm_params has no input_cost_per_token or input_cost_per_second" $m.model_name) }}{{ end }}
+{{- $_ := set $out $m.model_name (printf "token %v/%v second %v" ($p.input_cost_per_token | default 0) ($p.output_cost_per_token | default 0) ($p.input_cost_per_second | default 0)) }}
 {{- end }}
 {{- toJson $out }}
 {{- end }}

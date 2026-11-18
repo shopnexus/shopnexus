@@ -6,8 +6,10 @@
 #                               variable, as sk- and 48 hex digits
 #   keys.sh models DIR          adds each alias of DIR (models/, one
 #                               /model/new body per <alias>.json) that
-#                               LiteLLM has no deployment of; an alias it
-#                               has, even one changed since, stays as it is
+#                               LiteLLM has no deployment of, and sets the
+#                               prices of the file on the deployment
+#                               seed-<alias> when it exists; any other
+#                               deployment of an alias stays as it is
 #   keys.sh sync keys.txt       makes every key exist in LiteLLM with
 #                               its budget: updates it when it exists,
 #                               creates it with the client's value when it
@@ -17,7 +19,8 @@
 # only; compose runs gen on its keys volume's .env, then models and sync.
 #
 # models reads LITELLM_URL and MASTER_KEY. Each seeded deployment has the id
-# seed-<alias>; LiteLLM refuses a second deployment with that id.
+# seed-<alias>; LiteLLM refuses a second deployment with that id. The prices
+# are the file's litellm_params *_cost_per_* lines, one per line.
 # sync reads LITELLM_URL, MASTER_KEY, each key's variable (column 3 of
 # keys.txt) and its limits, LIMITS_<KEY> with KEY the alias upper-cased and
 # - as _ (LIMITS_SERVER_LLM), or LIMITS_DEFAULT. A limits value is the JSON
@@ -52,6 +55,15 @@ models() {
 	[ "$code" = 200 ] || { echo "models: /model/info: HTTP $code"; exit 1; }
 	for file in "$1"/*.json; do
 		alias=$(basename "$file" .json)
+		if grep -Eq "\"id\": ?\"seed-$alias\"" /tmp/models; then
+			prices=$(grep -E '^ *"[a-z_]*cost_per_[a-z_]*": ' "$file" | tr -d ' \n' | sed 's/,$//')
+			body="{\"litellm_params\":{$prices}}"
+			code=$(curl -s -o /tmp/out -w '%{http_code}' -X PATCH "$LITELLM_URL/model/seed-$alias/update" \
+				-H "Authorization: Bearer $MASTER_KEY" -H 'Content-Type: application/json' -d "$body")
+			echo "model $alias: prices of seed-$alias, HTTP $code"
+			[ "$code" = 200 ] || { grep -o '"message":"[^"]*"' /tmp/out; exit 1; }
+			continue
+		fi
 		if grep -Eq "\"model_name\": ?\"$alias\"" /tmp/models; then
 			echo "model $alias: present"
 			continue
