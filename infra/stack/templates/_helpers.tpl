@@ -107,18 +107,26 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- toJson $out }}
 {{- end }}
 
-{{/* litellm/config.yaml parsed. */}}
-{{- define "sn.litellmConfig" -}}
-{{- .Files.Get "litellm/config.yaml" | fromYaml | toJson }}
+{{/* The aliases LiteLLM starts with, litellm/models/<alias>.json, as a JSON
+     list of /model/new bodies. A file's model_name is its file name. */}}
+{{- define "sn.litellmModels" -}}
+{{- $out := list }}
+{{- range $path, $_ := .Files.Glob "litellm/models/*.json" }}
+{{- $m := $.Files.Get $path | fromJson }}
+{{- $alias := base $path | trimSuffix ".json" }}
+{{- if ne (toString $m.model_name) $alias }}{{ fail (printf "%s: model_name is %v, want %s" $path $m.model_name $alias) }}{{ end }}
+{{- $out = append $out $m }}
+{{- end }}
+{{- if not $out }}{{ fail "litellm/models/ holds no aliases" }}{{ end }}
+{{- toJson $out }}
 {{- end }}
 
-{{/* Every alias of litellm/config.yaml with its cost, as a JSON object of
+{{/* Every alias of litellm/models/ with its cost, as a JSON object of
      name to cost. A key's budget counts in one unit only when every alias
      it calls costs the same. */}}
 {{- define "sn.litellmCosts" -}}
-{{- $cfg := include "sn.litellmConfig" . | fromJson }}
 {{- $out := dict }}
-{{- range $m := $cfg.model_list }}
+{{- range $m := include "sn.litellmModels" . | fromJsonArray }}
 {{- $i := $m.model_info | default dict }}
 {{- $_ := set $out $m.model_name (printf "token %v/%v second %v" ($i.input_cost_per_token | default 0) ($i.output_cost_per_token | default 0) ($i.input_cost_per_second | default 0)) }}
 {{- end }}
@@ -126,11 +134,10 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- end }}
 
 {{/* The secrets LiteLLM reads from the environment: each os.environ/NAME
-     api_key of litellm/config.yaml, sorted, once. */}}
+     api_key of litellm/models/, sorted, once. */}}
 {{- define "sn.litellmSecretEnv" -}}
-{{- $cfg := include "sn.litellmConfig" . | fromJson }}
 {{- $names := dict }}
-{{- range $m := $cfg.model_list }}
+{{- range $m := include "sn.litellmModels" . | fromJsonArray }}
 {{- $k := toString $m.litellm_params.api_key }}
 {{- if hasPrefix "os.environ/" $k }}{{ $_ := set $names (trimPrefix "os.environ/" $k) true }}{{ end }}
 {{- end }}

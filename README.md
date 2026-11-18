@@ -130,9 +130,9 @@ To run your own copy:
 1. Fork this repo. Set `repoURL` in `infra/argocd/root.yaml` and
    `infra/argocd/stacks.yaml`. In `infra/stack/values-dev.yaml` and
    `infra/stack/values-prod.yaml`, set `domain`. Each stack's LiteLLM
-   sends every model call to the model its alias names in
-   `infra/stack/litellm/config.yaml`, with a daily budget per key in the
-   stack's values file.
+   starts with the aliases in `infra/stack/litellm/models/` and keeps them
+   in its database; each key has a daily budget in the stack's values
+   file.
    If your images are not `ghcr.io/shopnexus/*`, change the names in
    `infra/stack/values.yaml` and `infra/argocd/stacks.yaml`. The cluster
    pulls them without credentials, so the GHCR packages must be public.

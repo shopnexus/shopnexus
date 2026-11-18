@@ -74,8 +74,8 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 
 # ── local compose ──
 # Every stack of the root docker-compose.yml runs the stack's data services
-# from the x-postgres, x-restate, x-rustfs and x-litellm blocks.
-for s in postgres restate rustfs litellm; do
+# from the x-postgres, x-restate, x-rustfs, x-litellm and x-redis blocks.
+for s in postgres restate rustfs litellm redis; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
 eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"

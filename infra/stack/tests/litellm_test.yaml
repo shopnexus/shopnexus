@@ -4,13 +4,14 @@ release: { namespace: shopnexus-prod }
 values: [../values-prod.yaml, values-test.yaml]
 tests:
   # The ConfigMap is litellm/config.yaml as is, the file compose mounts.
-  - it: holds litellm/config.yaml as LiteLLM's config
+  # The aliases are in LiteLLM's database, seeded from litellm/models/.
+  - it: holds litellm/config.yaml as LiteLLM's config, with the aliases in its database
     documentIndex: 0
     asserts:
       - equal: { path: metadata.name, value: litellm-config }
-      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: search\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: os.environ/LLM_UPSTREAM_BASE_URL\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
-      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: embed-text\\n    litellm_params:\\n      model: openai/baai/bge-m3\\n      api_base: https://openrouter.ai/api/v1\\n      api_key: os.environ/OPENROUTER_API_KEY" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "store_model_in_db: true\\n" }
       - matchRegex: { path: 'data["config.yaml"]', pattern: "store_prompts_in_spend_logs: false\\n" }
+      - notMatchRegex: { path: 'data["config.yaml"]', pattern: "model_list" }
   - it: runs the pinned LiteLLM with each upstream key once and its database, and rolls on a config change
     documentIndex: 1
     asserts:
@@ -47,12 +48,30 @@ tests:
       - equal: { path: metadata.name, value: litellm-keys }
       - matchRegex: { path: 'data["keys.txt"]', pattern: 'server-llm +server-secrets +LLM_API_KEY +search' }
       - matchRegex: { path: 'data["keys.sh"]', pattern: 'call update' }
-  - it: runs keys.sh sync after LiteLLM is up, with server-llm's key and 2M tokens a day at 100k a minute
+  - it: ships litellm/models/, the five aliases LiteLLM starts with, at their costs
     documentIndex: 4
+    asserts:
+      - equal: { path: metadata.name, value: litellm-models }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+      - matchRegex: { path: 'data["search.json"]', pattern: '"model": "openai/claude-haiku-5-5",\n *"api_base": "os.environ/LLM_UPSTREAM_BASE_URL",\n *"api_key": "os.environ/LLM_UPSTREAM_API_KEY"' }
+      - matchRegex: { path: 'data["console-agent.json"]', pattern: '"input_cost_per_token": 0.000002,\n *"output_cost_per_token": 0.00001' }
+      - matchRegex: { path: 'data["embed-text.json"]', pattern: '"api_key": "os.environ/OPENROUTER_API_KEY"' }
+      - exists: { path: 'data["listing-read.json"]' }
+      - exists: { path: 'data["scam-check.json"]' }
+  - it: adds the missing aliases, then runs keys.sh sync after LiteLLM is up, with server-llm's key and 2M tokens a day at 100k a minute
+    documentIndex: 5
     asserts:
       - equal: { path: metadata.name, value: litellm-keys }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "4" }
-      - equal: { path: 'spec.template.spec.containers[0].command', value: [sh, /etc/keys/keys.sh, sync, /etc/keys/keys.txt] }
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [sh, -ec, "sh /etc/keys/keys.sh models /etc/keys/models; exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
+      - contains:
+          path: spec.template.spec.volumes[0].projected.sources
+          content: { configMap: { name: litellm-keys } }
+      - contains:
+          path: spec.template.spec.volumes[0].projected.sources[1].configMap.items
+          content: { key: search.json, path: models/search.json }
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -62,7 +81,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content: { name: LIMITS_SERVER_LLM, value: '"max_budget":2,"tpm_limit":100000' }
   - it: makes the console agent's key from agent-secrets with 20 USD a day
-    documentIndex: 4
+    documentIndex: 5
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env

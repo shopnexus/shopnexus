@@ -44,13 +44,24 @@
 #
 # Every model call of the server and the console agent goes to the stack's
 # LiteLLM, as in the cluster: the same config
-# (infra/stack/litellm/config.yaml), the same aliases and the same keys, one
+# (infra/stack/litellm/config.yaml), the same starting aliases
+# (infra/stack/litellm/models/) and the same keys, one
 # per purpose (infra/stack/litellm/keys.txt). litellm-keys-* adds those keys
 # to the stack's keys volume and litellm-sync-* registers them with a
 # budget. LiteLLM reads the upstream keys, LLM_UPSTREAM_API_KEY and
 # OPENROUTER_API_KEY, from infra/stack/secrets/compose.env, and the rest of
 # its settings from infra/stack/env/litellm.env. Inside a stack litellm
 # answers by that name, as its Service does in the cluster.
+#
+# LiteLLM keeps its aliases in its database; litellm-sync-* adds the ones of
+# infra/stack/litellm/models/ it lacks before it registers the keys. The
+# server reaches LiteLLM's admin API at LITELLM_URL (server.env) with
+# LITELLM_MASTER_KEY, which the keys volume's .env holds for it as for
+# LiteLLM.
+#
+# The console agent's run bus is the stack's Redis (redis-dev, redis-prod),
+# which answers by the name redis inside its stack, as its Service does in
+# the cluster.
 #
 # Speech, photo vectors and video frames are the server's module ai, which
 # runs in the server container here (SERVER_ROLE unset, so all) with the
@@ -60,8 +71,8 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate and RustFS follow infra/stack/values.yaml;
-# infra/check.sh fails when they differ.
+# Image versions of Postgres, Restate, RustFS, LiteLLM and Redis follow
+# infra/stack/values.yaml; infra/check.sh fails when they differ.
 name: shopnexus
 
 # ── building blocks ──
@@ -113,6 +124,18 @@ x-restate: &restate
     retries: 30
   restart: unless-stopped
 
+# Redis for the console agent's runs, with the stack chart's image and
+# arguments (infra/stack/templates/redis.yaml).
+x-redis: &redis
+  image: redis:7.4.12-alpine
+  command: [redis-server, --appendonly, "yes", --maxmemory, 192mb, --maxmemory-policy, volatile-lru]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
+
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector in one
 # container. Locally Grafana needs no sign-in.
 x-lgtm: &lgtm
@@ -151,7 +174,7 @@ x-litellm: &litellm
 
 # infra/stack/litellm/keys.sh: litellm-keys-* adds LiteLLM's keys missing
 # from the keys volume's .env as the keys service's user, and litellm-sync-*
-# registers them. Each key gets 20 of budget a day (20 USD for the agent,
+# adds the aliases of models/ LiteLLM lacks and registers the keys. Each key gets 20 of budget a day (20 USD for the agent,
 # 20M tokens or requests for the others) and 600 requests a minute.
 x-litellm-keys: &litellm-keys
   image: curlimages/curl:8.23.0
@@ -160,7 +183,7 @@ x-litellm-keys: &litellm-keys
 
 x-litellm-sync: &litellm-sync
   <<: *litellm-keys
-  entrypoint: ["sh", "-ec", "export $$(grep -E '^[A-Z_]*KEY=' /keys/.env); MASTER_KEY=$$LITELLM_MASTER_KEY exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
+  entrypoint: ["sh", "-ec", "export $$(grep -E '^[A-Z_]*KEY=' /keys/.env); export MASTER_KEY=$$LITELLM_MASTER_KEY; sh /etc/keys/keys.sh models /etc/keys/models; exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
   environment:
     LITELLM_URL: http://litellm:4000
     LIMITS_DEFAULT: '"max_budget":20,"rpm_limit":600'
@@ -474,6 +497,11 @@ services:
     depends_on:
       litellm-dev: { condition: service_healthy }
 
+  redis-dev:
+    <<: [*dev, *redis]
+    networks: { dev: { aliases: [redis] } }
+    volumes: [redis-dev:/data]
+
   agent-db-dev:
     <<: [*dev, *agent-db]
     environment: { PGPASSWORD: shopnexus }
@@ -504,6 +532,7 @@ services:
     depends_on:
       agent-migrate-dev: { condition: service_completed_successfully }
       litellm-sync-dev: { condition: service_completed_successfully }
+      redis-dev: { condition: service_healthy }
     develop:
       watch:
         - { action: rebuild, path: ./agent/src }
@@ -640,6 +669,11 @@ services:
     depends_on:
       litellm-prod: { condition: service_healthy }
 
+  redis-prod:
+    <<: [*prod, *redis]
+    networks: { prod: { aliases: [redis] } }
+    volumes: [redis-prod:/data]
+
   agent-db-prod:
     <<: [*prod, *agent-db]
     environment: { PGPASSWORD: shopnexus }
@@ -667,6 +701,7 @@ services:
     depends_on:
       agent-migrate-prod: { condition: service_completed_successfully }
       litellm-sync-prod: { condition: service_completed_successfully }
+      redis-prod: { condition: service_healthy }
 
   proxy-prod:
     <<: *prod
@@ -827,11 +862,13 @@ volumes:
   models-dev:
   go-build-dev:
   lgtm-dev:
+  redis-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
   models-prod:
   lgtm-prod:
+  redis-prod:
   keys-test:
   go-build-test:

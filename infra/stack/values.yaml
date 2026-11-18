@@ -20,6 +20,7 @@ images:
   pgweb: { repository: sosedoff/pgweb, tag: 0.17.0 }
   litellm: { repository: ghcr.io/berriai/litellm-database, tag: v1.108.0 }
   curl: { repository: curlimages/curl, tag: 8.23.0 }
+  redis: { repository: redis, tag: 7.4.12-alpine }
 
 console:
   enabled: true
@@ -43,6 +44,12 @@ restate:
 rustfs:
   storage: 10Gi
 
+# Redis (templates/redis.yaml), the agent's run bus: a turn's events and its
+# control messages on Redis Streams. The runs themselves are in the agent's
+# database, so Redis holds an hour of streams at most.
+redis:
+  storage: 1Gi
+
 # Argo CD has one server per cluster, and one stack routes argocd.<domain>
 # to it behind the console's sign-in: prod's, or dev's on a cluster that
 # runs dev only (the Application sets the parameter).
@@ -62,9 +69,9 @@ agent:
   memoryRequest: 256Mi
   memoryLimit: 512Mi
 
-# LiteLLM (templates/litellm.yaml): its aliases and costs are in
-# litellm/config.yaml and its keys in litellm/keys.txt, files
-# docker-compose.yml reads too. Here is each key's budget: dailyUnits (1M
+# LiteLLM (templates/litellm.yaml): its config is litellm/config.yaml, the
+# aliases and costs it starts with are in litellm/models/ and its keys in
+# litellm/keys.txt, files docker-compose.yml reads too. Here is each key's budget: dailyUnits (1M
 # units is 1 of LiteLLM budget) and tpmLimit or rpmLimit, set per stack.
 litellm:
   keys:
