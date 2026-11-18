@@ -41,9 +41,11 @@ spec:
       ingress:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
           podSelector: { matchLabels: { app.kubernetes.io/name: server } }
+      # server-ai checks the admin port's health to be ready.
       admin:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
-          podSelector: { matchLabels: { app.kubernetes.io/name: server } }
+          podSelector:
+            matchExpressions: [{ key: app.kubernetes.io/name, operator: In, values: [server, server-ai] }]
         # Traefik serves the admin UI at restate.<domain>, behind the gate.
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { app.kubernetes.io/name: traefik } }

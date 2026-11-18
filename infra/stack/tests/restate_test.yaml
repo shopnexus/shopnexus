@@ -40,7 +40,7 @@ tests:
           pattern: default-replication = 1
   # restate-operator admits ingress and admin traffic only from networkPeers,
   # and lets Restate pods reach pods labelled allow.restate.dev/<cluster>.
-  - it: admits the server to Restate's ingress and admin ports
+  - it: admits the server to Restate's ingress and admin ports, and server-ai to admin
     template: restate.yaml
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -51,6 +51,9 @@ tests:
       - equal:
           path: spec.security.networkPeers.admin[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
           value: shopnexus-prod
+      - equal:
+          path: spec.security.networkPeers.admin[0].podSelector.matchExpressions[0].values
+          value: [server, server-ai]
   - it: lets Restate reach RustFS
     template: rustfs.yaml
     documentIndex: 0
