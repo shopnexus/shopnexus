@@ -41,23 +41,14 @@ DOCS_ORIGINS: {{ printf "https://%s,%s" (include "sn.host" (dict "root" . "sub" 
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
-LLM_BASE_URL: http://ai-gateway:4000/v1
-LLM_MODEL: search
-AI_FRAMES_BASE_URL: http://ai-models:8000/v1
-STT_BASE_URL: http://ai-gateway:4000/v1
-STT_MODEL: stt
-ASSIST_LLM_BASE_URL: http://ai-gateway:4000/v1
-ASSIST_LLM_MODEL: listing-read
-TRUST_LLM_BASE_URL: http://ai-gateway:4000/v1
-TRUST_LLM_MODEL: scam-check
 {{- /* The console agent, in-cluster only; its two tokens are in server-secrets. */}}
 AGENT_BASE_URL: http://agent:3000
 CARRIER: {{ required "server.carrier is required: fake or none, in the stack's values file" .Values.server.carrier | quote }}
 {{- /* A kind turned off gets an empty model, and the server writes and
        reads no vectors of it. */}}
 {{- $e := .Values.server.embed }}
-EMBED_TEXT_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.text | quote }}
-EMBED_IMAGE_BASE_URL: {{ ternary "http://ai-gateway:4000/v1" "" $e.image | quote }}
+EMBED_TEXT_BASE_URL: {{ ternary "http://litellm:4000/v1" "" $e.text | quote }}
+EMBED_IMAGE_BASE_URL: {{ ternary "http://litellm:4000/v1" "" $e.image | quote }}
 EMBED_TEXT_MODEL: {{ ternary "embed-text" "" $e.text | quote }}
 EMBED_IMAGE_MODEL: {{ ternary "embed-image" "" $e.image | quote }}
 PNV_TEST_NUMBERS: {{ .Values.server.pnvTestNumbers | quote }}

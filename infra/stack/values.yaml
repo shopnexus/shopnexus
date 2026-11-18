@@ -18,6 +18,8 @@ images:
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
   lgtm: { repository: grafana/otel-lgtm, tag: 0.37.0 }
   pgweb: { repository: sosedoff/pgweb, tag: 0.17.0 }
+  litellm: { repository: ghcr.io/berriai/litellm-database, tag: v1.108.0 }
+  curl: { repository: curlimages/curl, tag: 8.23.0 }
 
 console:
   enabled: true
@@ -60,11 +62,21 @@ agent:
   memoryRequest: 256Mi
   memoryLimit: 512Mi
 
+# LiteLLM (templates/litellm.yaml): its aliases and costs are in
+# litellm/config.yaml and its keys in litellm/keys.txt, files
+# docker-compose.yml reads too. Here is each key's budget: dailyUnits (1M
+# units is 1 of LiteLLM budget) and tpmLimit or rpmLimit, set per stack.
+litellm:
+  keys:
+    # The console agent's key: 20 USD a day in every stack; the stack sets
+    # tpmLimit.
+    agent: { dailyUnits: 20000000 }
+
 # The server's settings that differ between stacks; the ones every stack
 # shares are in env/server.env, which docker-compose.yml reads too.
 server:
-  # text and image turn each kind of vector on, through ai-gateway's aliases
-  # embed-text and embed-image (repo shopnexus/ai); a stack whose ai-models
+  # text and image turn each kind of vector on, through LiteLLM's aliases
+  # embed-text and embed-image; a stack whose ai-models
   # loads no SigLIP 2 sets image false.
   embed:
     text: true

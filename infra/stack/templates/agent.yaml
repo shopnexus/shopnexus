@@ -8,8 +8,6 @@
 {{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
 - { name: {{ $k }}, value: {{ $v | quote }} }
 {{- end }}
-- { name: AGENT_MODEL_ID, value: console-agent }
-- { name: LITELLM_BASE_URL, value: http://ai-gateway:4000/v1 }
 - name: LITELLM_API_KEY
   valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } }
 - name: AGENT_SERVICE_TOKEN

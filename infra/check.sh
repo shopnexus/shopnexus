@@ -97,8 +97,8 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 
 # ── local compose ──
 # Every stack of the root docker-compose.yml runs the stack's data services
-# from the x-postgres, x-restate and x-rustfs blocks.
-for s in postgres restate rustfs; do
+# from the x-postgres, x-restate, x-rustfs and x-litellm blocks.
+for s in postgres restate rustfs litellm; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
 eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
@@ -107,7 +107,7 @@ eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier'
 # there is written nowhere else.
 # The chart fails its render on a key in both; compose would let its own
 # block win, so this catches it.
-for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env "$ai_chart/env/models.env:x-ai-models"; do
+for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env stack/env/litellm.env:x-litellm "$ai_chart/env/models.env:x-ai-models"; do
   for k in $(grep -oE '^[A-Z0-9_]+' "${f%%:*}"); do
     # yq warns about compose's merge anchors on stderr; the keys read are literal.
     for block in $(yq 'keys | .[] | select(test("^'"${f#*:}"'"))' ../docker-compose.yml 2>/dev/null); do

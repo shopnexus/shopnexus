@@ -1,0 +1,90 @@
+suite: litellm
+templates: [litellm.yaml]
+release: { namespace: shopnexus-prod }
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  # The ConfigMap is litellm/config.yaml as is, the file compose mounts.
+  - it: holds litellm/config.yaml as LiteLLM's config
+    documentIndex: 0
+    asserts:
+      - equal: { path: metadata.name, value: litellm-config }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: search\\n    litellm_params:\\n      model: openai/claude-haiku-5-5\\n      api_base: os.environ/LLM_UPSTREAM_BASE_URL\\n      api_key: os.environ/LLM_UPSTREAM_API_KEY" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "model_name: embed-text\\n    litellm_params:\\n      model: openai/baai/bge-m3\\n      api_base: https://openrouter.ai/api/v1\\n      api_key: os.environ/OPENROUTER_API_KEY" }
+      - matchRegex: { path: 'data["config.yaml"]', pattern: "store_prompts_in_spend_logs: false\\n" }
+  - it: runs the pinned LiteLLM with each upstream key once and its database, and rolls on a config change
+    documentIndex: 1
+    asserts:
+      - isKind: { of: Deployment }
+      - equal: { path: metadata.name, value: litellm }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "ghcr.io/berriai/litellm-database:v1.108.0" }
+      - exists: { path: 'spec.template.metadata.annotations["checksum/config"]' }
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 8 }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LLM_UPSTREAM_BASE_URL, value: "http://khoakomlem-internal.ddns.net:8317/v1" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LLM_UPSTREAM_API_KEY
+            valueFrom: { secretKeyRef: { name: litellm-secrets, key: LLM_UPSTREAM_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPENROUTER_API_KEY
+            valueFrom: { secretKeyRef: { name: litellm-secrets, key: OPENROUTER_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: DATABASE_URL, value: "postgresql://litellm:$(DB_PASSWORD)@postgres-rw:5432/litellm" }
+  - it: serves on litellm:4000
+    documentIndex: 2
+    asserts:
+      - equal: { path: metadata.name, value: litellm }
+      - equal: { path: 'spec.ports[0].port', value: 4000 }
+  - it: ships litellm/keys.sh and litellm/keys.txt, the files compose runs too
+    documentIndex: 3
+    asserts:
+      - equal: { path: metadata.name, value: litellm-keys }
+      - matchRegex: { path: 'data["keys.txt"]', pattern: 'server-llm +server-secrets +LLM_API_KEY +search' }
+      - matchRegex: { path: 'data["keys.sh"]', pattern: 'call update' }
+  - it: runs keys.sh sync after LiteLLM is up, with server-llm's key and 2M tokens a day at 100k a minute
+    documentIndex: 4
+    asserts:
+      - equal: { path: metadata.name, value: litellm-keys }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "4" }
+      - equal: { path: 'spec.template.spec.containers[0].command', value: [sh, /etc/keys/keys.sh, sync, /etc/keys/keys.txt] }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LLM_API_KEY
+            valueFrom: { secretKeyRef: { name: server-secrets, key: LLM_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LIMITS_SERVER_LLM, value: '"max_budget":2,"tpm_limit":100000' }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LIMITS_SERVER_STT, value: '"max_budget":0.036,"rpm_limit":60' }
+  - it: makes the console agent's key from agent-secrets with 20 USD a day
+    documentIndex: 4
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_LLM_API_KEY
+            valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LIMITS_AGENT, value: '"max_budget":20,"tpm_limit":200000' }
+  - it: refuses a budget for a key keys.txt does not have
+    set:
+      litellm.keys.loose: { dailyUnits: 1000, rpmLimit: 1 }
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.loose is not a key of litellm/keys.txt" }
+  - it: refuses a key of keys.txt without a budget
+    set: { litellm.keys.server-trust: null }
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.server-trust is required" }
+  - it: refuses a key with neither tpmLimit nor rpmLimit
+    set: { litellm.keys.server-llm.tpmLimit: null }
+    asserts:
+      - failedTemplate: { errorPattern: "litellm.keys.server-llm needs tpmLimit or rpmLimit" }

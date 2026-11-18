@@ -128,8 +128,10 @@ func seal(stack string, o opts, out io.Writer) error {
 			return fmt.Errorf("%s: envgen in %s wrote no %s; pull a newer server image", envFile, o.image, k)
 		}
 	}
-	if env.get("OPENROUTER_API_KEY") == "" {
-		return fmt.Errorf("%s: set OPENROUTER_API_KEY", envFile)
+	for _, k := range []string{"OPENROUTER_API_KEY", "LLM_UPSTREAM_API_KEY"} {
+		if env.get(k) == "" {
+			return fmt.Errorf("%s: set %s", envFile, k)
+		}
 	}
 	if env.get("LITELLM_UI_USERNAME") == "" {
 		return fmt.Errorf("%s: set LITELLM_UI_USERNAME", envFile)
@@ -159,7 +161,7 @@ func seal(stack string, o opts, out io.Writer) error {
 			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),
 			"AWS_SECRET_ACCESS_KEY": env.get("OBJECT_STORE_SECRET_KEY"),
 		}},
-		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD")},
+		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY", "LLM_UPSTREAM_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD")},
 		// CNPG reads a managed role's password from a basic-auth Secret.
 		{name: "litellm-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
 			"username": "litellm",

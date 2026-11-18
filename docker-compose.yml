@@ -23,6 +23,7 @@
 #   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
 #   ai-models  http://127.0.0.1:56491                     http://127.0.0.1:56490
+#   litellm    (no host: only the server and the agent call it)
 #
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
@@ -42,17 +43,15 @@
 # The tests container shares Restate's network namespace, so Restate reaches
 # the endpoints the tests serve on 127.0.0.1.
 #
-# The server needs an OpenAI-compatible API for search, video reads and scam
-# checks in dev and prod: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-# ASSIST_LLM_BASE_URL, ASSIST_LLM_API_KEY, ASSIST_LLM_MODEL and
-# TRUST_LLM_BASE_URL, TRUST_LLM_API_KEY, TRUST_LLM_MODEL, read from
-# server/.env (the Makefile passes --env-file server/.env). The console agent
-# reads AGENT_LLM_BASE_URL, AGENT_LLM_API_KEY and AGENT_LLM_MODEL from the
-# same file. For text embeddings the server reads EMBED_TEXT_BASE_URL,
-# EMBED_TEXT_MODEL, EMBED_INDEX_API_KEY and EMBED_SEARCH_API_KEY from it too
-# (OpenRouter's baai/bge-m3; an empty model turns text vectors off). It
-# calls the stack's ai-models directly for photo vectors, speech and frames.
-# In the cluster every model sits behind ai-gateway (submodule ai).
+# Every model call of the server and the console agent goes to the stack's
+# LiteLLM, as in the cluster: the same config
+# (infra/stack/litellm/config.yaml), the same aliases and the same keys, one
+# per purpose (infra/stack/litellm/keys.txt). litellm-keys-* adds those keys
+# to the stack's keys volume and litellm-sync-* registers them with a
+# budget. LiteLLM reads the upstream keys, LLM_UPSTREAM_API_KEY and
+# OPENROUTER_API_KEY, from infra/stack/secrets/compose.env, and the rest of
+# its settings from infra/stack/env/litellm.env. Inside a stack litellm and
+# ai-models answer by those names, as Services do in the cluster.
 # The tests use a stub. The first start of a stack writes the server's keys
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
@@ -131,9 +130,8 @@ x-server-image: &server-image
   build: ./server
   env_file: [./infra/stack/env/server.env]
 
-# The models the AI hub hosts itself (submodule ai, ai-models). In the
-# cluster ai-gateway's aliases stt and embed-image call it. Locally the
-# server calls it directly, for photo vectors, speech and video frames.
+# The models the AI hub hosts itself (submodule ai, ai-models). LiteLLM's
+# aliases stt and embed-image call it, and the server its frames route.
 x-ai-models: &ai-models
   image: shopnexus-ai:local
   build: ./ai
@@ -142,6 +140,37 @@ x-ai-models: &ai-models
   environment:
     AI_EMBED_MODELS: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
   restart: unless-stopped
+
+# LiteLLM with the stack chart's config and image, its database litellm in
+# the stack's Postgres. It takes LITELLM_MASTER_KEY from the keys volume.
+x-litellm: &litellm
+  image: ghcr.io/berriai/litellm-database:v1.108.0
+  env_file:
+    - ./infra/stack/env/litellm.env
+    - { path: ./infra/stack/secrets/compose.env, required: false }
+  entrypoint: ["sh", "-ec", "export $$(grep -E '^LITELLM_MASTER_KEY=' /keys/.env); exec litellm --config /etc/litellm/config.yaml --port 4000"]
+  healthcheck:
+    test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness')"]
+    interval: 5s
+    timeout: 5s
+    retries: 60
+  restart: unless-stopped
+
+# infra/stack/litellm/keys.sh: litellm-keys-* adds LiteLLM's keys missing
+# from the keys volume's .env as the keys service's user, and litellm-sync-*
+# registers them. Each key gets 20 of budget a day (20 USD for the agent,
+# 20M tokens or requests for the others) and 600 requests a minute.
+x-litellm-keys: &litellm-keys
+  image: curlimages/curl:8.23.0
+  user: "65532:65532"
+  restart: "no"
+
+x-litellm-sync: &litellm-sync
+  <<: *litellm-keys
+  entrypoint: ["sh", "-ec", "export $$(grep -E '^[A-Z_]*KEY=' /keys/.env); MASTER_KEY=$$LITELLM_MASTER_KEY exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
+  environment:
+    LITELLM_URL: http://litellm:4000
+    LIMITS_DEFAULT: '"max_budget":20,"rpm_limit":600'
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
 # key) in the stack's keys volume, as make run does in server/.env. Keys
@@ -166,26 +195,13 @@ x-server-env: &server-env
   DASHBOARD_HOSTS: ""
   OBJECT_STORE_ACCESS_KEY: shopnexus
   OBJECT_STORE_SECRET_KEY: shopnexus-secret
-  LLM_BASE_URL: ${LLM_BASE_URL:-}
-  LLM_API_KEY: ${LLM_API_KEY:-}
-  LLM_MODEL: ${LLM_MODEL:-}
-  EMBED_TEXT_BASE_URL: ${EMBED_TEXT_BASE_URL:-}
-  EMBED_TEXT_MODEL: ${EMBED_TEXT_MODEL:-}
-  EMBED_IMAGE_MODEL: siglip2-so400m-patch16-384
-  # OpenRouter's key for text; ai-models takes none and ignores it.
-  EMBED_INDEX_API_KEY: ${EMBED_INDEX_API_KEY:-}
-  EMBED_SEARCH_API_KEY: ${EMBED_SEARCH_API_KEY:-}
-  # Video reads (module assist). Locally the server calls ai for speech with
-  # its model name and no key, and the LLM in server/.env for the fill.
-  STT_API_KEY: ""
-  STT_MODEL: gipformer-1.5
-  ASSIST_LLM_BASE_URL: ${ASSIST_LLM_BASE_URL:-}
-  ASSIST_LLM_API_KEY: ${ASSIST_LLM_API_KEY:-}
-  ASSIST_LLM_MODEL: ${ASSIST_LLM_MODEL:-}
-  # Scam checks (module trust): the LLM in server/.env.
-  TRUST_LLM_BASE_URL: ${TRUST_LLM_BASE_URL:-}
-  TRUST_LLM_API_KEY: ${TRUST_LLM_API_KEY:-}
-  TRUST_LLM_MODEL: ${TRUST_LLM_MODEL:-}
+  # Both kinds of vector on, through LiteLLM, as the cluster's
+  # server.embed turns them on. The other AI settings are in server.env and
+  # the keys in the keys volume's .env.
+  EMBED_TEXT_BASE_URL: http://litellm:4000/v1
+  EMBED_TEXT_MODEL: embed-text
+  EMBED_IMAGE_BASE_URL: http://litellm:4000/v1
+  EMBED_IMAGE_MODEL: embed-image
   # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
   # dev cluster stack runs them. With them the server serves the dev
   # endpoint that moves their shipments. The token key comes from the keys
@@ -210,9 +226,6 @@ x-server-env-dev: &server-env-dev
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
-  EMBED_IMAGE_BASE_URL: http://ai-models-dev:8000/v1
-  AI_FRAMES_BASE_URL: http://ai-models-dev:8000/v1
-  STT_BASE_URL: http://ai-models-dev:8000/v1
   AGENT_BASE_URL: http://agent-dev:3000
 
 x-server-env-prod: &server-env-prod
@@ -227,18 +240,13 @@ x-server-env-prod: &server-env-prod
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
-  EMBED_IMAGE_BASE_URL: http://ai-models-prod:8000/v1
-  AI_FRAMES_BASE_URL: http://ai-models-prod:8000/v1
-  STT_BASE_URL: http://ai-models-prod:8000/v1
   AGENT_BASE_URL: http://agent-prod:3000
 
 # The console agent (submodule agent). Its database is `agent` in the
 # stack's Postgres: agent-db-* creates it, agent-migrate-* runs
 # `prisma migrate deploy` on it, and the agent then starts. The agent takes
-# AGENT_SERVICE_TOKEN and AGENT_MCP_TOKEN, and nothing else, from the .env
-# the keys service wrote. There is no LiteLLM locally, so the agent calls the
-# OpenAI-compatible API in server/.env: AGENT_LLM_BASE_URL, AGENT_LLM_API_KEY
-# and AGENT_LLM_MODEL; in the cluster it calls LiteLLM's alias console-agent.
+# AGENT_SERVICE_TOKEN, AGENT_MCP_TOKEN and its LiteLLM key
+# AGENT_LLM_API_KEY, and nothing else, from the .env in the keys volume.
 x-agent-image: &agent-image
   image: shopnexus-agent:local
   build: ./agent
@@ -246,9 +254,6 @@ x-agent-image: &agent-image
   env_file: [./infra/stack/env/agent.env]
 
 x-agent-env: &agent-env
-  AGENT_MODEL_ID: ${AGENT_LLM_MODEL:-}
-  LITELLM_BASE_URL: ${AGENT_LLM_BASE_URL:-}
-  LITELLM_API_KEY: ${AGENT_LLM_API_KEY:-}
   POSTGRES_USER: shopnexus
   POSTGRES_PASSWORD: shopnexus
 
@@ -271,10 +276,10 @@ x-agent-db: &agent-db
   entrypoint: ["sh", "-ec"]
   restart: "no"
 
-# Exports the two tokens from the keys volume, then starts the agent; a
-# .env without them stops the start.
+# Exports the two tokens and the LiteLLM key (as LITELLM_API_KEY) from the
+# keys volume, then starts the agent; a .env without them stops the start.
 x-agent-run: &agent-run
-  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); export $$tokens; exec node dist/main.js"]
+  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); key=$$(sed -n 's/^AGENT_LLM_API_KEY=/LITELLM_API_KEY=/p' /keys/.env); export $$tokens $$key; exec node dist/main.js"]
   restart: unless-stopped
 
 # A web app's dev image: its dependencies, then its source. DIR is the app's
@@ -333,7 +338,7 @@ services:
     environment: *server-env-dev
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
-      keys-dev: { condition: service_completed_successfully }
+      litellm-keys-dev: { condition: service_completed_successfully }
       postgres-dev: { condition: service_healthy }
     develop:
       watch:
@@ -346,7 +351,7 @@ services:
     environment: *server-env-dev
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
-      keys-dev: { condition: service_completed_successfully }
+      litellm-keys-dev: { condition: service_completed_successfully }
       rustfs-dev: { condition: service_healthy }
 
   # go run on the source. The image holds the modules; .dockerignore keeps the
@@ -371,6 +376,7 @@ services:
       migrate-dev: { condition: service_completed_successfully }
       objectstore-init-dev: { condition: service_completed_successfully }
       restate-dev: { condition: service_healthy }
+      litellm-sync-dev: { condition: service_completed_successfully }
     restart: unless-stopped
     develop:
       watch:
@@ -433,7 +439,42 @@ services:
 
   ai-models-dev:
     <<: [*dev, *ai-models]
+    networks: { dev: { aliases: [ai-models] } }
     ports: ["127.0.0.1:56491:8000"]
+
+  litellm-keys-dev:
+    <<: [*dev, *litellm-keys]
+    command: ["sh", "/etc/keys/keys.sh", "gen", "/etc/keys/keys.txt", "/keys/.env"]
+    volumes: [keys-dev:/keys, ./infra/stack/litellm:/etc/keys:ro]
+    depends_on:
+      keys-dev: { condition: service_completed_successfully }
+
+  litellm-db-dev:
+    <<: [*dev, *agent-db]
+    environment: { PGPASSWORD: shopnexus }
+    command:
+      - |
+        psql -h postgres-dev -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE DATABASE litellm' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm') \gexec
+        SQL
+    depends_on:
+      postgres-dev: { condition: service_healthy }
+
+  litellm-dev:
+    <<: [*dev, *litellm]
+    networks: { dev: { aliases: [litellm] } }
+    environment:
+      DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-dev:5432/litellm
+    volumes: [keys-dev:/keys:ro, ./infra/stack/litellm/config.yaml:/etc/litellm/config.yaml:ro]
+    depends_on:
+      litellm-keys-dev: { condition: service_completed_successfully }
+      litellm-db-dev: { condition: service_completed_successfully }
+
+  litellm-sync-dev:
+    <<: [*dev, *litellm-sync]
+    volumes: [keys-dev:/keys:ro, ./infra/stack/litellm:/etc/keys:ro]
+    depends_on:
+      litellm-dev: { condition: service_healthy }
 
   agent-db-dev:
     <<: [*dev, *agent-db]
@@ -463,8 +504,8 @@ services:
     environment: *agent-env-dev
     volumes: [keys-dev:/keys:ro]
     depends_on:
-      keys-dev: { condition: service_completed_successfully }
       agent-migrate-dev: { condition: service_completed_successfully }
+      litellm-sync-dev: { condition: service_completed_successfully }
     develop:
       watch:
         - { action: rebuild, path: ./agent/src }
@@ -511,7 +552,7 @@ services:
     environment: *server-env-prod
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      keys-prod: { condition: service_completed_successfully }
+      litellm-keys-prod: { condition: service_completed_successfully }
       postgres-prod: { condition: service_healthy }
 
   objectstore-init-prod:
@@ -521,7 +562,7 @@ services:
     environment: *server-env-prod
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      keys-prod: { condition: service_completed_successfully }
+      litellm-keys-prod: { condition: service_completed_successfully }
       rustfs-prod: { condition: service_healthy }
 
   server-prod:
@@ -533,6 +574,7 @@ services:
       migrate-prod: { condition: service_completed_successfully }
       objectstore-init-prod: { condition: service_completed_successfully }
       restate-prod: { condition: service_healthy }
+      litellm-sync-prod: { condition: service_completed_successfully }
     restart: unless-stopped
 
   website-prod:
@@ -560,7 +602,42 @@ services:
 
   ai-models-prod:
     <<: [*prod, *ai-models]
+    networks: { prod: { aliases: [ai-models] } }
     ports: ["127.0.0.1:56490:8000"]
+
+  litellm-keys-prod:
+    <<: [*prod, *litellm-keys]
+    command: ["sh", "/etc/keys/keys.sh", "gen", "/etc/keys/keys.txt", "/keys/.env"]
+    volumes: [keys-prod:/keys, ./infra/stack/litellm:/etc/keys:ro]
+    depends_on:
+      keys-prod: { condition: service_completed_successfully }
+
+  litellm-db-prod:
+    <<: [*prod, *agent-db]
+    environment: { PGPASSWORD: shopnexus }
+    command:
+      - |
+        psql -h postgres-prod -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE DATABASE litellm' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm') \gexec
+        SQL
+    depends_on:
+      postgres-prod: { condition: service_healthy }
+
+  litellm-prod:
+    <<: [*prod, *litellm]
+    networks: { prod: { aliases: [litellm] } }
+    environment:
+      DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-prod:5432/litellm
+    volumes: [keys-prod:/keys:ro, ./infra/stack/litellm/config.yaml:/etc/litellm/config.yaml:ro]
+    depends_on:
+      litellm-keys-prod: { condition: service_completed_successfully }
+      litellm-db-prod: { condition: service_completed_successfully }
+
+  litellm-sync-prod:
+    <<: [*prod, *litellm-sync]
+    volumes: [keys-prod:/keys:ro, ./infra/stack/litellm:/etc/keys:ro]
+    depends_on:
+      litellm-prod: { condition: service_healthy }
 
   agent-db-prod:
     <<: [*prod, *agent-db]
@@ -587,8 +664,8 @@ services:
     environment: *agent-env-prod
     volumes: [keys-prod:/keys:ro]
     depends_on:
-      keys-prod: { condition: service_completed_successfully }
       agent-migrate-prod: { condition: service_completed_successfully }
+      litellm-sync-prod: { condition: service_completed_successfully }
 
   proxy-prod:
     <<: *prod

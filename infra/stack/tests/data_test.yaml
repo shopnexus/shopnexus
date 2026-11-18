@@ -114,9 +114,9 @@ tests:
           content:
             name: OBJECT_STORE_BUCKET
             value: restate-snapshots
-  # ai-gateway (repo shopnexus/ai) keeps its keys and spend in a database of
-  # its own in the stack's Postgres.
-  - it: gives the gateway its own database and a sealed role password
+  # LiteLLM keeps its keys and spend in a database of its own in the stack's
+  # Postgres.
+  - it: gives LiteLLM its own database and a sealed role password
     template: postgres.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:

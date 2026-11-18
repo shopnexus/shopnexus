@@ -12,7 +12,7 @@ import (
 )
 
 // setup returns a secrets directory with dev.env and prod.env made from
-// example.env, OPENROUTER_API_KEY filled in, and the server image to run
+// example.env, OPENROUTER_API_KEY and LLM_UPSTREAM_API_KEY filled in, and the server image to run
 // envgen from (SERVER_IMAGE, or the one CI pushes).
 func setup(t *testing.T) (opts, string) {
 	t.Helper()
@@ -25,6 +25,7 @@ func setup(t *testing.T) (opts, string) {
 		t.Fatal(err)
 	}
 	filled := strings.Replace(string(example), "\nOPENROUTER_API_KEY=\n", "\nOPENROUTER_API_KEY=test\n", 1)
+	filled = strings.Replace(filled, "\nLLM_UPSTREAM_API_KEY=\n", "\nLLM_UPSTREAM_API_KEY=test\n", 1)
 	filled = strings.Replace(filled, "\nLITELLM_UI_USERNAME=\n", "\nLITELLM_UI_USERNAME=admin\n", 1)
 	for _, s := range []string{"dev", "prod"} {
 		if err := os.WriteFile(filepath.Join(dir, s+".env"), []byte(filled), 0o600); err != nil {
@@ -80,7 +81,7 @@ func TestSealKeepsItsKeys(t *testing.T) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY", "STT_API_KEY",
-		"ASSIST_LLM_API_KEY", "TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "private.pem", "LITELLM_MASTER_KEY",
+		"ASSIST_LLM_API_KEY", "TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "private.pem", "LITELLM_MASTER_KEY", "LLM_UPSTREAM_API_KEY",
 		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)

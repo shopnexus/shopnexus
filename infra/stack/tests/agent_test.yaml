@@ -39,7 +39,7 @@ tests:
     asserts:
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PORT, value: "3000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MODEL_ID, value: console-agent } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://ai-gateway:4000/v1 } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_HOST, value: postgres-rw } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_DB, value: agent } }

@@ -82,10 +82,10 @@ tests:
     asserts:
       - notExists:
           path: spec.ingress[0].from[0].namespaceSelector
-  # ai-models is reached by ai-gateway and the server only: from-stack admits
-  # it, Traefik does not. Traefik reaches ai-gateway for its dashboard.
+  # ai-models is reached by LiteLLM and the server only: from-stack admits
+  # it, Traefik does not. Traefik reaches LiteLLM for its dashboard.
   - it: keeps Traefik away from ai-models
     documentIndex: 2
     asserts:
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: ai-models }
-      - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: ai-gateway }
+      - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: litellm }

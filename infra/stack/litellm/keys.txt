@@ -1,0 +1,15 @@
+# LiteLLM's keys, one per client purpose, the same in every stack. The
+# stack chart's Job litellm-keys and docker-compose.yml run keys.sh over
+# this file. Columns: the key's alias in LiteLLM, the Secret that holds the
+# client's copy (in compose, the keys volume's .env holds them all), the
+# variable in that Secret, and the aliases of config.yaml the key may call,
+# comma-separated. A key's
+# budget and rate limit are the stack's (litellm.keys in the chart's
+# values, LIMITS_DEFAULT in compose).
+server-llm          server-secrets  LLM_API_KEY           search
+server-stt          server-secrets  STT_API_KEY           stt
+server-assist       server-secrets  ASSIST_LLM_API_KEY    listing-read
+server-trust        server-secrets  TRUST_LLM_API_KEY     scam-check
+server-embed-index  server-secrets  EMBED_INDEX_API_KEY   embed-text,embed-image
+server-embed-search server-secrets  EMBED_SEARCH_API_KEY  embed-text,embed-image
+agent               agent-secrets   AGENT_LLM_API_KEY     console-agent

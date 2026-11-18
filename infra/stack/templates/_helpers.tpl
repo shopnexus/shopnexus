@@ -72,7 +72,7 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- $l := list
   (dict "app" "grafana" "service" "lgtm" "port" 3000)
   (dict "app" "restate" "service" "restate" "namespace" (include "sn.restate" .) "port" 9070)
-  (dict "app" "litellm" "service" "ai-gateway" "port" 4000)
+  (dict "app" "litellm" "service" "litellm" "port" 4000)
   (dict "app" "s3" "service" "rustfs" "port" 9001)
   (dict "app" "db" "service" "pgweb" "port" 8081) }}
 {{- if .Values.argocdDashboard }}
@@ -105,4 +105,68 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
 {{- end }}
 {{- end }}
 {{- toJson $out }}
+{{- end }}
+
+{{/* litellm/config.yaml parsed. */}}
+{{- define "sn.litellmConfig" -}}
+{{- .Files.Get "litellm/config.yaml" | fromYaml | toJson }}
+{{- end }}
+
+{{/* Every alias of litellm/config.yaml with its cost, as a JSON object of
+     name to cost. A key's budget counts in one unit only when every alias
+     it calls costs the same. */}}
+{{- define "sn.litellmCosts" -}}
+{{- $cfg := include "sn.litellmConfig" . | fromJson }}
+{{- $out := dict }}
+{{- range $m := $cfg.model_list }}
+{{- $i := $m.model_info | default dict }}
+{{- $_ := set $out $m.model_name (printf "token %v/%v second %v" ($i.input_cost_per_token | default 0) ($i.output_cost_per_token | default 0) ($i.input_cost_per_second | default 0)) }}
+{{- end }}
+{{- toJson $out }}
+{{- end }}
+
+{{/* The secrets LiteLLM reads from the environment: each os.environ/NAME
+     api_key of litellm/config.yaml, sorted, once. */}}
+{{- define "sn.litellmSecretEnv" -}}
+{{- $cfg := include "sn.litellmConfig" . | fromJson }}
+{{- $names := dict }}
+{{- range $m := $cfg.model_list }}
+{{- $k := toString $m.litellm_params.api_key }}
+{{- if hasPrefix "os.environ/" $k }}{{ $_ := set $names (trimPrefix "os.environ/" $k) true }}{{ end }}
+{{- end }}
+{{- keys $names | sortAlpha | toJson }}
+{{- end }}
+
+{{/* The keys of litellm/keys.txt as a JSON list of {alias, secret, var,
+     allows}. */}}
+{{- define "sn.litellmKeys" -}}
+{{- $out := list }}
+{{- range splitList "\n" (.Files.Get "litellm/keys.txt") }}
+{{- $line := trim . }}
+{{- if and $line (not (hasPrefix "#" $line)) }}
+{{- $f := regexSplit "\\s+" $line -1 }}
+{{- if ne (len $f) 4 }}{{ fail (printf "litellm/keys.txt: %q is not alias secret var allows" $line) }}{{ end }}
+{{- $out = append $out (dict "alias" (index $f 0) "secret" (index $f 1) "var" (index $f 2) "allows" (splitList "," (index $f 3))) }}
+{{- end }}
+{{- end }}
+{{- toJson $out }}
+{{- end }}
+
+{{/* The env var of the key Job that holds one key's limits: server-llm
+     gives LIMITS_SERVER_LLM. */}}
+{{- define "sn.litellmLimitsEnv" -}}
+LIMITS_{{ . | upper | replace "-" "_" }}
+{{- end }}
+
+{{/* A key's budget and rate limit as JSON members, the LIMITS_ value
+     keys.sh adds to the body of /key/update and /key/generate. Call with
+     (dict "alias" "server-llm" "k" .Values.litellm.keys.server-llm). */}}
+{{- define "sn.litellmLimits" -}}
+{{- $k := .k | default dict -}}
+{{- $units := required (printf "litellm.keys.%s.dailyUnits is required" .alias) $k.dailyUnits -}}
+{{- $b := dict "max_budget" (divf $units 1000000) -}}
+{{- with $k.tpmLimit }}{{ $_ := set $b "tpm_limit" (int .) }}{{ end -}}
+{{- with $k.rpmLimit }}{{ $_ := set $b "rpm_limit" (int .) }}{{ end -}}
+{{- if not (or $k.tpmLimit $k.rpmLimit) }}{{ fail (printf "litellm.keys.%s needs tpmLimit or rpmLimit" .alias) }}{{ end -}}
+{{- toJson $b | trimPrefix "{" | trimSuffix "}" -}}
 {{- end }}
