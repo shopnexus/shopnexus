@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Measures, on the pinned LiteLLM, what photo search relies on
-# (spec 2026-11-09-server2-photo-similar-search-design.md, "Measured first"):
+# (spec 2026-11-09-server-photo-similar-search-design.md, "Measured first"):
 #   1. a data URL and a text in input reach the upstream unchanged;
 #   2. a call is priced from the upstream's usage, not from the input's length;
 #   4. no input lands in LiteLLM_SpendLogs.

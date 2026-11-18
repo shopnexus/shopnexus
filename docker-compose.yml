@@ -681,17 +681,17 @@ services:
 
   # go test runs a package per CPU, each test on a cloned database of about
   # 13 MB, and holds connections longer while ParadeDB writes its index.
-  # Port 56433 and database server2_test are what the tests' guard
+  # Port 56433 and database server_test are what the tests' guard
   # (internal/platform/postgres/pgtest) accepts, so they never drop other data.
   postgres-test:
     <<: [*test, *postgres]
     environment:
       POSTGRES_USER: shopnexus
       POSTGRES_PASSWORD: shopnexus
-      POSTGRES_DB: server2_test
+      POSTGRES_DB: server_test
     command: postgres -p 56433 -c max_connections=400
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 56433 -U shopnexus -d server2_test"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 56433 -U shopnexus -d server_test"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -735,7 +735,7 @@ services:
     network_mode: service:restate-test
     command: ["go", "test", "-race", "./..."]
     environment:
-      TEST_DATABASE_URL: postgres://shopnexus:shopnexus@postgres-test:56433/server2_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://shopnexus:shopnexus@postgres-test:56433/server_test?sslmode=disable
       TEST_RESTATE_INGRESS_URL: http://127.0.0.1:8080
       TEST_RESTATE_ADMIN_URL: http://127.0.0.1:9070
       TEST_RESTATE_IDENTITY_FILE: /keys/identity.pem
@@ -743,7 +743,7 @@ services:
       TEST_OBJECT_STORE_PUBLIC_ENDPOINT: http://rustfs-test:9000
       TEST_OBJECT_STORE_ACCESS_KEY: shopnexus
       TEST_OBJECT_STORE_SECRET_KEY: shopnexus-secret
-      TEST_MEDIA_PUBLIC_URL: http://rustfs-test:9000/server2-test
+      TEST_MEDIA_PUBLIC_URL: http://rustfs-test:9000/server-test
     volumes: [./server:/src:ro, keys-test:/keys:ro, go-build-test:/root/.cache/go-build]
     depends_on:
       postgres-test: { condition: service_healthy }
