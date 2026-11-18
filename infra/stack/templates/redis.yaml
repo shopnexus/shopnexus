@@ -1,0 +1,63 @@
+{{- /* Redis, the agent's run bus: the replica running a turn adds its events
+       to the stream turn:<id> and reads stop and steer from
+       turn:<id>:control; a reader on any replica follows the stream. The
+       turns and their events are kept in the agent's database, so Redis
+       holds only live streams, each expiring an hour after its turn ends.
+       Only the agent reaches it (NetworkPolicy to-redis), so it asks for no
+       password. docker-compose.yml runs the same image with the same
+       arguments. */ -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: redis }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "redis") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "stateful" | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ include "sn.image" .Values.images.redis }}
+          # The append-only file keeps a stream across a restart. maxmemory
+          # stays under the container's limit; past it Redis drops the
+          # streams of finished turns, the keys with an expiry, and refuses
+          # writes when none is left.
+          args: [redis-server, --appendonly, "yes", --maxmemory, 192mb, --maxmemory-policy, volatile-lru]
+          ports:
+            - { name: redis, containerPort: 6379 }
+          readinessProbe:
+            exec: { command: [redis-cli, ping] }
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: [redis-cli, ping] }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: {{ required "redis.storage is required" .Values.redis.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: redis }
+  ports:
+    - { name: redis, port: 6379, targetPort: redis }

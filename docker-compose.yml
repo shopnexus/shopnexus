@@ -60,8 +60,8 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate and RustFS follow infra/stack/values.yaml;
-# infra/check.sh fails when they differ.
+# Image versions of Postgres, Restate, RustFS, LiteLLM and Redis follow
+# infra/stack/values.yaml; infra/check.sh fails when they differ.
 name: shopnexus
 
 # ── building blocks ──
@@ -108,6 +108,18 @@ x-restate: &restate
     RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE: /keys/identity.pem
   healthcheck:
     test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9070/health"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
+
+# Redis for the console agent's runs, with the stack chart's image and
+# arguments (infra/stack/templates/redis.yaml).
+x-redis: &redis
+  image: redis:7.4.12-alpine
+  command: [redis-server, --appendonly, "yes", --maxmemory, 192mb, --maxmemory-policy, volatile-lru]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
     interval: 2s
     timeout: 3s
     retries: 30
@@ -474,6 +486,11 @@ services:
     depends_on:
       litellm-dev: { condition: service_healthy }
 
+  redis-dev:
+    <<: [*dev, *redis]
+    networks: { dev: { aliases: [redis] } }
+    volumes: [redis-dev:/data]
+
   agent-db-dev:
     <<: [*dev, *agent-db]
     environment: { PGPASSWORD: shopnexus }
@@ -504,6 +521,7 @@ services:
     depends_on:
       agent-migrate-dev: { condition: service_completed_successfully }
       litellm-sync-dev: { condition: service_completed_successfully }
+      redis-dev: { condition: service_healthy }
     develop:
       watch:
         - { action: rebuild, path: ./agent/src }
@@ -640,6 +658,11 @@ services:
     depends_on:
       litellm-prod: { condition: service_healthy }
 
+  redis-prod:
+    <<: [*prod, *redis]
+    networks: { prod: { aliases: [redis] } }
+    volumes: [redis-prod:/data]
+
   agent-db-prod:
     <<: [*prod, *agent-db]
     environment: { PGPASSWORD: shopnexus }
@@ -667,6 +690,7 @@ services:
     depends_on:
       agent-migrate-prod: { condition: service_completed_successfully }
       litellm-sync-prod: { condition: service_completed_successfully }
+      redis-prod: { condition: service_healthy }
 
   proxy-prod:
     <<: *prod
@@ -827,11 +851,13 @@ volumes:
   models-dev:
   go-build-dev:
   lgtm-dev:
+  redis-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
   models-prod:
   lgtm-prod:
+  redis-prod:
   keys-test:
   go-build-test:

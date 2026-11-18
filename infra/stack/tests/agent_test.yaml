@@ -40,6 +40,7 @@ tests:
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PORT, value: "3000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MODEL_ID, value: console-agent } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: REDIS_URL, value: "redis://redis:6379" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_HOST, value: postgres-rw } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_DB, value: agent } }
@@ -61,14 +62,14 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: LITELLM_API_KEY, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } } }
-  # Configuration has no defaults: the 26 settings of agent/src/config.ts
+  # Configuration has no defaults: the 27 settings of agent/src/config.ts
   # (all but the CLI's two), the two kill switches and Prisma's DATABASE_URL.
   - it: sets every setting the agent reads
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 29 }
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 30 }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_SWEEP_INTERVAL_MS, value: "60000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MAX_TURNS, value: "0" } }
