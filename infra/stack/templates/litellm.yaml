@@ -2,7 +2,8 @@
        agent name an alias and hold a key of litellm/keys.txt. Its config is
        litellm/config.yaml and its shared settings env/litellm.env, which
        docker-compose.yml mounts and reads too. Its database is litellm in
-       the stack's Postgres (postgres.yaml). */ -}}
+       the stack's Postgres (postgres.yaml), which holds the aliases too;
+       the Job litellm-keys adds the ones of litellm/models/ it lacks. */ -}}
 {{- $l := .Values.litellm }}
 apiVersion: v1
 kind: ConfigMap
@@ -45,7 +46,7 @@ spec:
               valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_UI_USERNAME } }
             - name: UI_PASSWORD
               valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_UI_PASSWORD } }
-            {{- /* env/litellm.env, then the upstream keys config.yaml names. */}}
+            {{- /* env/litellm.env, then the upstream keys litellm/models/ names. */}}
             {{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/litellm.env") | fromJson }}
             - { name: {{ $k }}, value: {{ $v | quote }} }
             {{- end }}
@@ -85,10 +86,12 @@ spec:
   ports:
     - { name: http, port: 4000, targetPort: http }
 ---
-{{- /* Makes each key of litellm/keys.txt exist with this stack's budget by
-       running litellm/keys.sh sync, which docker-compose.yml runs too. A key
-       calls only aliases of config.yaml that cost the same, and every key
-       has its budget in litellm.keys. It runs once LiteLLM is up. */ -}}
+{{- /* Adds each alias of litellm/models/ that LiteLLM lacks, then makes
+       each key of litellm/keys.txt exist with this stack's budget, by
+       running litellm/keys.sh models and sync, which docker-compose.yml runs
+       too. A key calls only aliases of litellm/models/ that cost the same,
+       and every key has its budget in litellm.keys. It runs once LiteLLM is
+       up. */ -}}
 {{- $costs := include "sn.litellmCosts" . | fromJson }}
 {{- $keys := include "sn.litellmKeys" . | fromJsonArray }}
 {{- $listed := dict }}
@@ -96,7 +99,7 @@ spec:
 {{- $_ := set $listed $k.alias true }}
 {{- $seen := dict }}
 {{- range $m := $k.allows }}
-{{- if not (hasKey $costs $m) }}{{ fail (printf "litellm/keys.txt: %s names %s, which litellm/config.yaml does not have" $k.alias $m) }}{{ end }}
+{{- if not (hasKey $costs $m) }}{{ fail (printf "litellm/keys.txt: %s names %s, which litellm/models/ does not have" $k.alias $m) }}{{ end }}
 {{- $_ := set $seen (get $costs $m) true }}
 {{- end }}
 {{- if gt (len $seen) 1 }}{{ fail (printf "litellm/keys.txt: %s calls aliases with different costs" $k.alias) }}{{ end }}
@@ -120,6 +123,21 @@ data:
   keys.txt: |
     {{- .Files.Get "litellm/keys.txt" | nindent 4 }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-models
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    {{- include "sn.wave" "3" | nindent 4 }}
+data:
+  {{- range $path, $_ := .Files.Glob "litellm/models/*.json" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -139,7 +157,7 @@ spec:
       containers:
         - name: keys
           image: {{ include "sn.image" .Values.images.curl }}
-          command: [sh, /etc/keys/keys.sh, sync, /etc/keys/keys.txt]
+          command: [sh, -ec, "sh /etc/keys/keys.sh models /etc/keys/models; exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
           env:
             - { name: LITELLM_URL, value: "http://litellm:4000" }
             - name: MASTER_KEY
@@ -151,6 +169,16 @@ spec:
             {{- end }}
           volumeMounts:
             - { name: keys, mountPath: /etc/keys }
+      {{- /* One volume, laid out as compose mounts litellm/: keys.sh,
+             keys.txt and models/. */}}
       volumes:
         - name: keys
-          configMap: { name: litellm-keys }
+          projected:
+            sources:
+              - configMap: { name: litellm-keys }
+              - configMap:
+                  name: litellm-models
+                  items:
+                    {{- range $path, $_ := .Files.Glob "litellm/models/*.json" }}
+                    - { key: {{ base $path }}, path: models/{{ base $path }} }
+                    {{- end }}

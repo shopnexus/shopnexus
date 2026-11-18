@@ -95,6 +95,7 @@ tests:
       - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
       - exists: { path: data.AGENT_BASE_URL }
+      - exists: { path: data.LITELLM_URL }
       - exists: { path: data.AGENT_MCP_ADDR }
       - exists: { path: data.CARRIER }
       - exists: { path: data.CARRIER_POLL_EVERY }
@@ -117,7 +118,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 66e6a038dd0b9b3b
+          value: 724ba31f9a17a474
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -125,7 +126,18 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 66e6a038dd0b9b3b
+          value: 724ba31f9a17a474
+  # The console's AI settings call LiteLLM's admin API with the master key
+  # LiteLLM itself reads.
+  - it: reaches LiteLLM's admin API with its master key
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.LITELLM_URL, value: http://litellm:4000 }
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LITELLM_MASTER_KEY, valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY } } }
+        documentIndex: 1
   # Text vectors come from LiteLLM's alias embed-text and photo vectors from
   # module ai's SigLIP 2; each model's version is stored with its vectors.
   - it: sets the embedding settings

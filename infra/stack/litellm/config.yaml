@@ -2,66 +2,36 @@
 # litellm-config holds this file as is, and docker-compose.yml mounts it.
 # Clients ask for a model_name (an alias) with a key from keys.txt.
 #
+# The aliases live in LiteLLM's database (store_model_in_db), where the
+# server's console settings change them through the admin API. models/ holds
+# the five the stack starts with, one /model/new body per file named after
+# the alias; keys.sh models adds each one LiteLLM does not have yet and
+# leaves the others alone, so an alias the console changed stays changed.
+#
 # LiteLLM serves the remote models only; speech, photo vectors and video
-# frames are the server's module ai. A key's budget counts the cost below:
-# 1e-6 a token, so 1 of budget is 1M tokens; console-agent costs Claude
-# Sonnet 5.5's list price, so its key's budget is dollars. The chart refuses
-# a key over aliases with different costs. An api_key of os.environ/NAME is
-# the key NAME in Secret litellm-secrets, and in compose the variable NAME
-# of infra/stack/secrets/compose.env; LLM_UPSTREAM_BASE_URL is in
+# frames are the server's module ai. A key's budget counts the cost in
+# models/: 1e-6 a token, so 1 of budget is 1M tokens; console-agent costs
+# Claude Sonnet 5.5's list price (2 and 10 USD per 1M tokens in and out), so
+# its key's budget is dollars. The chart refuses a key over aliases with
+# different costs. An api_key of os.environ/NAME is the key NAME in Secret
+# litellm-secrets, and in compose the variable NAME of
+# infra/stack/secrets/compose.env; LLM_UPSTREAM_BASE_URL is in
 # env/litellm.env.
-model_list:
-  # The LLM aliases go to the LLM upstream, an OpenAI-compatible API that
-  # serves the Claude models in place of Anthropic's own.
-  - model_name: search
-    litellm_params:
-      model: openai/claude-haiku-5-5
-      api_base: os.environ/LLM_UPSTREAM_BASE_URL
-      api_key: os.environ/LLM_UPSTREAM_API_KEY
-    model_info:
-      input_cost_per_token: 0.000001
-      output_cost_per_token: 0.000001
-  - model_name: listing-read
-    litellm_params:
-      model: openai/claude-haiku-5-5
-      api_base: os.environ/LLM_UPSTREAM_BASE_URL
-      api_key: os.environ/LLM_UPSTREAM_API_KEY
-    model_info:
-      input_cost_per_token: 0.000001
-      output_cost_per_token: 0.000001
-  - model_name: scam-check
-    litellm_params:
-      model: openai/claude-haiku-5-5
-      api_base: os.environ/LLM_UPSTREAM_BASE_URL
-      api_key: os.environ/LLM_UPSTREAM_API_KEY
-    model_info:
-      input_cost_per_token: 0.000001
-      output_cost_per_token: 0.000001
-  # 2 and 10 USD per 1M tokens in and out.
-  - model_name: console-agent
-    litellm_params:
-      model: openai/claude-sonnet-5-5
-      api_base: os.environ/LLM_UPSTREAM_BASE_URL
-      api_key: os.environ/LLM_UPSTREAM_API_KEY
-    model_info:
-      input_cost_per_token: 0.000002
-      output_cost_per_token: 0.00001
-  # OpenRouter serves bge-m3 from DeepInfra (fp32), whose vectors match the
-  # TEI the stack ran before at a cosine of 0.999999, and from Parasail at
-  # 0.996. The pin keeps stored vectors and new ones in one space.
-  - model_name: embed-text
-    litellm_params:
-      model: openai/baai/bge-m3
-      api_base: https://openrouter.ai/api/v1
-      api_key: os.environ/OPENROUTER_API_KEY
-      extra_body: { provider: { order: [DeepInfra], allow_fallbacks: false } }
-    model_info:
-      mode: embedding
-      input_cost_per_token: 0.000001
-      output_cost_per_token: 0.000001
+#
+# The LLM aliases (search, listing-read, scam-check, console-agent) go to the
+# LLM upstream, an OpenAI-compatible API that serves the Claude models in
+# place of Anthropic's own. embed-text goes to OpenRouter, which serves
+# bge-m3 from DeepInfra (fp32), whose vectors match the TEI the stack ran
+# before at a cosine of 0.999999, and from Parasail at 0.996. Its provider
+# pin keeps stored vectors and new ones in one space.
+#
+# LiteLLM encrypts the stored aliases' parameters with LITELLM_MASTER_KEY
+# (no LITELLM_SALT_KEY is set), so a new master key needs the aliases added
+# again.
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
   # A search photo passes through here; the spend logs keep no bodies, and
   # they are kept 30 days.
   store_prompts_in_spend_logs: false

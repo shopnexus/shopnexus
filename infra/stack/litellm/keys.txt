@@ -2,7 +2,7 @@
 # stack chart's Job litellm-keys and docker-compose.yml run keys.sh over
 # this file. Columns: the key's alias in LiteLLM, the Secret that holds the
 # client's copy (in compose, the keys volume's .env holds them all), the
-# variable in that Secret, and the aliases of config.yaml the key may call,
+# variable in that Secret, and the aliases of models/ the key may call,
 # comma-separated. A key's
 # budget and rate limit are the stack's (litellm.keys in the chart's
 # values, LIMITS_DEFAULT in compose).

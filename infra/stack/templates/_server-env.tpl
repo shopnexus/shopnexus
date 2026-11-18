@@ -7,6 +7,11 @@ env:
   - name: DATABASE_URL
     valueFrom:
       secretKeyRef: { name: postgres-app, key: uri }
+  {{- /* LiteLLM's master key, for its admin API (LITELLM_URL), from the
+         Secret LiteLLM itself reads, so one key serves both. */}}
+  - name: LITELLM_MASTER_KEY
+    valueFrom:
+      secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY }
 {{- end }}
 
 {{/* Non-secret server configuration: the data of ConfigMap server-env,
