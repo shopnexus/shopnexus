@@ -20,19 +20,13 @@ tests:
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - equal: { path: 'spec.template.spec.containers[0].image', value: ghcr.io/shopnexus/agent:main }
-  # prisma migrate deploy applies the migrations the database has not
-  # recorded, with the same image and settings as the agent.
-  - it: runs the agent's migrations before it starts
+  - it: has no init container, since the agent keeps no state
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: 'spec.template.spec.initContainers[0].command', value: [node_modules/.bin/prisma, migrate, deploy] }
-      - matchRegex: { path: 'spec.template.spec.initContainers[0].image', pattern: '^ghcr.io/shopnexus/agent:[0-9]+\.[0-9]+\.[0-9]+$' }
-      - contains:
-          path: spec.template.spec.initContainers[0].env
-          content: { name: DATABASE_URL, value: "postgresql://agent:$(POSTGRES_PASSWORD)@postgres-rw:5432/agent" }
-  - it: calls the console-agent alias, the server's MCP and its own database
+      - notExists: { path: spec.template.spec.initContainers }
+  - it: calls the console-agent alias and the server's MCP
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
@@ -40,14 +34,7 @@ tests:
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PORT, value: "3000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MODEL_ID, value: console-agent } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: REDIS_URL, value: "redis://redis:6379" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_HOST, value: postgres-rw } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_DB, value: agent } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: POSTGRES_USER, value: agent } }
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: agent-db, key: password } } }
   - it: takes the two tokens and its LiteLLM key from agent-secrets
     template: agent.yaml
     documentIndex: 0
@@ -62,18 +49,15 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: LITELLM_API_KEY, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } } }
-  # Configuration has no defaults: the 27 settings of agent/src/config.ts
-  # (all but the CLI's two), the two kill switches and Prisma's DATABASE_URL.
-  - it: sets every setting the agent reads
+  # env/agent.env, the three secrets and the MCP URL.
+  - it: sets the agent's settings
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 30 }
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 16 }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_SWEEP_INTERVAL_MS, value: "60000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MAX_TURNS, value: "0" } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: EMBEDDING_MODEL_ID, value: "" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FEATURE_ALL_AGENT, value: "true" } }
   # env/agent.env, which compose reads too, holds the shared settings.
   - it: takes the shared settings from env/agent.env
@@ -86,15 +70,14 @@ tests:
           content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" }
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: EMBEDDING_MODEL_ID, value: "" }
-  # Every route needs the service token, so the probes check the port.
-  - it: probes the port
+          content: { name: AGENT_HISTORY_CHARS, value: "60000" }
+  - it: probes /healthz
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.tcpSocket.port', value: http }
-      - equal: { path: 'spec.template.spec.containers[0].livenessProbe.tcpSocket.port', value: http }
+      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.httpGet.path', value: /healthz }
+      - equal: { path: 'spec.template.spec.containers[0].livenessProbe.httpGet.path', value: /healthz }
   - it: is reachable in the stack as agent:3000, the address the server calls
     template: agent.yaml
     documentIndex: 1

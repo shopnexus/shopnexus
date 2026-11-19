@@ -58,10 +58,6 @@
 # LITELLM_MASTER_KEY, which the keys volume's .env holds for it as for
 # LiteLLM.
 #
-# The console agent's run bus is the stack's Redis (redis-dev, redis-prod),
-# which answers by the name redis inside its stack, as its Service does in
-# the cluster.
-#
 # Speech, photo vectors and video frames are the server's module ai, which
 # runs in the server container here (SERVER_ROLE unset, so all) with the
 # model files from the stack's models volume; fetch-models-* fills it with
@@ -70,7 +66,7 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate, RustFS, LiteLLM and Redis follow
+# Image versions of Postgres, Restate, RustFS and LiteLLM follow
 # infra/stack/values.yaml; infra/check.sh fails when they differ.
 name: shopnexus
 
@@ -87,7 +83,7 @@ x-health-bun: &health-bun
   test: ["CMD", "bun", "-e", "await fetch('http://127.0.0.1:' + (process.env.HEALTH_PORT ?? 4321))"]
 x-health-agent: &health-agent
   <<: *health
-  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').catch(() => process.exit(1))"]
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => r.ok || process.exit(1), () => process.exit(1))"]
 x-health-server: &health-server
   <<: *health
   test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
@@ -144,18 +140,6 @@ x-restate: &restate
     RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE: /keys/identity.pem
   healthcheck:
     test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9070/health"]
-    interval: 2s
-    timeout: 3s
-    retries: 30
-  restart: unless-stopped
-
-# Redis for the console agent's runs, with the stack chart's image and
-# arguments (infra/stack/templates/redis.yaml).
-x-redis: &redis
-  image: redis:7.4.12-alpine
-  command: [redis-server, --appendonly, "yes", --maxmemory, 192mb, --maxmemory-policy, volatile-lru]
-  healthcheck:
-    test: ["CMD", "redis-cli", "ping"]
     interval: 2s
     timeout: 3s
     retries: 30
@@ -281,36 +265,23 @@ x-server-env-prod: &server-env-prod
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
   AGENT_BASE_URL: http://agent-prod:3000
 
-# The console agent (submodule agent). Its database is `agent` in the
-# stack's Postgres: agent-db-* creates it, agent-migrate-* runs
-# `prisma migrate deploy` on it, and the agent then starts. The agent takes
-# AGENT_SERVICE_TOKEN, AGENT_MCP_TOKEN and its LiteLLM key
-# AGENT_LLM_API_KEY, and nothing else, from the .env in the keys volume.
+# The console agent (submodule agent): a runtime with no state of its own.
+# The server keeps the runs; the agent takes AGENT_SERVICE_TOKEN,
+# AGENT_MCP_TOKEN and AGENT_LLM_API_KEY from the keys volume's .env.
 x-agent-image: &agent-image
   image: shopnexus-agent:local
   build: ./agent
   # The settings every stack shares with the cluster's chart.
   env_file: [./infra/stack/env/agent.env]
 
-x-agent-env: &agent-env
-  POSTGRES_USER: shopnexus
-  POSTGRES_PASSWORD: shopnexus
-
 x-agent-env-dev: &agent-env-dev
-  <<: *agent-env
-  POSTGRES_HOST: postgres-dev
-  DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-dev:5432/agent
   MCP_SERVER_URL: http://server-dev:9090/mcp
 
 x-agent-env-prod: &agent-env-prod
-  <<: *agent-env
-  POSTGRES_HOST: postgres-prod
-  DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-prod:5432/agent
   MCP_SERVER_URL: http://server-prod:9090/mcp
 
-# Creates the database agent when it is missing; pgvector and pg_trgm come
-# with the agent's first migration.
-x-agent-db: &agent-db
+# Creates a database in the stack's Postgres when it is missing.
+x-create-db: &create-db
   image: paradedb/paradedb:0.26.4-pg18
   entrypoint: ["sh", "-ec"]
   restart: "no"
@@ -488,7 +459,7 @@ services:
       keys-dev: { condition: service_completed_successfully }
 
   litellm-db-dev:
-    <<: [*dev, *agent-db]
+    <<: [*dev, *create-db]
     environment: { PGPASSWORD: shopnexus }
     command:
       - |
@@ -514,29 +485,6 @@ services:
     depends_on:
       litellm-dev: { condition: service_healthy }
 
-  redis-dev:
-    <<: [*dev, *redis]
-    networks: { dev: { aliases: [redis] } }
-    volumes: [redis-dev:/data]
-
-  agent-db-dev:
-    <<: [*dev, *agent-db]
-    environment: { PGPASSWORD: shopnexus }
-    command:
-      - |
-        psql -h postgres-dev -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
-        SELECT 'CREATE DATABASE agent' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent') \gexec
-        SQL
-    depends_on:
-      postgres-dev: { condition: service_healthy }
-
-  agent-migrate-dev:
-    <<: [*dev, *agent-image]
-    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
-    environment: *agent-env-dev
-    depends_on:
-      agent-db-dev: { condition: service_completed_successfully }
-
   # The agent's source under node --watch and ts-node. Root reads the keys
   # volume's .env (mode 600).
   agent-dev:
@@ -546,7 +494,6 @@ services:
     env_file: [./infra/stack/env/agent.env]
     environment:
       <<: *agent-env-dev
-      CHECKPOINT_DISABLE: "1"
       TS_NODE_TRANSPILE_ONLY: "true"
     entrypoint:
       - sh
@@ -554,7 +501,6 @@ services:
       - |
         if ! cmp -s package-lock.json node_modules/.package-lock.copy; then
           npm ci --no-audit --no-fund
-          npx prisma generate
           cp package-lock.json node_modules/.package-lock.copy
         fi
         tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env)
@@ -566,9 +512,7 @@ services:
       - agent-node-modules-dev:/app/node_modules
       - keys-dev:/keys:ro
     depends_on:
-      agent-migrate-dev: { condition: service_completed_successfully }
       litellm-sync-dev: { condition: service_completed_successfully }
-      redis-dev: { condition: service_healthy }
     healthcheck: *health-agent
     restart: unless-stopped
 
@@ -688,7 +632,7 @@ services:
       keys-prod: { condition: service_completed_successfully }
 
   litellm-db-prod:
-    <<: [*prod, *agent-db]
+    <<: [*prod, *create-db]
     environment: { PGPASSWORD: shopnexus }
     command:
       - |
@@ -714,29 +658,6 @@ services:
     depends_on:
       litellm-prod: { condition: service_healthy }
 
-  redis-prod:
-    <<: [*prod, *redis]
-    networks: { prod: { aliases: [redis] } }
-    volumes: [redis-prod:/data]
-
-  agent-db-prod:
-    <<: [*prod, *agent-db]
-    environment: { PGPASSWORD: shopnexus }
-    command:
-      - |
-        psql -h postgres-prod -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
-        SELECT 'CREATE DATABASE agent' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent') \gexec
-        SQL
-    depends_on:
-      postgres-prod: { condition: service_healthy }
-
-  agent-migrate-prod:
-    <<: [*prod, *agent-image]
-    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
-    environment: *agent-env-prod
-    depends_on:
-      agent-db-prod: { condition: service_completed_successfully }
-
   # The keys service's user, which owns the .env (mode 600).
   agent-prod:
     <<: [*prod, *agent-image, *agent-run]
@@ -744,9 +665,7 @@ services:
     environment: *agent-env-prod
     volumes: [keys-prod:/keys:ro]
     depends_on:
-      agent-migrate-prod: { condition: service_completed_successfully }
       litellm-sync-prod: { condition: service_completed_successfully }
-      redis-prod: { condition: service_healthy }
     healthcheck: *health-agent
 
   proxy-prod:
@@ -942,13 +861,11 @@ volumes:
   console-node-modules-dev:
   agent-node-modules-dev:
   lgtm-dev:
-  redis-dev:
   postgres-prod:
   rustfs-prod:
   restate-prod:
   keys-prod:
   models-prod:
   lgtm-prod:
-  redis-prod:
   keys-test:
   go-build-test:

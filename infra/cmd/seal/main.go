@@ -108,7 +108,6 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
 		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)
 		{"AGENT_LLM_API_KEY", "sk-", 24},    // the console agent's key in LiteLLM (agent)
-		{"AGENT_DB_PASSWORD", "", 24},       // the console agent's database role
 	} {
 		if env.get(k.name) == "" {
 			b := make([]byte, k.bytes)
@@ -164,10 +163,6 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "litellm-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
 			"username": "litellm",
 			"password": env.get("LITELLM_DB_PASSWORD"),
-		}},
-		{name: "agent-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
-			"username": "agent",
-			"password": env.get("AGENT_DB_PASSWORD"),
 		}},
 	}
 
