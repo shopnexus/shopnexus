@@ -3,7 +3,7 @@
 # stacks never share data and can run at the same time. Production is the k3d
 # cluster in ./infra; this file is for running things locally.
 #
-#   docker compose --profile dev up --build --watch    # everything, with live reload
+#   docker compose --profile dev up -d --build         # everything, with live reload
 #   docker compose --profile prod up -d --build        # the images the cluster runs
 #   docker compose --profile test run --rm --build tests   # the server's Go tests
 #
@@ -31,11 +31,9 @@
 # visitor in as admin@shopnexus.localhost, an Admin; in the cluster the
 # console's sign-in names the member.
 #
-# dev runs the server with go run and the web apps' dev servers. --watch
-# copies a saved file into its container: the web dev servers reload the
-# page, and the server's container restarts and builds again. A change to
-# go.mod, package.json or a lock file rebuilds the image; a change under
-# server/migrations runs the migrations again.
+# dev mounts the source into its containers and reloads on save (air for
+# the server, the dev servers for the web apps, node --watch for the agent).
+# After a lock file changes, restart the service to install the packages.
 #
 # test runs the server's Go tests against Postgres, Restate and RustFS on
 # tmpfs. run starts them and exits with the tests' status; they keep running
@@ -77,6 +75,25 @@
 name: shopnexus
 
 # ── building blocks ──
+
+# Healthchecks; the bun and node images have no curl, so they use fetch.
+x-health: &health
+  interval: 10s
+  timeout: 3s
+  retries: 3
+  start_period: 2m
+x-health-bun: &health-bun
+  <<: *health
+  test: ["CMD", "bun", "-e", "await fetch('http://127.0.0.1:' + (process.env.HEALTH_PORT ?? 4321))"]
+x-health-agent: &health-agent
+  <<: *health
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').catch(() => process.exit(1))"]
+x-health-server: &health-server
+  <<: *health
+  test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+x-health-wget: &health-wget
+  <<: *health
+  test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/"]
 
 x-postgres: &postgres
   image: paradedb/paradedb:0.26.4-pg18
@@ -295,16 +312,23 @@ x-agent-run: &agent-run
   entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); key=$$(sed -n 's/^AGENT_LLM_API_KEY=/LITELLM_API_KEY=/p' /keys/.env); export $$tokens $$key; exec node dist/main.js"]
   restart: unless-stopped
 
-# A web app's dev image: its dependencies, then its source. DIR is the app's
-# directory in the build context; $$ keeps Compose from reading ${DIR} as one
-# of its own variables.
-x-bun-dev-dockerfile: &bun-dev-dockerfile |
-  FROM oven/bun:1.4.4
-  ARG DIR=.
-  WORKDIR /src
-  COPY $${DIR}/package.json $${DIR}/bun.lock ./
-  RUN bun install --frozen-lockfile
-  COPY $${DIR}/ ./
+# A web app's dev server on its mounted source. It installs the packages
+# when bun.lock changed since the last install.
+x-bun-dev: &bun-dev
+  image: oven/bun:1.4.4
+  working_dir: /src
+  entrypoint:
+    - sh
+    - -ec
+    - |
+      if ! cmp -s bun.lock node_modules/.bun.lock; then
+        bun install --frozen-lockfile
+        cp bun.lock node_modules/.bun.lock
+      fi
+      exec bun run dev "$$@"
+    - bun-dev
+  healthcheck: *health-bun
+  restart: unless-stopped
 
 x-dev: &dev
   profiles: [dev]
@@ -353,9 +377,6 @@ services:
     depends_on:
       litellm-keys-dev: { condition: service_completed_successfully }
       postgres-dev: { condition: service_healthy }
-    develop:
-      watch:
-        - { action: rebuild, path: ./server/migrations }
 
   objectstore-init-dev:
     <<: [*dev, *server-image]
@@ -367,10 +388,8 @@ services:
       litellm-keys-dev: { condition: service_completed_successfully }
       rustfs-dev: { condition: service_healthy }
 
-  # go run on the source. The image holds the modules; .dockerignore keeps the
-  # host's .env out, and the .env here is the keys-dev volume's. Module ai
-  # links sherpa-onnx through cgo, found in the module cache, and runs
-  # ffmpeg.
+  # air rebuilds the server on a .go or .sql change and runs the migrations
+  # before each start. The .env is the keys volume's, over the checkout's.
   server-dev:
     <<: *dev
     image: shopnexus-server-dev:local
@@ -379,80 +398,64 @@ services:
       dockerfile_inline: |
         FROM golang:1.27.3-trixie
         RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+        RUN go install github.com/air-verse/air@v1.67.4
         WORKDIR /src
         COPY go.mod go.sum ./
         RUN go mod download
-        COPY . .
-        RUN ln -s /keys/.env .env
-    command: ["go", "run", "./cmd/server"]
+    command: ["air", "-c", "/etc/air.toml"]
     env_file: [./infra/stack/env/server.env]
     environment: *server-env-dev
-    volumes: [keys-dev:/keys:ro, models-dev:/models:ro, go-build-dev:/root/.cache/go-build]
+    volumes:
+      - ./server:/src
+      - { type: volume, source: keys-dev, target: /src/.env, read_only: true, volume: { subpath: .env } }
+      - keys-dev:/keys:ro
+      - models-dev:/models:ro
+      - go-build-dev:/root/.cache/go-build
+      - go-mod-dev:/go/pkg/mod
+    configs:
+      - { source: air-dev, target: /etc/air.toml }
     depends_on:
       migrate-dev: { condition: service_completed_successfully }
       objectstore-init-dev: { condition: service_completed_successfully }
       restate-dev: { condition: service_healthy }
       litellm-sync-dev: { condition: service_completed_successfully }
       fetch-models-dev: { condition: service_completed_successfully }
+    healthcheck: *health-server
     restart: unless-stopped
-    develop:
-      watch:
-        - { action: sync+restart, path: ./server, target: /src, ignore: [.env, .restate/, tmp/, bin/, .git/] }
-        - { action: rebuild, path: ./server/go.mod }
-        - { action: rebuild, path: ./server/go.sum }
 
   docs-dev:
-    <<: *dev
-    image: shopnexus-docs-dev:local
-    build:
-      context: ./docs
-      args: { DIR: web }
-      dockerfile_inline: *bun-dev-dockerfile
-    command: ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "4321"]
+    <<: [*dev, *bun-dev]
+    command: ["--host", "0.0.0.0", "--port", "4321"]
     environment:
       # true adds the internal pages (the Developers tab).
       DOCS_INTERNAL: ${DOCS_INTERNAL:-true}
     # The Requirements pages and the API playground read ../registry.
     volumes:
+      - ./docs/web:/src
       - ./docs/registry:/registry:ro
-    restart: unless-stopped
-    develop:
-      watch:
-        - { action: sync, path: ./docs/web, target: /src, ignore: [node_modules/, dist/, .astro/] }
-        - { action: rebuild, path: ./docs/web/package.json }
-        - { action: rebuild, path: ./docs/web/bun.lock }
+      - docs-node-modules-dev:/src/node_modules
+      - docs-astro-dev:/src/.astro
 
   website-dev:
-    <<: *dev
-    image: shopnexus-website-dev:local
-    build:
-      context: ./website
-      dockerfile_inline: *bun-dev-dockerfile
-    command: ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "4321"]
+    <<: [*dev, *bun-dev]
+    # Astro's lock file outlives the container; one server runs here anyway.
+    command: ["--host", "0.0.0.0", "--port", "4321", "--ignore-lock"]
     environment:
       API_URL: http://server-dev:8080/v1
-    restart: unless-stopped
-    develop:
-      watch:
-        - { action: sync, path: ./website, target: /src, ignore: [node_modules/, dist/, .astro/] }
-        - { action: rebuild, path: ./website/package.json }
-        - { action: rebuild, path: ./website/bun.lock }
+    volumes:
+      - ./website:/src
+      - website-node-modules-dev:/src/node_modules
+      - website-astro-dev:/src/.astro
 
   # The console finds the API at api.<its own host>, so console.localhost
   # calls api.localhost.
   console-dev:
-    <<: *dev
-    image: shopnexus-console-dev:local
-    build:
-      context: ./console
-      dockerfile_inline: *bun-dev-dockerfile
-    command: ["bun", "run", "dev", "--host", "0.0.0.0"]
-    restart: unless-stopped
-    develop:
-      watch:
-        - { action: sync, path: ./console, target: /src, ignore: [node_modules/, dist/] }
-        - { action: rebuild, path: ./console/package.json }
-        - { action: rebuild, path: ./console/bun.lock }
+    <<: [*dev, *bun-dev]
+    command: ["--host", "0.0.0.0"]
+    environment: { HEALTH_PORT: 5173 }
+    volumes:
+      - ./console:/src
+      - console-node-modules-dev:/src/node_modules
 
   fetch-models-dev:
     <<: [*dev, *server-image]
@@ -517,25 +520,41 @@ services:
     environment: *agent-env-dev
     depends_on:
       agent-db-dev: { condition: service_completed_successfully }
-    develop:
-      watch:
-        - { action: rebuild, path: ./agent/prisma }
 
-  # The keys service's user, which owns the .env (mode 600).
+  # The agent's source under node --watch and ts-node. Root reads the keys
+  # volume's .env (mode 600).
   agent-dev:
-    <<: [*dev, *agent-image, *agent-run]
-    user: "65532:65532"
-    environment: *agent-env-dev
-    volumes: [keys-dev:/keys:ro]
+    <<: *dev
+    image: node:24.21.0-trixie-slim
+    working_dir: /app
+    env_file: [./infra/stack/env/agent.env]
+    environment:
+      <<: *agent-env-dev
+      CHECKPOINT_DISABLE: "1"
+      TS_NODE_TRANSPILE_ONLY: "true"
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        if ! cmp -s package-lock.json node_modules/.package-lock.copy; then
+          npm ci --no-audit --no-fund
+          npx prisma generate
+          cp package-lock.json node_modules/.package-lock.copy
+        fi
+        tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env)
+        key=$$(sed -n 's/^AGENT_LLM_API_KEY=/LITELLM_API_KEY=/p' /keys/.env)
+        export $$tokens $$key
+        exec node --watch -r ts-node/register src/main.ts
+    volumes:
+      - ./agent:/app
+      - agent-node-modules-dev:/app/node_modules
+      - keys-dev:/keys:ro
     depends_on:
       agent-migrate-dev: { condition: service_completed_successfully }
       litellm-sync-dev: { condition: service_completed_successfully }
       redis-dev: { condition: service_healthy }
-    develop:
-      watch:
-        - { action: rebuild, path: ./agent/src }
-        - { action: rebuild, path: ./agent/package.json }
-        - { action: rebuild, path: ./agent/package-lock.json }
+    healthcheck: *health-agent
+    restart: unless-stopped
 
   proxy-dev:
     <<: *dev
@@ -543,6 +562,7 @@ services:
     ports: ["127.0.0.1:56481:80"]
     configs:
       - { source: caddyfile-dev, target: /etc/caddy/Caddyfile }
+    healthcheck: *health-wget
     restart: unless-stopped
 
   # ── prod ──
@@ -601,6 +621,7 @@ services:
       objectstore-init-prod: { condition: service_completed_successfully }
       restate-prod: { condition: service_healthy }
       litellm-sync-prod: { condition: service_completed_successfully }
+    healthcheck: *health-server
     restart: unless-stopped
 
   website-prod:
@@ -610,6 +631,7 @@ services:
     environment:
       API_URL: http://server-prod:8080/v1
     depends_on: [server-prod]
+    healthcheck: { <<: *health, test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').catch(() => process.exit(1))"] }
     restart: unless-stopped
 
   # The console finds the API at api.<its own host>, so console.localhost
@@ -618,12 +640,14 @@ services:
     <<: *prod
     image: shopnexus-console:local
     build: ./console
+    healthcheck: *health-wget
     restart: unless-stopped
 
   docs-prod:
     <<: *prod
     image: shopnexus-docs:local
     build: ./docs
+    healthcheck: *health-wget
     restart: unless-stopped
 
   fetch-models-prod:
@@ -700,6 +724,7 @@ services:
       agent-migrate-prod: { condition: service_completed_successfully }
       litellm-sync-prod: { condition: service_completed_successfully }
       redis-prod: { condition: service_healthy }
+    healthcheck: *health-agent
 
   proxy-prod:
     <<: *prod
@@ -708,6 +733,7 @@ services:
     configs:
       - { source: caddyfile-prod, target: /etc/caddy/Caddyfile }
     depends_on: [server-prod, website-prod, console-prod, docs-prod, rustfs-prod]
+    healthcheck: *health-wget
     restart: unless-stopped
 
   # ── test ──
@@ -789,6 +815,20 @@ networks:
   test:
 
 configs:
+  air-dev:
+    content: |
+      tmp_dir = "/tmp/air"
+      [build]
+        cmd = "go build -buildvcs=false -o /tmp/bin/ ./cmd/server ./cmd/migrate"
+        entrypoint = ["sh", "-c", "/tmp/bin/migrate && exec /tmp/bin/server"]
+        include_ext = ["go", "sql"]
+        exclude_dir = ["tmp", "bin", ".git", ".restate", ".worktrees", ".claude", ".superpowers", ".zed", "e2e", "api"]
+        exclude_regex = ["_test\\.go$$"]
+        delay = 300
+        send_interrupt = true
+        kill_delay = "5s"
+      [log]
+        main_only = true
   caddyfile-dev:
     content: |
       {
@@ -865,6 +905,13 @@ volumes:
   keys-dev:
   models-dev:
   go-build-dev:
+  go-mod-dev:
+  docs-node-modules-dev:
+  docs-astro-dev:
+  website-node-modules-dev:
+  website-astro-dev:
+  console-node-modules-dev:
+  agent-node-modules-dev:
   lgtm-dev:
   redis-dev:
   postgres-prod:

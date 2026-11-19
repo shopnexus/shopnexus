@@ -2,10 +2,9 @@
 # details and the URLs.
 .PHONY: dev prod test down trace trace-rename
 
-# Everything with live reload, behind http://localhost:56481. Stays in the
-# foreground and prints the logs.
+# Everything with live reload, behind http://localhost:56481, detached.
 dev:
-	docker compose --profile dev up --build --watch
+	docker compose --profile dev up -d --build
 
 # The images the cluster runs, behind http://localhost:56480.
 prod:

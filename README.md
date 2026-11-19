@@ -72,13 +72,13 @@ Grafana gets the server's traces, metrics and logs. Locally the three
 dashboards need no sign-in, and the RustFS console signs in with the stack's
 object store keys, `shopnexus` and `shopnexus-secret`.
 
-`dev` runs the server with `go run` and the web apps' dev servers. With
-`--watch`, a saved file is copied into its container: the web apps reload the
-page, and the server's container restarts on the new code in a few seconds. A
-change to `go.mod`, `package.json` or a lock file rebuilds the image, and a
-change under `server/migrations` runs the migrations again. Docs show the
-internal pages; `DOCS_INTERNAL=false` before the command hides them. Search
-is empty in dev, because only `bun run build` makes the Pagefind index.
+`dev` runs detached and mounts the source into its containers. On save the
+web apps reload the page, the agent restarts, and the server builds again
+and runs any new migrations. After a lock file changes, restart that
+service (`docker compose restart website-dev`) to install the packages.
+Docs show the internal pages; `DOCS_INTERNAL=false` before the command hides
+them. Search is empty in dev, because only `bun run build` makes the Pagefind
+index.
 
 `prod` builds every component from its Dockerfile. Its server runs with
 `APP_ENV=dev`, so PNV's test numbers sign in.
