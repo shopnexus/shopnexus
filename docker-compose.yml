@@ -260,6 +260,7 @@ x-server-env-dev: &server-env-dev
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
   # The docs site's API playground, here and on a laptop's `bun run dev`.
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56481,http://localhost:4321
+  WEBSITE_ORIGINS: http://shopnexus.localhost:56481,http://localhost:4321
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
@@ -274,6 +275,7 @@ x-server-env-prod: &server-env-prod
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56480
+  WEBSITE_ORIGINS: http://shopnexus.localhost:56480
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus

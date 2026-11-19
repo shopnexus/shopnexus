@@ -27,6 +27,9 @@ tests:
       - equal:
           path: data.DOCS_ORIGINS
           value: https://docs.shopnexus.id.vn,https://shopnexus.github.io
+      - equal:
+          path: data.WEBSITE_ORIGINS
+          value: https://shopnexus.id.vn
       # The server reaches models only through the stack's LiteLLM, under one alias.
       - equal:
           path: data.LLM_BASE_URL
@@ -47,6 +50,9 @@ tests:
       - equal:
           path: data.DOCS_ORIGINS
           value: https://docs.dev.shopnexus.id.vn,http://localhost:4321
+      - equal:
+          path: data.WEBSITE_ORIGINS
+          value: https://dev.shopnexus.id.vn,http://localhost:4321
   # config.Load reads every variable below. The rest come from server-secrets,
   # which infra/cmd/seal writes, and DATABASE_URL from CloudNativePG's secret.
   - it: sets every variable config.Load reads that is not a secret
@@ -110,6 +116,7 @@ tests:
       - exists: { path: data.TRUSTED_PROXIES }
       - exists: { path: data.DASHBOARD_HOSTS }
       - exists: { path: data.DOCS_ORIGINS }
+      - exists: { path: data.WEBSITE_ORIGINS }
   # checksum/env is a hash of the ConfigMap's data. A change to it makes a new
   # server version. The value below is the hash of the prod data.
   - it: carries the hash of the configuration
@@ -118,7 +125,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 724ba31f9a17a474
+          value: e000367a58ce5391
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -126,7 +133,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 724ba31f9a17a474
+          value: e000367a58ce5391
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key

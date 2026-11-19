@@ -43,6 +43,9 @@ DASHBOARD_HOSTS: {{ include "sn.dashboardHosts" . | quote }}
 # The docs site's API playground calls the API from these origins. Prod adds
 # the GitHub Pages copy; dev adds the docs dev server on a laptop.
 DOCS_ORIGINS: {{ printf "https://%s,%s" (include "sn.host" (dict "root" . "sub" "docs")) (ternary "https://shopnexus.github.io" "http://localhost:4321" (eq .Values.appEnv "prod")) | quote }}
+# The website's pages PUT photos to presigned upload URLs from these origins.
+# Dev adds the website dev server on a laptop.
+WEBSITE_ORIGINS: {{ printf "https://%s%s" (include "sn.host" (dict "root" . "sub" "")) (ternary "" ",http://localhost:4321" (eq .Values.appEnv "prod")) | quote }}
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
