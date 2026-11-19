@@ -29,7 +29,7 @@ data:
 {{- end }}
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector; the
 # server sends its traces, metrics and logs to port 4318. Grafana takes the
-# console member from the headers the forwardAuth answer sets.
+# console member from the headers the forwardAuth answer sets (env/lgtm.env).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -56,12 +56,9 @@ spec:
           image: {{ include "sn.image" .Values.images.lgtm }}
           env:
             - { name: GF_SERVER_ROOT_URL, value: "https://{{ include "sn.host" (dict "root" . "sub" "grafana") }}" }
-            - { name: GF_AUTH_PROXY_ENABLED, value: "true" }
-            - { name: GF_AUTH_PROXY_HEADER_NAME, value: X-Console-Email }
-            - { name: GF_AUTH_PROXY_HEADER_PROPERTY, value: email }
-            - { name: GF_AUTH_PROXY_HEADERS, value: "Role:X-Console-Role" }
-            - { name: GF_AUTH_PROXY_AUTO_SIGN_UP, value: "true" }
-            - { name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true" }
+            {{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/lgtm.env") | fromJson }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
           ports:
             - { name: grafana, containerPort: 3000 }
             - { name: otlp-http, containerPort: 4318 }

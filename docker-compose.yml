@@ -27,8 +27,9 @@
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
 #
-# Grafana gets the server's traces, metrics and logs. The dashboards need no
-# sign-in here; in the cluster the console's sign-in guards them.
+# Grafana gets the server's traces, metrics and logs. Here Caddy signs every
+# visitor in as admin@shopnexus.localhost, an Admin; in the cluster the
+# console's sign-in names the member.
 #
 # dev runs the server with go run and the web apps' dev servers. --watch
 # copies a saved file into its container: the web dev servers reload the
@@ -137,13 +138,10 @@ x-redis: &redis
   restart: unless-stopped
 
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector in one
-# container. Locally Grafana needs no sign-in.
+# container. It signs in the member that Caddy names in X-Console-Email.
 x-lgtm: &lgtm
   image: grafana/otel-lgtm:0.37.0
-  environment:
-    GF_AUTH_ANONYMOUS_ENABLED: "true"
-    GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-    GF_AUTH_DISABLE_LOGIN_FORM: "true"
+  env_file: [./infra/stack/env/lgtm.env]
   restart: unless-stopped
 
 # RustFS's web console on port 9001, for browsing the buckets.
@@ -813,7 +811,10 @@ configs:
         reverse_proxy console-dev:5173
       }
       http://grafana.shopnexus.localhost {
-        reverse_proxy lgtm-dev:3000
+        reverse_proxy lgtm-dev:3000 {
+          header_up X-Console-Email admin@shopnexus.localhost
+          header_up X-Console-Role Admin
+        }
       }
       http://restate.shopnexus.localhost {
         reverse_proxy restate-dev:9070
@@ -844,7 +845,10 @@ configs:
         reverse_proxy console-prod:80
       }
       http://grafana.shopnexus.localhost {
-        reverse_proxy lgtm-prod:3000
+        reverse_proxy lgtm-prod:3000 {
+          header_up X-Console-Email admin@shopnexus.localhost
+          header_up X-Console-Role Admin
+        }
       }
       http://restate.shopnexus.localhost {
         reverse_proxy restate-prod:9070

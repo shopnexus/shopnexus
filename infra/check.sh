@@ -84,7 +84,7 @@ eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier'
 # there is written nowhere else.
 # The chart fails its render on a key in both; compose would let its own
 # block win, so this catches it.
-for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env stack/env/litellm.env:x-litellm; do
+for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env stack/env/litellm.env:x-litellm stack/env/lgtm.env:x-lgtm; do
   for k in $(grep -oE '^[A-Z0-9_]+' "${f%%:*}"); do
     # yq warns about compose's merge anchors on stderr; the keys read are literal.
     for block in $(yq 'keys | .[] | select(test("^'"${f#*:}"'"))' ../docker-compose.yml 2>/dev/null); do
