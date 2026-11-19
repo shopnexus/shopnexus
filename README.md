@@ -66,9 +66,10 @@ cookie reaches the API:
 | console | http://console.shopnexus.localhost:56481 | http://console.shopnexus.localhost:56480 |
 | Grafana | http://grafana.shopnexus.localhost:56481 | http://grafana.shopnexus.localhost:56480 |
 | Restate UI | http://restate.shopnexus.localhost:56481 | http://restate.shopnexus.localhost:56480 |
+| pgweb | http://db.shopnexus.localhost:56481 | http://db.shopnexus.localhost:56480 |
 | RustFS console | http://s3.shopnexus.localhost:56481 | http://s3.shopnexus.localhost:56480 |
 
-Grafana gets the server's traces, metrics and logs. Locally the three
+Grafana gets the server's traces, metrics and logs. Locally the four
 dashboards need no sign-in, and the RustFS console signs in with the stack's
 object store keys, `shopnexus` and `shopnexus-secret`.
 

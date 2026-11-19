@@ -110,6 +110,13 @@ x-postgres: &postgres
     retries: 30
   restart: unless-stopped
 
+# pgweb on the stack's database, the dashboard db, as in the cluster.
+x-pgweb: &pgweb
+  image: sosedoff/pgweb:0.17.0
+  command: [--bind=0.0.0.0, --listen=8081, --lock-session, --skip-open]
+  healthcheck: { <<: *health, test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8081/"] }
+  restart: unless-stopped
+
 x-rustfs: &rustfs
   image: rustfs/rustfs:1.0.4
   environment: &rustfs-env
@@ -358,6 +365,13 @@ services:
     <<: [*dev, *lgtm]
     volumes: [lgtm-dev:/data]
 
+  pgweb-dev:
+    <<: [*dev, *pgweb]
+    environment:
+      PGWEB_DATABASE_URL: postgres://shopnexus:shopnexus@postgres-dev:5432/shopnexus?sslmode=disable
+    depends_on:
+      postgres-dev: { condition: service_healthy }
+
   keys-dev:
     <<: [*dev, *keys]
     volumes: [keys-dev:/home/nonroot]
@@ -579,6 +593,13 @@ services:
   lgtm-prod:
     <<: [*prod, *lgtm]
     volumes: [lgtm-prod:/data]
+
+  pgweb-prod:
+    <<: [*prod, *pgweb]
+    environment:
+      PGWEB_DATABASE_URL: postgres://shopnexus:shopnexus@postgres-prod:5432/shopnexus?sslmode=disable
+    depends_on:
+      postgres-prod: { condition: service_healthy }
 
   keys-prod:
     <<: [*prod, *keys]
@@ -859,6 +880,9 @@ configs:
       http://restate.shopnexus.localhost {
         reverse_proxy restate-dev:9070
       }
+      http://db.shopnexus.localhost {
+        reverse_proxy pgweb-dev:8081
+      }
       http://s3.shopnexus.localhost {
         redir / /rustfs/console/
         reverse_proxy rustfs-dev:9001
@@ -892,6 +916,9 @@ configs:
       }
       http://restate.shopnexus.localhost {
         reverse_proxy restate-prod:9070
+      }
+      http://db.shopnexus.localhost {
+        reverse_proxy pgweb-prod:8081
       }
       http://s3.shopnexus.localhost {
         redir / /rustfs/console/
