@@ -50,6 +50,18 @@ files:
             web:
               forwardedHeaders:
                 trustedIPs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+          # The client's address is in X-Forwarded-For; cookies and
+          # Authorization stay out of the log.
+          accessLog:
+            enabled: true
+            format: json
+            fields:
+              headers:
+                defaultMode: drop
+                names:
+                  User-Agent: keep
+                  X-Forwarded-For: keep
+                  Referer: keep
   # k3s applies these at its first start: Argo CD, then root, the
   # app-of-apps, which k3s retries until Argo CD's CRDs exist.
   - description: Argo CD

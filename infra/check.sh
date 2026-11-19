@@ -63,7 +63,8 @@ for f in -- '--entryPoints.websecure.http.tls.certResolver=le' '--entryPoints.we
   [[ $f == -- ]] && continue; grep -qF -- "$f" <<<"$direct" || { echo "FAIL: direct edge lacks $f" >&2; fails=$((fails + 1)); }
 done
 grep -qF -- '--entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks trusted IPs" >&2; fails=$((fails + 1)); }
-grep -qF -- 'redirections' <<<"$proxy" && { echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
+grep -qF -- '--accesslog=true' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks the access log" >&2; fails=$((fails + 1)); }
+grep -qF -- 'redirections' <<<"$proxy" &&{ echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
 for e in direct behind-proxy; do eq "$(yq '.image' "cluster/k3d-$e.yaml")" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"; done
 # The dashboards' IngressRoute reaches Restate and Argo CD in other namespaces.
 for e in "$direct" "$proxy"; do grep -qF -- '--providers.kubernetescrd.allowCrossNamespace=true' <<<"$e" || { echo "FAIL: an edge lacks allowCrossNamespace" >&2; fails=$((fails + 1)); }; done
