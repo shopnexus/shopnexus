@@ -94,6 +94,7 @@ tests:
       - exists: { path: data.AI_FRAMES_MAX_SECONDS }
       - exists: { path: data.ASSIST_LLM_BASE_URL }
       - exists: { path: data.ASSIST_LLM_MODEL }
+      - exists: { path: data.ASSIST_LLM_REASONING_EFFORT }
       - exists: { path: data.ASSIST_CALL_TIMEOUT }
       - exists: { path: data.CHOTOT_GATEWAY_URL }
       - exists: { path: data.CHOTOT_CDN_URL }
@@ -125,7 +126,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: e000367a58ce5391
+          value: c60ab1421659cc6f
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -133,7 +134,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: e000367a58ce5391
+          value: c60ab1421659cc6f
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
@@ -170,6 +171,7 @@ tests:
       - equal: { path: data.AI_VAD_MODEL, value: /models/silero_vad.onnx }
       - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.ASSIST_LLM_MODEL, value: listing-read }
+      - equal: { path: data.ASSIST_LLM_REASONING_EFFORT, value: none }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
       - equal: { path: data.CHOTOT_GATEWAY_URL, value: https://gateway.chotot.com }
       - equal: { path: data.CHOTOT_CDN_URL, value: https://cdn.chotot.com }
