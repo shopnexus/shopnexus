@@ -192,7 +192,4 @@ tests:
           content: --lock-session
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: PGWEB_PASSWORD, valueFrom: { secretKeyRef: { name: pgweb-db, key: password } } }
-      - matchRegex:
-          path: spec.template.spec.containers[0].env[1].value
-          pattern: ^postgresql://pgweb:\$\(PGWEB_PASSWORD\)@postgres-rw:5432/app\?
+          content: { name: PGWEB_DATABASE_URL, valueFrom: { secretKeyRef: { name: postgres-app, key: uri } } }

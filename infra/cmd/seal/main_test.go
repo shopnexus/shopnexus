@@ -77,7 +77,7 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-db", "agent-secrets", "litellm-db", "litellm-secrets", "pgweb-db", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-db", "agent-secrets", "litellm-db", "litellm-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY",
