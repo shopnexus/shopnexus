@@ -99,3 +99,19 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/shopnexus/console:main
+  - it: keeps a browser on one website pod
+    template: web.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      # web.yaml renders each app's Deployment, then its Service.
+      - isKind: { of: Service }
+        documentIndex: 1
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/service.sticky.cookie"]
+          value: "true"
+        documentIndex: 1
+      - isKind: { of: Service }
+        documentIndex: 3
+      - notExists:
+          path: metadata.annotations
+        documentIndex: 3

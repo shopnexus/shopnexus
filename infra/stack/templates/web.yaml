@@ -1,6 +1,7 @@
-{{- /* Stateless HTTP apps: one Deployment and one Service each. */ -}}
+{{- /* Stateless HTTP apps: one Deployment and one Service each. The website
+  keeps each browser on one pod: its session refresh runs once per pod. */ -}}
 {{- $apps := list
-  (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website)
+  (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website "sticky" true)
   (dict "name" "docs" "port" 80 "image" .Values.images.docs "replicas" .Values.replicas.docs) }}
 {{- if .Values.console.enabled }}
 {{- $apps = append $apps (dict "name" "console" "port" .Values.console.port "image" .Values.images.console "replicas" .Values.replicas.console) }}
@@ -40,6 +41,13 @@ kind: Service
 metadata:
   name: {{ .name }}
   labels: {{- include "sn.labels" $ | nindent 4 }}
+  {{- if .sticky }}
+  annotations:
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.name: sn_pod
+    traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.samesite: lax
+  {{- end }}
 spec:
   selector: { app.kubernetes.io/name: {{ .name }} }
   ports:

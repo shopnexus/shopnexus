@@ -455,7 +455,7 @@ services:
     # Astro's lock file outlives the container; one server runs here anyway.
     command: ["--host", "0.0.0.0", "--port", "4321", "--ignore-lock"]
     environment:
-      API_URL: http://server-dev:8080/v1
+      API_URL: http://server-dev:8080
     volumes:
       - ./website:/src
       - website-node-modules-dev:/src/node_modules
@@ -650,7 +650,7 @@ services:
     image: shopnexus-website:local
     build: ./website
     environment:
-      API_URL: http://server-prod:8080/v1
+      API_URL: http://server-prod:8080
     depends_on: [server-prod]
     healthcheck: { <<: *health, test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').catch(() => process.exit(1))"] }
     restart: unless-stopped
