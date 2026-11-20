@@ -1,0 +1,16 @@
+suite: server versions
+# Old server versions stay up until Restate finishes their invocations; API
+# traffic goes to the current one only, after it is ready.
+templates: [server.yaml]
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  - it: labels the pods with the version
+    documentIndex: 1
+    asserts:
+      - matchRegex: { path: 'spec.template.metadata.labels["shopnexus.id.vn/version"]', pattern: '^[0-9a-f]{16}$' }
+  - it: sends API traffic to that version, in the wave after the server
+    documentIndex: 2
+    asserts:
+      - equal: { path: metadata.name, value: server-api }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+      - matchRegex: { path: 'spec.selector["shopnexus.id.vn/version"]', pattern: '^[0-9a-f]{16}$' }

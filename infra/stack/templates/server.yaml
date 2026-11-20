@@ -27,6 +27,7 @@ spec:
       labels:
         {{- include "sn.podLabels" (dict "root" . "name" "server") | nindent 8 }}
         {{- include "sn.restateAllow" . | nindent 8 }}
+        shopnexus.id.vn/version: {{ include "sn.serverVersion" . }}
       annotations:
         # A config change changes the template, so the operator starts a new version.
         checksum/env: {{ include "sn.serverEnvData" . | sha256sum | trunc 16 }}
@@ -57,14 +58,17 @@ spec:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { memory: 512Mi }
 ---
-# API traffic reaches every server pod, of any version.
+# API traffic reaches the current version only. Wave 3 waits for the
+# RestateDeployment to be Healthy (cluster/argocd.yaml), so the selector moves
+# once the new pods are ready.
 apiVersion: v1
 kind: Service
 metadata:
   name: server-api
   labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "3" | nindent 4 }}
 spec:
-  selector: { app.kubernetes.io/name: server }
+  selector: { app.kubernetes.io/name: server, shopnexus.id.vn/version: {{ include "sn.serverVersion" . }} }
   ports:
     - { name: http, port: 8080, targetPort: http }
 ---
@@ -75,7 +79,8 @@ kind: Service
 metadata:
   name: server-mcp
   labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "3" | nindent 4 }}
 spec:
-  selector: { app.kubernetes.io/name: server }
+  selector: { app.kubernetes.io/name: server, shopnexus.id.vn/version: {{ include "sn.serverVersion" . }} }
   ports:
     - { name: mcp, port: 9090, targetPort: mcp }

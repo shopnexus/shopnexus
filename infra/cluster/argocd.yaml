@@ -39,3 +39,15 @@ spec:
             end
           end
           return hs
+        # A RestateDeployment is Healthy once its current version is ready, so
+        # the server's API Services (wave 3) move to it only then.
+        resource.customizations.health.restate.dev_RestateDeployment: |
+          hs = { status = "Progressing", message = "" }
+          if obj.status == nil or obj.status.observedGeneration ~= obj.metadata.generation then
+            return hs
+          end
+          local ready = obj.status.readyReplicas or 0
+          if ready >= (obj.status.desiredReplicas or 1) then
+            hs.status = "Healthy"
+          end
+          return hs

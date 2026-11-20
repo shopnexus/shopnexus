@@ -10,6 +10,15 @@ app.kubernetes.io/name: {{ .name }}
 {{ include "sn.labels" .root }}
 {{- end }}
 
+{{/*
+The server's version: a hash of what makes the operator start a new one
+(image, env, secrets). The API Services select it, so old versions only
+finish their invocations.
+*/}}
+{{- define "sn.serverVersion" -}}
+{{ printf "%s|%s|%s" (include "sn.image" .Values.images.server) (include "sn.serverEnvData" .) (include "sn.secretsSum" .) | sha256sum | trunc 16 }}
+{{- end }}
+
 {{/* repository:tag of one images.* entry. */}}
 {{- define "sn.image" -}}
 {{ .repository }}:{{ .tag }}
