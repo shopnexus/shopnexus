@@ -126,7 +126,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: d90caa90b899d0eb
+          value: 71087728da0287ce
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -134,7 +134,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: d90caa90b899d0eb
+          value: 71087728da0287ce
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
