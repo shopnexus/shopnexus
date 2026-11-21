@@ -1,5 +1,5 @@
 suite: web apps and ingress
-templates: [web.yaml, ingress.yaml]
+templates: [web.yaml, ingress.yaml, compress.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   - it: serves the prod hosts, each to its Service
@@ -115,3 +115,17 @@ tests:
       - notExists:
           path: metadata.annotations
         documentIndex: 3
+  - it: compresses text answers on every host
+    template: ingress.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
+          value: shopnexus-prod-compress@kubernetescrd
+  - it: compresses text, not photos
+    template: compress.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Middleware }
+      - contains: { path: spec.compress.includedContentTypes, content: text/html }
+      - notContains: { path: spec.compress.includedContentTypes, content: image/jpeg }
