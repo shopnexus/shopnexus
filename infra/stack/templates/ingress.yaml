@@ -11,7 +11,7 @@ metadata:
   labels: {{- include "sn.labels" . | nindent 4 }}
   annotations:
     {{- include "sn.wave" "2" | nindent 4 }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-compress@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-compress@kubernetescrd,{{ .Release.Namespace }}-security-headers@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:

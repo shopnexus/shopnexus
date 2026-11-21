@@ -1,5 +1,5 @@
 suite: web apps and ingress
-templates: [web.yaml, ingress.yaml, compress.yaml]
+templates: [web.yaml, ingress.yaml, compress.yaml, security-headers.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   - it: serves the prod hosts, each to its Service
@@ -126,13 +126,13 @@ tests:
       - notExists:
           path: metadata.annotations
         documentIndex: 3
-  - it: compresses text answers on every host
+  - it: compresses text answers and adds the security headers on every host
     template: ingress.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal:
           path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
-          value: shopnexus-prod-compress@kubernetescrd
+          value: shopnexus-prod-compress@kubernetescrd,shopnexus-prod-security-headers@kubernetescrd
   - it: compresses text, not photos
     template: compress.yaml
     values: [../values-prod.yaml, values-test.yaml]
@@ -140,3 +140,10 @@ tests:
       - isKind: { of: Middleware }
       - contains: { path: spec.compress.includedContentTypes, content: text/html }
       - notContains: { path: spec.compress.includedContentTypes, content: image/jpeg }
+  - it: asks for HTTPS for a year and no content type sniffing
+    template: security-headers.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind: { of: Middleware }
+      - equal: { path: spec.headers.stsSeconds, value: 31536000 }
+      - equal: { path: spec.headers.contentTypeNosniff, value: true }
