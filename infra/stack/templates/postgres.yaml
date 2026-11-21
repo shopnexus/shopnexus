@@ -28,7 +28,11 @@ spec:
     name: postgres
     major: 18
   postgresql:
-    shared_preload_libraries: [pg_search]
+    # pg_prewarm reloads the buffers it saved after a restart.
+    shared_preload_libraries: [pg_search, pg_prewarm]
+    parameters:
+      shared_buffers: {{ .Values.postgres.sharedBuffers | quote }}
+      effective_cache_size: {{ .Values.postgres.effectiveCacheSize | quote }}
   managed:
     roles:
       # LiteLLM keeps its keys and spend in a database of its own.

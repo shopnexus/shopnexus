@@ -35,6 +35,9 @@ replicas:
 postgres:
   instances: 1
   storage: 5Gi
+  # The vector and BM25 indexes search reads must fit in memory.
+  sharedBuffers: 2GB
+  effectiveCacheSize: 6GB
 
 restate:
   replicas: 1
