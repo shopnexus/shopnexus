@@ -27,6 +27,12 @@
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
 #
+# The website's photos are at <website>/_img/, as in the cluster: Caddy
+# sends that path to imgproxy-cache-* (nginx), which keeps each answer of
+# imgproxy-*, which resizes from the stack's RustFS. Their shared settings
+# are infra/stack/env/imgproxy.env and infra/stack/imgproxy/nginx.conf,
+# which the chart reads too.
+#
 # Grafana gets the server's traces, metrics and logs. Here Caddy signs every
 # visitor in as admin@shopnexus.localhost, an Admin; in the cluster the
 # console's sign-in names the member.
@@ -66,8 +72,8 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate, RustFS and LiteLLM follow
-# infra/stack/values.yaml; infra/check.sh fails when they differ.
+# Image versions of Postgres, Restate, RustFS, LiteLLM, imgproxy and its
+# nginx follow infra/stack/values.yaml; infra/check.sh fails when they differ.
 name: shopnexus
 
 # ── building blocks ──
@@ -150,6 +156,30 @@ x-restate: &restate
 x-lgtm: &lgtm
   image: grafana/otel-lgtm:0.37.0
   env_file: [./infra/stack/env/lgtm.env]
+  restart: unless-stopped
+
+# imgproxy reads the stack's RustFS, which each stack names in
+# x-imgproxy-env-*. Inside a stack it answers as imgproxy, the name of its
+# Service in the cluster, which nginx.conf calls.
+x-imgproxy: &imgproxy
+  image: ghcr.io/imgproxy/imgproxy:v4.0.24
+  env_file: [./infra/stack/env/imgproxy.env]
+  healthcheck: { <<: *health, test: ["CMD", "imgproxy", "health"] }
+  restart: unless-stopped
+
+x-imgproxy-env-dev: &imgproxy-env-dev
+  IMGPROXY_BASE_URL: http://rustfs-dev:9000/
+  IMGPROXY_ALLOWED_SOURCES: http://rustfs-dev:9000/shopnexus/
+
+x-imgproxy-env-prod: &imgproxy-env-prod
+  IMGPROXY_BASE_URL: http://rustfs-prod:9000/
+  IMGPROXY_ALLOWED_SOURCES: http://rustfs-prod:9000/shopnexus/
+
+x-imgproxy-cache: &imgproxy-cache
+  image: nginx:1.30.7-alpine
+  configs:
+    - { source: imgproxy-nginx, target: /etc/nginx/conf.d/default.conf }
+  healthcheck: { <<: *health, test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/healthz"] }
   restart: unless-stopped
 
 # RustFS's web console on port 9001, for browsing the buckets.
@@ -519,6 +549,18 @@ services:
     healthcheck: *health-agent
     restart: unless-stopped
 
+  imgproxy-dev:
+    <<: [*dev, *imgproxy]
+    networks: { dev: { aliases: [imgproxy] } }
+    environment: *imgproxy-env-dev
+    depends_on:
+      rustfs-dev: { condition: service_healthy }
+
+  imgproxy-cache-dev:
+    <<: [*dev, *imgproxy-cache]
+    depends_on:
+      imgproxy-dev: { condition: service_healthy }
+
   proxy-dev:
     <<: *dev
     image: caddy:2.10.2-alpine
@@ -671,13 +713,25 @@ services:
       litellm-sync-prod: { condition: service_completed_successfully }
     healthcheck: *health-agent
 
+  imgproxy-prod:
+    <<: [*prod, *imgproxy]
+    networks: { prod: { aliases: [imgproxy] } }
+    environment: *imgproxy-env-prod
+    depends_on:
+      rustfs-prod: { condition: service_healthy }
+
+  imgproxy-cache-prod:
+    <<: [*prod, *imgproxy-cache]
+    depends_on:
+      imgproxy-prod: { condition: service_healthy }
+
   proxy-prod:
     <<: *prod
     image: caddy:2.10.2-alpine
     ports: ["127.0.0.1:56480:80"]
     configs:
       - { source: caddyfile-prod, target: /etc/caddy/Caddyfile }
-    depends_on: [server-prod, website-prod, console-prod, docs-prod, rustfs-prod]
+    depends_on: [server-prod, website-prod, console-prod, docs-prod, rustfs-prod, imgproxy-cache-prod]
     healthcheck: *health-wget
     restart: unless-stopped
 
@@ -760,6 +814,8 @@ networks:
   test:
 
 configs:
+  imgproxy-nginx:
+    file: ./infra/stack/imgproxy/nginx.conf
   air-dev:
     content: |
       tmp_dir = "/tmp/air"
@@ -781,7 +837,12 @@ configs:
         admin off
       }
       http://shopnexus.localhost {
-        reverse_proxy website-dev:4321
+        handle /_img/* {
+          reverse_proxy imgproxy-cache-dev:80
+        }
+        handle {
+          reverse_proxy website-dev:4321
+        }
       }
       http://api.shopnexus.localhost {
         reverse_proxy server-dev:8080
@@ -818,7 +879,12 @@ configs:
         admin off
       }
       http://shopnexus.localhost {
-        reverse_proxy website-prod:3000
+        handle /_img/* {
+          reverse_proxy imgproxy-cache-prod:80
+        }
+        handle {
+          reverse_proxy website-prod:3000
+        }
       }
       http://api.shopnexus.localhost {
         reverse_proxy server-prod:8080

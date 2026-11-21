@@ -1,0 +1,70 @@
+suite: imgproxy and its cache
+templates: [imgproxy.yaml]
+# imgproxy.yaml renders imgproxy's Deployment and Service, the cache's
+# ConfigMap, Deployment and Service.
+release: { namespace: shopnexus-prod }
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  - it: runs the pinned imgproxy on presets only, under /_img
+    documentIndex: 0
+    asserts:
+      - equal: { path: metadata.name, value: imgproxy }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+      - matchRegex: { path: 'spec.template.spec.containers[0].image', pattern: '^ghcr.io/imgproxy/imgproxy:v[0-9]+\.[0-9]+\.[0-9]+$' }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_ONLY_PRESETS, value: "true" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_PATH_PREFIX, value: /_img }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_AUTO_AVIF, value: "true" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_TTL, value: "31536000" }
+      - matchRegex: { path: 'spec.template.spec.containers[0].env[?(@.name=="IMGPROXY_PRESETS")].value', pattern: '(^|,)sq480=rs:fill:480:480:0/g:sm(,|$)' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].env[?(@.name=="IMGPROXY_PRESETS")].value', pattern: '(^|,)w1080=rs:fit:1080:0:0(,|$)' }
+      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.httpGet.path', value: /_img/health }
+  - it: reads the stack's rustfs, and nothing else, in prod
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_BASE_URL, value: "http://rustfs:9000/" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_ALLOWED_SOURCES, value: "http://rustfs:9000/shopnexus/" }
+  - it: reads the stack's rustfs in dev
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_BASE_URL, value: "http://rustfs:9000/" }
+  - it: ships imgproxy/nginx.conf, the file compose mounts, keyed by path and format
+    documentIndex: 2
+    asserts:
+      - equal: { path: metadata.name, value: imgproxy-cache }
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_pass http://imgproxy:8080;' }
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_cache_key "\$uri\|\$img_accept";' }
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_set_header Accept \$img_accept;' }
+  - it: runs the cache with the config and an emptyDir, and rolls on a config change
+    documentIndex: 3
+    asserts:
+      - equal: { path: metadata.name, value: imgproxy-cache }
+      - matchRegex: { path: 'spec.template.spec.containers[0].image', pattern: '^nginx:[0-9]+\.[0-9]+\.[0-9]+-alpine$' }
+      - exists: { path: 'spec.template.metadata.annotations["checksum/config"]' }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: cache, emptyDir: { sizeLimit: 2Gi } }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: config, mountPath: /etc/nginx/conf.d }
+  - it: serves the cache on imgproxy-cache:80 and imgproxy on imgproxy:8080
+    asserts:
+      - equal: { path: 'spec.ports[0].port', value: 80 }
+        documentIndex: 4
+      - equal: { path: 'spec.ports[0].port', value: 8080 }
+        documentIndex: 1

@@ -1,0 +1,114 @@
+{{- /* imgproxy resizes the website's photos from rustfs at <domain>/_img/
+       (ingress.yaml), behind imgproxy-cache, an nginx that keeps each
+       answer. Their settings are env/imgproxy.env and imgproxy/nginx.conf,
+       which docker-compose.yml reads too; the source differs from compose
+       and is set here. A key in both fails the render. */ -}}
+{{- $shared := include "sn.envFile" (dict "root" . "file" "env/imgproxy.env") | fromJson }}
+{{- $stack := dict "IMGPROXY_BASE_URL" "http://rustfs:9000/" "IMGPROXY_ALLOWED_SOURCES" "http://rustfs:9000/shopnexus/" }}
+{{- range $k, $_ := $stack }}
+{{- if hasKey $shared $k }}{{ fail (printf "%s is in env/imgproxy.env and in imgproxy.yaml" $k) }}{{ end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imgproxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: imgproxy }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "imgproxy") | nindent 8 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: imgproxy
+          image: {{ include "sn.image" .Values.images.imgproxy }}
+          env:
+            {{- range $k, $v := merge $stack $shared }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /_img/health, port: http }
+          livenessProbe:
+            httpGet: { path: /_img/health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imgproxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: imgproxy }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: imgproxy-cache
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    {{- .Files.Get "imgproxy/nginx.conf" | nindent 4 }}
+---
+# The cache is an emptyDir: a new pod starts empty and fills from imgproxy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imgproxy-cache
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: imgproxy-cache }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "imgproxy-cache") | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Files.Get "imgproxy/nginx.conf" | sha256sum | trunc 16 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: nginx
+          image: {{ include "sn.image" .Values.images.nginx }}
+          ports:
+            - { name: http, containerPort: 80 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - { name: config, mountPath: /etc/nginx/conf.d }
+            - { name: cache, mountPath: /var/cache/nginx }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: config
+          configMap: { name: imgproxy-cache }
+        - name: cache
+          emptyDir: { sizeLimit: 2Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imgproxy-cache
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: imgproxy-cache }
+  ports:
+    - { name: http, port: 80, targetPort: http }

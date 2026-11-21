@@ -13,7 +13,7 @@ tests:
           path: spec.rules[0].host
           value: shopnexus.id.vn
       - equal:
-          path: spec.rules[0].http.paths[0].backend.service.name
+          path: spec.rules[0].http.paths[1].backend.service.name
           value: website
       - equal:
           path: spec.rules[1].host
@@ -52,6 +52,17 @@ tests:
       - equal:
           path: spec.rules[4].host
           value: console.dev.shopnexus.id.vn
+  - it: sends the main host's /_img to the photo cache, the rest to the website
+    template: ingress.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - lengthEqual: { path: 'spec.rules[0].http.paths', count: 2 }
+      - equal:
+          path: spec.rules[0].http.paths[0]
+          value: { path: /_img, pathType: Prefix, backend: { service: { name: imgproxy-cache, port: { number: 80 } } } }
+      - equal: { path: 'spec.rules[0].http.paths[1].path', value: / }
+      - equal: { path: 'spec.rules[0].http.paths[1].backend.service.name', value: website }
+      - lengthEqual: { path: 'spec.rules[1].http.paths', count: 1 }
   - it: leaves TLS to the edge
     template: ingress.yaml
     values: [../values-prod.yaml, values-test.yaml]

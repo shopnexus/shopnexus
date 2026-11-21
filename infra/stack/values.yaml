@@ -20,6 +20,8 @@ images:
   pgweb: { repository: sosedoff/pgweb, tag: 0.17.0 }
   litellm: { repository: ghcr.io/berriai/litellm-database, tag: v1.108.0 }
   curl: { repository: curlimages/curl, tag: 8.23.0 }
+  imgproxy: { repository: ghcr.io/imgproxy/imgproxy, tag: v4.0.24 }
+  nginx: { repository: nginx, tag: 1.30.7-alpine }
 
 console:
   enabled: true

@@ -11,9 +11,10 @@ spec:
   policyTypes: [Ingress]
 ---
 # Pods of this stack reach each other: server to postgres and rustfs, the
-# jobs, postgres replication. The server and the agent take only the ports
-# to-server and to-agent open. pgweb asks for no sign-in, so only Traefik,
-# behind the console's gate, reaches it.
+# jobs, postgres replication, imgproxy to rustfs. The server and the agent
+# take only the ports to-server and to-agent open, and imgproxy only its
+# cache. pgweb asks for no sign-in, so only Traefik, behind the console's
+# gate, reaches it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -22,7 +23,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy] }
   ingress:
     - from:
         - podSelector: {}
@@ -35,7 +36,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, litellm, pgweb] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, litellm, pgweb, imgproxy-cache] }
   ingress:
     - from:
         - namespaceSelector:
@@ -135,3 +136,20 @@ spec:
             matchLabels: { app.kubernetes.io/name: server }
       ports:
         - { protocol: TCP, port: 3000 }
+---
+# imgproxy takes requests from its cache only, so every photo is resized
+# once per format.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-imgproxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: imgproxy }
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: imgproxy-cache }
+      ports:
+        - { protocol: TCP, port: 8080 }

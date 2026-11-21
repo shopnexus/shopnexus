@@ -19,6 +19,15 @@ spec:
     - host: {{ include "sn.host" (dict "root" $ "sub" (index . 0)) }}
       http:
         paths:
+          {{- if eq (index . 0) "" }}
+          # The website's photos, resized by imgproxy behind its cache.
+          - path: /_img
+            pathType: Prefix
+            backend:
+              service:
+                name: imgproxy-cache
+                port: { number: 80 }
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:
