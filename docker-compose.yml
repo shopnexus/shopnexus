@@ -176,6 +176,9 @@ x-litellm: &litellm
     interval: 5s
     timeout: 5s
     retries: 60
+    # Startup takes ~25s; check each second then, so the stack waits no longer.
+    start_period: 2m
+    start_interval: 1s
   restart: unless-stopped
 
 # infra/stack/litellm/keys.sh: litellm-keys-* adds LiteLLM's keys missing
