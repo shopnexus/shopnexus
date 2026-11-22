@@ -39,6 +39,7 @@ spec:
             - { name: console, containerPort: 9001 }
           readinessProbe:
             httpGet: { path: /health, port: s3 }
+            initialDelaySeconds: 3
           volumeMounts:
             - { name: data, mountPath: /data }
           resources:

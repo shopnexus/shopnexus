@@ -47,8 +47,11 @@ spec:
             - { name: http, containerPort: 8080 }
             - { name: restate, containerPort: 9080 }
             - { name: mcp, containerPort: 9090 }
+          # Probes start once the process usually listens, so a rollout
+          # leaves no failed-probe events.
           readinessProbe:
             httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
             httpGet: { path: /healthz, port: http }

@@ -115,6 +115,7 @@ spec:
             - { name: otlp-http, containerPort: 4318 }
           readinessProbe:
             httpGet: { path: /api/health, port: grafana }
+            initialDelaySeconds: 25
           volumeMounts:
             - { name: data, mountPath: /data }
             - name: dashboards
