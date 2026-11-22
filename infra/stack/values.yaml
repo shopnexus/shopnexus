@@ -48,6 +48,9 @@ restate:
 rustfs:
   storage: 10Gi
 
+# Other domains that redirect to the same host under domain.
+aliasDomains: []
+
 # Argo CD has one server per cluster, and one stack routes argocd.<domain>
 # to it behind the console's sign-in: prod's, or dev's on a cluster that
 # runs dev only (the Application sets the parameter).

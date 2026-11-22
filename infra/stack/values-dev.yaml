@@ -2,6 +2,7 @@ stack: dev
 # Temporary: dev serves the prod domain until prod runs from a release tag.
 # Then this goes back to dev.shopnexus.id.vn.
 domain: shopnexus.id.vn
+aliasDomains: [dev.shopnexus.id.vn]
 appEnv: dev
 server:
   # server-ai on dev loads no SigLIP 2: the machine has no room for its

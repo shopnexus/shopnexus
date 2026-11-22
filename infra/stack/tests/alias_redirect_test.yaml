@@ -1,0 +1,29 @@
+suite: alias domains
+templates: [alias-redirect.yaml]
+release: { namespace: shopnexus-dev }
+tests:
+  - it: sends every dev. host to the same host on the main domain
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.redirectRegex
+          value:
+            regex: '^https?://([a-z0-9-]+\.)?(dev\.shopnexus\.id\.vn)(:[0-9]+)?(.*)$'
+            replacement: 'https://${1}shopnexus.id.vn${4}'
+        documentSelector: { path: kind, value: Middleware }
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
+          value: shopnexus-dev-alias-redirect@kubernetescrd
+        documentSelector: { path: kind, value: Ingress }
+      - lengthEqual: { path: spec.rules, count: 10 }
+        documentSelector: { path: kind, value: Ingress }
+      - equal: { path: 'spec.rules[0].host', value: dev.shopnexus.id.vn }
+        documentSelector: { path: kind, value: Ingress }
+      - equal: { path: 'spec.rules[1].host', value: api.dev.shopnexus.id.vn }
+        documentSelector: { path: kind, value: Ingress }
+      - equal: { path: 'spec.rules[5].host', value: grafana.dev.shopnexus.id.vn }
+        documentSelector: { path: kind, value: Ingress }
+  - it: renders nothing without alias domains
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }

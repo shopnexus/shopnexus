@@ -1,0 +1,45 @@
+{{- /* Each alias domain redirects to the same host under domain:
+       api.<alias>/x goes to api.<domain>/x. The Ingress's backend is never
+       reached: the middleware answers first. */ -}}
+{{- if .Values.aliasDomains }}
+{{- $d := required "domain is required" .Values.domain }}
+{{- $subs := list "" "api" "media" "docs" "console" }}
+{{- range include "sn.dashboards" . | fromJsonArray }}{{ $subs = append $subs .app }}{{ end }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: alias-redirect
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  redirectRegex:
+    {{- $alt := list }}
+    {{- range .Values.aliasDomains }}{{ $alt = append $alt (replace "." "\\." .) }}{{ end }}
+    regex: {{ printf "^https?://([a-z0-9-]+\\.)?(%s)(:[0-9]+)?(.*)$" (join "|" $alt) | squote }}
+    replacement: {{ printf "https://${1}%s${4}" $d | squote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alias-redirect
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations:
+    {{- include "sn.wave" "2" | nindent 4 }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-alias-redirect@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  {{- range $alias := .Values.aliasDomains }}
+  {{- range $subs }}
+    - host: {{ if . }}{{ . }}.{{ end }}{{ $alias }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: website
+                port: { number: 3000 }
+  {{- end }}
+  {{- end }}
+{{- end }}
