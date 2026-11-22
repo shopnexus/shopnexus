@@ -21,6 +21,33 @@ spec:
           retention: 3d
           persistentVolume: { size: 4Gi }
           global: { scrape_interval: 30s }
+        # cnpg: each Postgres instance's exporter, which the pod annotations
+        # cannot name, since CNPG copies them onto its Services too.
+        # blackbox: the public hosts, probed from inside the cluster through
+        # Traefik (blackbox-exporter.yaml); dev serves the apex for now.
+        extraScrapeConfigs: |
+          - job_name: cnpg
+            kubernetes_sd_configs: [{ role: pod }]
+            relabel_configs:
+              - { source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole], regex: instance, action: keep }
+              - { source_labels: [__meta_kubernetes_pod_container_port_name], regex: metrics, action: keep }
+              - { source_labels: [__meta_kubernetes_namespace], target_label: namespace }
+              - { source_labels: [__meta_kubernetes_pod_name], target_label: pod }
+              - { source_labels: [__meta_kubernetes_pod_label_cnpg_io_instanceRole], target_label: role }
+          - job_name: blackbox
+            metrics_path: /probe
+            params: { module: [http_2xx] }
+            scrape_interval: 60s
+            static_configs:
+              - targets:
+                  - https://shopnexus.id.vn/
+                  - https://api.shopnexus.id.vn/healthz
+                  - https://console.shopnexus.id.vn/
+                  - https://docs.shopnexus.id.vn/
+            relabel_configs:
+              - { source_labels: [__address__], target_label: __param_target }
+              - { source_labels: [__param_target], target_label: instance }
+              - { target_label: __address__, replacement: blackbox-exporter.monitoring.svc:9115 }
   destination: { server: https://kubernetes.default.svc, namespace: monitoring }
   syncPolicy:
     automated: { prune: true, selfHeal: true }

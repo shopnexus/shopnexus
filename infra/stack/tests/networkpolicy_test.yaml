@@ -3,10 +3,18 @@ templates: [networkpolicy.yaml]
 release: { namespace: shopnexus-prod }
 values: [../values-prod.yaml, values-test.yaml]
 tests:
-  - it: denies ingress by default and opens it to five sources and five services
+  - it: denies ingress by default, opens it to five sources and five services, and lets Prometheus scrape
     asserts:
       - hasDocuments:
-          count: 10
+          count: 12
+      - equal:
+          path: metadata.name
+          value: from-monitoring
+        documentIndex: 10
+      - equal:
+          path: metadata.name
+          value: from-monitoring-litellm
+        documentIndex: 11
       - equal:
           path: metadata.name
           value: default-deny-ingress

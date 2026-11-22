@@ -64,6 +64,9 @@ lgtm:
   # Grafana's second Prometheus, the cluster's (infra/platform/prometheus.yaml).
   # Empty leaves Grafana with the one inside lgtm.
   clusterPrometheus: http://prometheus-server.monitoring.svc
+  # Alerts go to Telegram, with the bot token and chat id of Secret
+  # grafana-secrets (secrets/<stack>/grafana-secrets.yaml, sealed by hand).
+  telegram: false
 
 # The console agent (repo shopnexus/agent): no Ingress, only the server
 # reaches it, and it reaches only the server's MCP port. Its settings are in

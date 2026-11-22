@@ -20,6 +20,8 @@ spec:
     autoProvision: true
   compute:
     replicas: {{ .Values.restate.replicas }}
+    # The cluster's Prometheus scrapes the node port's /metrics.
+    annotations: { prometheus.io/scrape: "true", prometheus.io/port: "5122" }
     image: {{ include "sn.image" .Values.images.restate }}
     topologySpreadConstraints:
       - maxSkew: 1
@@ -38,6 +40,9 @@ spec:
     # The operator admits traffic to the ingress and admin ports only from
     # these peers: the stack's server pods, and Traefik for the admin UI.
     networkPeers:
+      node:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: prometheus } }
       ingress:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Release.Namespace }} } }
           podSelector: { matchLabels: { app.kubernetes.io/name: server } }

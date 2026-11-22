@@ -1,0 +1,234 @@
+# The server's alerts, the same in the cluster and in docker-compose.yml.
+apiVersion: 1
+groups:
+- orgId: 1
+  name: Server
+  folder: ShopNexus
+  interval: 1m
+  rules:
+  - uid: sn-api-5xx
+    title: API 5xx share
+    condition: B
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: API trả lỗi 5xx cho {{ humanizePercentage $values.A.Value }} request trong 5 phút qua.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (sum(rate(http_server_request_duration_seconds_count{job="server",http_route!~"/(healthz|readyz)",http_response_status_code=~"5.."}[5m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{job="server",http_route!~"/(healthz|readyz)"}[5m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.02
+  - uid: sn-api-p95
+    title: API p95 latency
+    condition: B
+    for: 10m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: p95 của API là {{ humanizeDuration $values.A.Value }} trong 10 phút qua.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job="server",http_route!~"/(healthz|readyz)"}[10m]))) and on () sum(rate(http_server_request_duration_seconds_count{job="server",http_route!~"/(healthz|readyz)"}[10m]))
+          > 0.05
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 2
+  - uid: sn-server-silent
+    title: Server not reporting
+    condition: B
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: 'Không process server nào gửi metric trong 5 phút: server có thể đã dừng.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: count(target_info{job="server"}) or vector(0)
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+  - uid: sn-external-failing
+    title: External calls failing
+    condition: B
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ humanizePercentage $values.A.Value }} lượt gọi tới {{ $labels.server_address }} thất bại trong 5 phút qua.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: sum by (server_address) (rate(http_client_request_duration_seconds_count{job="server",http_response_status_code=~"[45]..|"}[5m])) / sum by (server_address) (rate(http_client_request_duration_seconds_count{job="server"}[5m]))
+          and on (server_address) sum by (server_address) (rate(http_client_request_duration_seconds_count{job="server"}[5m])) > 0.01
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.2
+  - uid: sn-sign-in-failures
+    title: Sign-in failures
+    condition: B
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $values.A.Value }} lần đăng nhập thất bại trong 15 phút: có thể có người dò mật khẩu.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: sum(increase(login_total{job="server",result="failure"}[15m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 30
+  - uid: sn-refresh-reuse
+    title: Refresh token reused
+    condition: B
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Có refresh token đã xoay vòng bị dùng lại: token có thể đã bị lộ.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: sum(increase(refresh_reuse_total{job="server"}[15m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+  - uid: sn-client-errors
+    title: Website script errors
+    condition: B
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Website ghi nhận {{ $values.A.Value }} lỗi script trong 15 phút qua.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: sum(increase(client_errors_total[15m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 20

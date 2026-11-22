@@ -1,0 +1,200 @@
+# Alerts on the cluster's Prometheus; the chart adds them with clusterPrometheus.
+apiVersion: 1
+groups:
+- orgId: 1
+  name: Cluster
+  folder: ShopNexus
+  interval: 1m
+  rules:
+  - uid: sn-site-down
+    title: Site down
+    condition: B
+    for: 2m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.instance }} không trả lời được từ trong cụm.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: probe_success{job="blackbox"}
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+  - uid: sn-cert-expiry
+    title: Certificate expiring
+    condition: B
+    for: 1h
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Chứng chỉ TLS của {{ $labels.instance }} hết hạn sau {{ humanize $values.A.Value }} ngày.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox"} - time()) / 86400
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 14
+  - uid: sn-pod-restarts
+    title: Pod restarting
+    condition: B
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Pod {{ $labels.pod }} đã khởi động lại {{ $values.A.Value }} lần trong 15 phút.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace="__NAMESPACE__"}[15m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 2
+  - uid: sn-pod-not-ready
+    title: Pod not ready
+    condition: B
+    for: 10m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Pod {{ $labels.pod }} đang chạy nhưng chưa sẵn sàng hơn 10 phút.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: sum by (pod) (kube_pod_status_ready{namespace="__NAMESPACE__",condition="false"} * on (namespace, pod) group_left () (kube_pod_status_phase{namespace="__NAMESPACE__",phase="Running"} == 1))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+  - uid: sn-node-disk
+    title: Node disk full
+    condition: B
+    for: 15m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Disk của node {{ $labels.node }} đã dùng {{ humanizePercentage $values.A.Value }}.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: 1 - min by (node) (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"})
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.9
+  - uid: sn-node-memory
+    title: Node memory full
+    condition: B
+    for: 15m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: RAM của node {{ $labels.node }} đã dùng {{ humanizePercentage $values.A.Value }}.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: 1 - sum by (node) (node_memory_MemAvailable_bytes) / sum by (node) (node_memory_MemTotal_bytes)
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.9

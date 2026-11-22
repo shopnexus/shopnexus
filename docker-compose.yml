@@ -153,7 +153,8 @@ x-restate: &restate
 
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector in one
 # container. It signs in the member that Caddy names in X-Console-Email and
-# loads the dashboards of infra/stack/grafana, as the chart does.
+# loads the dashboards and alert rules of infra/stack/grafana, as the chart
+# does. Alerts here notify no one; the cluster's go to Telegram.
 x-lgtm: &lgtm
   image: grafana/otel-lgtm:0.37.0
   env_file: [./infra/stack/env/lgtm.env]
@@ -373,7 +374,10 @@ services:
 
   lgtm-dev:
     <<: [*dev, *lgtm]
-    volumes: [lgtm-dev:/data, ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro]
+    volumes:
+      - lgtm-dev:/data
+      - ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro
+      - ./infra/stack/grafana/alerting:/otel-lgtm/grafana/conf/provisioning/alerting:ro
 
   pgweb-dev:
     <<: [*dev, *pgweb]
@@ -592,7 +596,10 @@ services:
 
   lgtm-prod:
     <<: [*prod, *lgtm]
-    volumes: [lgtm-prod:/data, ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro]
+    volumes:
+      - lgtm-prod:/data
+      - ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro
+      - ./infra/stack/grafana/alerting:/otel-lgtm/grafana/conf/provisioning/alerting:ro
 
   pgweb-prod:
     <<: [*prod, *pgweb]

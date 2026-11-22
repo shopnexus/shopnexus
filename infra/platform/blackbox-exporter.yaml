@@ -1,0 +1,22 @@
+# Probes the public hosts for the job blackbox of prometheus.yaml, so an
+# alert fires when a site stops answering or its certificate nears expiry.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: blackbox-exporter
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-blackbox-exporter
+    targetRevision: 11.22.0
+    helm:
+      valuesObject:
+        fullnameOverride: blackbox-exporter
+  destination: { server: https://kubernetes.default.svc, namespace: monitoring }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }

@@ -28,6 +28,9 @@ spec:
     metadata:
       labels: {{- include "sn.podLabels" (dict "root" . "name" "litellm") | nindent 8 }}
       annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "4000"
+        prometheus.io/path: /metrics
         checksum/config: {{ print (.Files.Get "litellm/config.yaml") (.Files.Get "env/litellm.env") | sha256sum | trunc 16 }}
         checksum/secrets: {{ include "sn.secretsSum" . }}
     spec:

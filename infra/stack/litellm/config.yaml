@@ -41,3 +41,7 @@ general_settings:
   trusted_proxy_ranges: []
 litellm_settings:
   drop_params: true
+  # Request, latency, token and spend metrics at /metrics, which only the
+  # cluster's Prometheus reaches (templates/networkpolicy.yaml).
+  callbacks: ["prometheus"]
+  require_auth_for_metrics_endpoint: false

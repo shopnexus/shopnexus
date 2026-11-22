@@ -1,0 +1,21 @@
+# Every alert goes to Telegram; the chart adds this with lgtm.telegram and
+# Secret grafana-secrets.
+apiVersion: 1
+contactPoints:
+- orgId: 1
+  name: Telegram
+  receivers:
+  - uid: sn-telegram
+    type: telegram
+    settings:
+      bottoken: $TELEGRAM_BOT_TOKEN
+      chatid: $TELEGRAM_CHAT_ID
+      parse_mode: None
+policies:
+- orgId: 1
+  receiver: Telegram
+  group_by:
+  - alertname
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h

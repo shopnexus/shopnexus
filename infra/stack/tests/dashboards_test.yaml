@@ -180,7 +180,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.template.spec.volumes
-          count: 2
+          count: 3
   - it: provisions the ShopNexus dashboards, Pods on the stack's namespace
     template: dashboards.yaml
     documentSelector: { path: metadata.name, value: lgtm-dashboards }
@@ -232,3 +232,39 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: PGWEB_DATABASE_URL, valueFrom: { secretKeyRef: { name: postgres-app, key: uri } } }
+  - it: provisions the alert rules, the cluster's on the stack's namespace, and Telegram on dev
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: lgtm-alerting }
+    values: [../values-dev.yaml, values-test.yaml]
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - matchRegex:
+          path: data["server.yaml"]
+          pattern: "uid: sn-api-5xx"
+      - matchRegex:
+          path: data["cluster.yaml"]
+          pattern: 'namespace="shopnexus-dev"'
+      - matchRegex:
+          path: data["telegram.yaml"]
+          pattern: 'chatid: \$TELEGRAM_CHAT_ID'
+  - it: leaves Telegram out of prod until its secret is sealed
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: lgtm-alerting }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - exists:
+          path: data["server.yaml"]
+      - notExists:
+          path: data["telegram.yaml"]
+  - it: gives Grafana the Telegram secret on dev
+    template: dashboards.yaml
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: lgtm }
+    values: [../values-dev.yaml, values-test.yaml]
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: TELEGRAM_BOT_TOKEN, valueFrom: { secretKeyRef: { name: grafana-secrets, key: TELEGRAM_BOT_TOKEN } } }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: alerting, mountPath: /otel-lgtm/grafana/conf/provisioning/alerting, readOnly: true }
