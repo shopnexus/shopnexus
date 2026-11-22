@@ -422,6 +422,8 @@ services:
         FROM golang:1.27.3-trixie
         RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
         RUN go install github.com/air-verse/air@v1.67.4
+        # GEOIP_DB in server.env, as the server image has it.
+        RUN --mount=type=bind,source=scripts/fetch-geoip.sh,target=/fetch-geoip.sh sh /fetch-geoip.sh /geoip/country.mmdb
         WORKDIR /src
         COPY go.mod go.sum ./
         RUN go mod download
