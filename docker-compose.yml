@@ -861,8 +861,14 @@ configs:
       http://api.shopnexus.localhost {
         reverse_proxy server-dev:8080
       }
+      # Only the media bucket, as on the cluster's media host.
       http://media.shopnexus.localhost {
-        reverse_proxy rustfs-dev:9000
+        handle /shopnexus/* {
+          reverse_proxy rustfs-dev:9000
+        }
+        handle {
+          respond 404
+        }
       }
       http://docs.shopnexus.localhost {
         reverse_proxy docs-dev:4321
@@ -903,8 +909,14 @@ configs:
       http://api.shopnexus.localhost {
         reverse_proxy server-prod:8080
       }
+      # Only the media bucket, as on the cluster's media host.
       http://media.shopnexus.localhost {
-        reverse_proxy rustfs-prod:9000
+        handle /shopnexus/* {
+          reverse_proxy rustfs-prod:9000
+        }
+        handle {
+          respond 404
+        }
       }
       http://docs.shopnexus.localhost {
         reverse_proxy docs-prod:80
