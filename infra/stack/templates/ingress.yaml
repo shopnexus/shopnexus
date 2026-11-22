@@ -1,8 +1,12 @@
 {{- /* Hosts only. TLS belongs to the edge: Traefik's websecure entrypoint
-       in direct mode, the outer proxy in behind-proxy mode. The console,
-       an admin app, has its own Ingress with noindex. */ -}}
+       in direct mode, the outer proxy in behind-proxy mode. The API and the
+       console are never searched for: their Ingress adds noindex. */ -}}
 {{- $d := required "domain is required" .Values.domain }}
-{{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- $routes := list (list "" "website" 3000) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- $private := list (list "api" "server-api" 8080) }}
+{{- if .Values.console.enabled }}
+{{- $private = append $private (list "console" "console" (int .Values.console.port)) }}
+{{- end }}
 {{- $mw := printf "%[1]s-compress@kubernetescrd,%[1]s-security-headers@kubernetescrd" .Release.Namespace }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -15,17 +19,15 @@ metadata:
 spec:
   ingressClassName: traefik
   rules: {{- include "sn.ingressRules" (dict "routes" $routes "domain" $d) | trim | nindent 4 }}
-{{- if .Values.console.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: console
+  name: private
   labels: {{- include "sn.labels" . | nindent 4 }}
   annotations:
     {{- include "sn.wave" "2" | nindent 4 }}
     traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }},{{ .Release.Namespace }}-noindex@kubernetescrd
 spec:
   ingressClassName: traefik
-  rules: {{- include "sn.ingressRules" (dict "routes" (list (list "console" "console" (int .Values.console.port))) "domain" $d) | trim | nindent 4 }}
-{{- end }}
+  rules: {{- include "sn.ingressRules" (dict "routes" $private "domain" $d) | trim | nindent 4 }}

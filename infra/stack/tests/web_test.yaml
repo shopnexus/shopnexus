@@ -9,7 +9,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.rules
-          count: 4
+          count: 3
       - equal:
           path: spec.rules[0].host
           value: shopnexus.id.vn
@@ -18,26 +18,26 @@ tests:
           value: website
       - equal:
           path: spec.rules[1].host
-          value: api.shopnexus.id.vn
-      - equal:
-          path: spec.rules[1].http.paths[0].backend.service.name
-          value: server-api
-      - equal:
-          path: spec.rules[2].host
           value: media.shopnexus.id.vn
       - equal:
-          path: spec.rules[3].host
+          path: spec.rules[2].host
           value: docs.shopnexus.id.vn
-  - it: serves the console on its own Ingress with noindex
+  - it: serves the API and the console with noindex
     template: ingress.yaml
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal:
           path: spec.rules[0].host
-          value: console.shopnexus.id.vn
+          value: api.shopnexus.id.vn
       - equal:
           path: spec.rules[0].http.paths[0].backend.service.name
+          value: server-api
+      - equal:
+          path: spec.rules[1].host
+          value: console.shopnexus.id.vn
+      - equal:
+          path: spec.rules[1].http.paths[0].backend.service.name
           value: console
       - equal:
           path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
@@ -48,9 +48,9 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal:
-          path: spec.rules[2].http.paths[0]
+          path: spec.rules[1].http.paths[0]
           value: { path: /robots.txt, pathType: Exact, backend: { service: { name: imgproxy-cache, port: { number: 80 } } } }
-      - equal: { path: 'spec.rules[2].http.paths[1].backend.service.name', value: rustfs }
+      - equal: { path: 'spec.rules[1].http.paths[1].backend.service.name', value: rustfs }
   - it: serves the dev hosts
     template: ingress.yaml
     values: [../values-dev.yaml, values-test.yaml]
@@ -61,12 +61,9 @@ tests:
           value: shopnexus.id.vn
       - equal:
           path: spec.rules[1].host
-          value: api.shopnexus.id.vn
-      - equal:
-          path: spec.rules[2].host
           value: media.shopnexus.id.vn
       - equal:
-          path: spec.rules[3].host
+          path: spec.rules[2].host
           value: docs.shopnexus.id.vn
   - it: sends the main host's /_img to the photo cache, the rest to the website
     template: ingress.yaml
@@ -79,7 +76,7 @@ tests:
           value: { path: /_img, pathType: Prefix, backend: { service: { name: imgproxy-cache, port: { number: 80 } } } }
       - equal: { path: 'spec.rules[0].http.paths[1].path', value: / }
       - equal: { path: 'spec.rules[0].http.paths[1].backend.service.name', value: website }
-      - lengthEqual: { path: 'spec.rules[1].http.paths', count: 1 }
+      - lengthEqual: { path: 'spec.rules[2].http.paths', count: 1 }
   - it: leaves TLS to the edge
     template: ingress.yaml
     values: [../values-prod.yaml, values-test.yaml]
