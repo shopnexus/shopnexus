@@ -43,7 +43,7 @@
       "type": "stat",
       "id": 2,
       "title": "Online now",
-      "description": "Visitors with a request in the last 5 minutes: signed-in accounts, console members and guests (one guest per address a day).",
+      "description": "Visitors with a request in the last 5 minutes: signed-in accounts, console members and guests (one guest per address a day). Bots are left out.",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -60,7 +60,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "count(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor != \"\" [5m])))",
+          "expr": "count(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [5m])))",
           "refId": "A",
           "queryType": "range"
         }
@@ -147,7 +147,7 @@
       "type": "stat",
       "id": 4,
       "title": "Requests / min",
-      "description": "API requests a minute over the last 5 minutes, health probes left out.",
+      "description": "API requests a minute over the last 5 minutes, health probes and bots left out.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -164,7 +164,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"server\",http_route!~\"/(healthz|readyz)\"}[5m])) * 60",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"server\",client!=\"bot\",http_route!~\"/(healthz|readyz)\"}[5m])) * 60",
           "refId": "A",
           "legendFormat": "__auto"
         }
@@ -216,7 +216,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "count(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor != \"\" [$__range])))",
+          "expr": "count(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [$__range])))",
           "refId": "A",
           "queryType": "instant"
         }
@@ -320,7 +320,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "count(sum by (country) (count_over_time({service_name=\"server\"} | visitor != \"\" | country != \"\" [$__range])))",
+          "expr": "count(sum by (country) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" | country != \"\" [$__range])))",
           "refId": "A",
           "queryType": "instant"
         }
@@ -385,7 +385,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "count by (client) (sum by (visitor, client) (count_over_time({service_name=\"server\"} | visitor != \"\" [5m])))",
+          "expr": "count by (client) (sum by (visitor, client) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [5m])))",
           "refId": "A",
           "queryType": "range",
           "legendFormat": "{{client}}"
@@ -488,7 +488,7 @@
       "type": "timeseries",
       "id": 10,
       "title": "Requests / min by app",
-      "description": "API requests a minute by the app that sent them, health probes left out.",
+      "description": "API requests a minute by the app that sent them, health probes and bots left out.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -505,7 +505,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (client) (rate(http_server_request_duration_seconds_count{job=\"server\",http_route!~\"/(healthz|readyz)\",client!=\"\"}[$__rate_interval])) * 60",
+          "expr": "sum by (client) (rate(http_server_request_duration_seconds_count{job=\"server\",client!=\"bot\",http_route!~\"/(healthz|readyz)\",client!=\"\"}[$__rate_interval])) * 60",
           "refId": "A",
           "legendFormat": "{{client}}"
         }
@@ -623,7 +623,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "count by (kind) (label_replace(label_replace(label_replace(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor != \"\" [1h])), \"kind\", \"Signed in\", \"visitor\", \"a:.*\"), \"kind\", \"Guests\", \"visitor\", \"g:.*\"), \"kind\", \"Console\", \"visitor\", \"m:.*\"))",
+          "expr": "count by (kind) (label_replace(label_replace(label_replace(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [1h])), \"kind\", \"Signed in\", \"visitor\", \"a:.*\"), \"kind\", \"Guests\", \"visitor\", \"g:.*\"), \"kind\", \"Console\", \"visitor\", \"m:.*\"))",
           "refId": "A",
           "queryType": "range",
           "legendFormat": "{{kind}}"
@@ -728,7 +728,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sort_desc(topk(10, sum by (route) (count_over_time({service_name=\"server\"} | visitor != \"\" | route != \"\" [$__range]))))",
+          "expr": "sort_desc(topk(10, sum by (route) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" | route != \"\" [$__range]))))",
           "refId": "A",
           "queryType": "instant",
           "legendFormat": "{{route}}"
@@ -799,7 +799,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sort_desc(count by (country) (sum by (visitor, country) (count_over_time({service_name=\"server\"} | visitor != \"\" | country != \"\" [$__range]))))",
+          "expr": "sort_desc(count by (country) (sum by (visitor, country) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" | country != \"\" [$__range]))))",
           "refId": "A",
           "queryType": "instant",
           "format": "table"
@@ -910,7 +910,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(15, sort_desc(count by (country) (sum by (visitor, country) (count_over_time({service_name=\"server\"} | visitor != \"\" | country != \"\" [$__range])))))",
+          "expr": "topk(15, sort_desc(count by (country) (sum by (visitor, country) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" | country != \"\" [$__range])))))",
           "refId": "A",
           "queryType": "instant",
           "legendFormat": "{{country}}"
@@ -968,7 +968,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sort_desc(count by (client) (sum by (visitor, client) (count_over_time({service_name=\"server\"} | visitor != \"\" [$__range]))))",
+          "expr": "sort_desc(count by (client) (sum by (visitor, client) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [$__range]))))",
           "refId": "A",
           "queryType": "instant",
           "legendFormat": "{{client}}"
@@ -1083,7 +1083,7 @@
       "type": "table",
       "id": 18,
       "title": "Online now",
-      "description": "Each visitor of the last 5 minutes. a: is an account ID, m: a console member ID, g: a guest (a hash of their address and the day).",
+      "description": "Each visitor of the last 5 minutes. a: is an account ID, m: a console member ID, g: a guest (a hash of their address and the day). Bots are in the Bots row.",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -1100,7 +1100,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(100, sum by (visitor, client, country) (count_over_time({service_name=\"server\"} | visitor != \"\" [5m])))",
+          "expr": "topk(100, sum by (visitor, client, country) (count_over_time({service_name=\"server\"} | visitor =~ \"[agm]:.+\" [5m])))",
           "refId": "A",
           "queryType": "instant",
           "format": "table"
@@ -1179,6 +1179,128 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "type": "row",
+      "id": 19,
+      "title": "Bots",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "id": 20,
+      "title": "Bots in range",
+      "description": "Different bots over the time range: crawlers, link previews, headless browsers, scanners and scripts, one per address a day. A bot posing as a browser counts as a guest.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "count(sum by (visitor) (count_over_time({service_name=\"server\"} | visitor =~ \"b:.+\" [$__range])))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#3987e5"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 21,
+      "title": "Bot requests by User-Agent",
+      "description": "Requests bots made over the time range, by the User-Agent they sent.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sort_desc(topk(15, sum by (ua) (count_over_time({service_name=\"server\"} | visitor =~ \"b:.+\" [$__range]))))",
+          "refId": "A",
+          "queryType": "instant",
+          "legendFormat": "{{ua}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "text",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 16
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Value/",
+          "values": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#3987e5"
+          }
+        },
+        "overrides": []
       }
     }
   ]
