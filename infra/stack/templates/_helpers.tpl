@@ -31,7 +31,8 @@ finish their invocations.
 {{- end }}
 
 {{/* Ingress rules for (dict "routes" (list (list sub service port) ...)
-     "domain" d). The website's host also sends /_img to imgproxy's cache. */}}
+     "domain" d). The website's host also sends /_img to imgproxy's cache,
+     and the media host its /robots.txt (imgproxy/nginx.conf). */}}
 {{- define "sn.ingressRules" -}}
 {{- $d := .domain }}
 {{- range .routes }}
@@ -41,6 +42,14 @@ finish their invocations.
       {{- if eq (index . 0) "" }}
       - path: /_img
         pathType: Prefix
+        backend:
+          service:
+            name: imgproxy-cache
+            port: { number: 80 }
+      {{- end }}
+      {{- if eq (index . 0) "media" }}
+      - path: /robots.txt
+        pathType: Exact
         backend:
           service:
             name: imgproxy-cache

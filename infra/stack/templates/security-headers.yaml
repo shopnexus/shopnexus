@@ -17,3 +17,15 @@ spec:
     customResponseHeaders:
       X-Robots-Tag: "noindex, nofollow"
     {{- end }}
+---
+# noindex for hosts that are never indexed: the console and alias domains.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: noindex
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  headers:
+    customResponseHeaders:
+      X-Robots-Tag: "noindex, nofollow"

@@ -1,5 +1,5 @@
 {{- /* Alias domains serve the same website, API, media and docs as domain,
-       with noindex. The console and the dashboards redirect to domain
+       with noindex (security-headers.yaml). The console and the dashboards redirect to domain
        (api.<alias>/x would go to api.<domain>/x): the server takes one
        console origin. The redirect Ingress's backend is never reached. */ -}}
 {{- if .Values.aliasDomains }}
@@ -9,17 +9,6 @@
 {{- range include "sn.dashboards" . | fromJsonArray }}{{ $redirect = append $redirect .app }}{{ end }}
 {{- $alt := list }}
 {{- range .Values.aliasDomains }}{{ $alt = append $alt (replace "." "\\." .) }}{{ end }}
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: noindex
-  labels: {{- include "sn.labels" . | nindent 4 }}
-  annotations: {{- include "sn.wave" "1" | nindent 4 }}
-spec:
-  headers:
-    customResponseHeaders:
-      X-Robots-Tag: "noindex, nofollow"
----
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

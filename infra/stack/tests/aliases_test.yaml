@@ -1,8 +1,9 @@
 suite: alias domains
-templates: [aliases.yaml]
+templates: [aliases.yaml, security-headers.yaml]
 release: { namespace: shopnexus-dev }
 tests:
   - it: serves the website, API, media and docs on dev. with noindex
+    template: aliases.yaml
     values: [../values-dev.yaml, values-test.yaml]
     documentSelector: { path: metadata.name, value: aliases }
     asserts:
@@ -16,14 +17,8 @@ tests:
       - equal: { path: 'spec.rules[1].host', value: api.dev.shopnexus.id.vn }
       - equal: { path: 'spec.rules[1].http.paths[0].backend.service.name', value: server-api }
       - equal: { path: 'spec.rules[3].host', value: docs.dev.shopnexus.id.vn }
-  - it: answers dev. with noindex
-    values: [../values-dev.yaml, values-test.yaml]
-    documentSelector: { path: metadata.name, value: noindex }
-    asserts:
-      - equal:
-          path: spec.headers.customResponseHeaders["X-Robots-Tag"]
-          value: noindex, nofollow
   - it: sends the console and the dashboards on dev. to the main domain
+    template: aliases.yaml
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
       - equal:
@@ -43,6 +38,16 @@ tests:
       - equal: { path: 'spec.rules[1].host', value: grafana.dev.shopnexus.id.vn }
         documentSelector: { path: metadata.name, value: alias-redirect }
   - it: renders nothing without alias domains
+    template: aliases.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - hasDocuments: { count: 0 }
+  - it: has a noindex middleware for the console and alias hosts
+    template: security-headers.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: noindex }
+      - equal:
+          path: spec.headers.customResponseHeaders["X-Robots-Tag"]
+          value: noindex, nofollow

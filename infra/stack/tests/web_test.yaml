@@ -4,11 +4,12 @@ release: { namespace: shopnexus-prod }
 tests:
   - it: serves the prod hosts, each to its Service
     template: ingress.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - lengthEqual:
           path: spec.rules
-          count: 5
+          count: 4
       - equal:
           path: spec.rules[0].host
           value: shopnexus.id.vn
@@ -27,15 +28,33 @@ tests:
       - equal:
           path: spec.rules[3].host
           value: docs.shopnexus.id.vn
+  - it: serves the console on its own Ingress with noindex
+    template: ingress.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
       - equal:
-          path: spec.rules[4].host
+          path: spec.rules[0].host
           value: console.shopnexus.id.vn
       - equal:
-          path: spec.rules[4].http.paths[0].backend.service.name
+          path: spec.rules[0].http.paths[0].backend.service.name
           value: console
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
+          value: shopnexus-prod-compress@kubernetescrd,shopnexus-prod-security-headers@kubernetescrd,shopnexus-prod-noindex@kubernetescrd
+  - it: answers the media host's robots.txt from the photo cache
+    template: ingress.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.rules[2].http.paths[0]
+          value: { path: /robots.txt, pathType: Exact, backend: { service: { name: imgproxy-cache, port: { number: 80 } } } }
+      - equal: { path: 'spec.rules[2].http.paths[1].backend.service.name', value: rustfs }
   - it: serves the dev hosts
     template: ingress.yaml
     values: [../values-dev.yaml, values-test.yaml]
+    documentIndex: 0
     asserts:
       - equal:
           path: spec.rules[0].host
@@ -49,11 +68,9 @@ tests:
       - equal:
           path: spec.rules[3].host
           value: docs.shopnexus.id.vn
-      - equal:
-          path: spec.rules[4].host
-          value: console.shopnexus.id.vn
   - it: sends the main host's /_img to the photo cache, the rest to the website
     template: ingress.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - lengthEqual: { path: 'spec.rules[0].http.paths', count: 2 }
@@ -128,6 +145,7 @@ tests:
         documentIndex: 3
   - it: compresses text answers and adds the security headers on every host
     template: ingress.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal:
@@ -135,6 +153,7 @@ tests:
           value: shopnexus-prod-compress@kubernetescrd,shopnexus-prod-security-headers@kubernetescrd
   - it: keeps search engines off a stack without indexed
     template: security-headers.yaml
+    documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
     set: { indexed: false }
     asserts:
@@ -143,6 +162,7 @@ tests:
           value: noindex, nofollow
   - it: lets search engines index prod and, for now, dev
     template: security-headers.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - notExists:
@@ -156,6 +176,7 @@ tests:
       - notContains: { path: spec.compress.includedContentTypes, content: image/jpeg }
   - it: asks for HTTPS for a year and no content type sniffing
     template: security-headers.yaml
+    documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - isKind: { of: Middleware }
