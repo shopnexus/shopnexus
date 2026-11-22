@@ -548,7 +548,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(10, label_replace(histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range]))), \"http_route\", \"(no route)\", \"http_route\", \"\"))",
+          "expr": "sort_desc(topk(10, label_replace(histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range]))), \"http_route\", \"(no route)\", \"http_route\", \"\")))",
           "refId": "A",
           "legendFormat": "{{http_route}}",
           "instant": true
