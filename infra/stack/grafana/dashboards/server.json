@@ -748,7 +748,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\")",
+          "expr": "label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\") > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -760,7 +760,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range]))), \"http_route\", \"(no route)\", \"http_route\", \"\")",
+          "expr": "(label_replace(histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range]))), \"http_route\", \"(no route)\", \"http_route\", \"\")) >= 0",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,
@@ -772,7 +772,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\",http_response_status_code=~\"4..\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\")) or (label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\") * 0)",
+          "expr": "(label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\",http_response_status_code=~\"4..\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\")) > 0 or ((label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\") > 0) * 0)",
           "refId": "C",
           "legendFormat": "__auto",
           "instant": true,
@@ -784,7 +784,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\",http_response_status_code=~\"5..\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\")) or (label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\") * 0)",
+          "expr": "(label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\",http_response_status_code=~\"5..\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\")) > 0 or ((label_replace(sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_route!~\"/(healthz|readyz)\"}[$__range])), \"http_route\", \"(no route)\", \"http_route\", \"\") > 0) * 0)",
           "refId": "D",
           "legendFormat": "__auto",
           "instant": true,
@@ -1045,7 +1045,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range]))",
+          "expr": "sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -1057,7 +1057,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\"}[$__range])))",
+          "expr": "(histogram_quantile(0.95, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{job=\"server\",instance=~\"$instance\"}[$__range])))) >= 0",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,
@@ -1069,7 +1069,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_response_status_code=~\"[45]..|\"}[$__range]))) or (sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range])) * 0)",
+          "expr": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_response_status_code=~\"[45]..|\"}[$__range]))) > 0 or ((sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range])) > 0) * 0)",
           "refId": "C",
           "legendFormat": "__auto",
           "instant": true,
@@ -1355,7 +1355,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (restate_service, restate_handler) (rate(restate_invocation_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range]))",
+          "expr": "sum by (restate_service, restate_handler) (rate(restate_invocation_duration_seconds_count{job=\"server\",instance=~\"$instance\"}[$__range])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -1367,7 +1367,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, restate_service, restate_handler) (rate(restate_invocation_duration_seconds_bucket{job=\"server\",instance=~\"$instance\"}[$__range])))",
+          "expr": "(histogram_quantile(0.95, sum by (le, restate_service, restate_handler) (rate(restate_invocation_duration_seconds_bucket{job=\"server\",instance=~\"$instance\"}[$__range])))) >= 0",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,
@@ -1824,7 +1824,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (span_name) (rate(traces_spanmetrics_calls_total{service=\"server\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"[A-Z]+\"}[$__range]))",
+          "expr": "sum by (span_name) (rate(traces_spanmetrics_calls_total{service=\"server\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"[A-Z]+\"}[$__range])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -1836,7 +1836,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, span_name) (rate(traces_spanmetrics_latency_bucket{service=\"server\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"[A-Z]+\"}[$__range])))",
+          "expr": "(histogram_quantile(0.95, sum by (le, span_name) (rate(traces_spanmetrics_latency_bucket{service=\"server\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"[A-Z]+\"}[$__range])))) >= 0",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,

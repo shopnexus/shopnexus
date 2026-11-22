@@ -422,7 +422,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\"}[$__range]))) >= 0",
           "refId": "A",
           "legendFormat": "__auto"
         }
@@ -1009,7 +1009,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range]))",
+          "expr": "sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -1021,7 +1021,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(client_request_duration_seconds_bucket{app=~\"$app\"}[$__range])))",
+          "expr": "(histogram_quantile(0.95, sum by (le, http_route) (rate(client_request_duration_seconds_bucket{app=~\"$app\"}[$__range])))) >= 0",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,
@@ -1033,7 +1033,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\"}[$__range]))) and on (http_route) sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range]))",
+          "expr": "(histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\"}[$__range]))) >= 0) and on (http_route) (sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range])) > 0)",
           "refId": "C",
           "legendFormat": "__auto",
           "instant": true,
@@ -1045,7 +1045,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\",http_response_status_code=~\"0|5..\"}[$__range]))) or (sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range])) * 0)",
+          "expr": "(sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\",http_response_status_code=~\"0|5..\"}[$__range]))) > 0 or ((sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range])) > 0) * 0)",
           "refId": "D",
           "legendFormat": "__auto",
           "instant": true,
@@ -1422,7 +1422,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"1\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"1\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"1\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"1\"}[$__range]))) >= 0",
           "refId": "A",
           "legendFormat": "1",
           "instant": true,
@@ -1433,7 +1433,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"2\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"2\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"2\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"2\"}[$__range]))) >= 0",
           "refId": "B",
           "legendFormat": "2",
           "instant": true,
@@ -1444,7 +1444,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"3\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"3\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"3\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"3\"}[$__range]))) >= 0",
           "refId": "C",
           "legendFormat": "3",
           "instant": true,
@@ -1455,7 +1455,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"4-5\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"4-5\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"4-5\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"4-5\"}[$__range]))) >= 0",
           "refId": "D",
           "legendFormat": "4-5",
           "instant": true,
@@ -1466,7 +1466,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"6-10\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"6-10\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"6-10\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"6-10\"}[$__range]))) >= 0",
           "refId": "E",
           "legendFormat": "6-10",
           "instant": true,
@@ -1477,7 +1477,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"11-20\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"11-20\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"11-20\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"11-20\"}[$__range]))) >= 0",
           "refId": "F",
           "legendFormat": "11-20",
           "instant": true,
@@ -1488,7 +1488,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"21+\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"21+\"}[$__range]))",
+          "expr": "(sum(increase(client_search_clicks_total{app=~\"$app\",position=\"21+\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"21+\"}[$__range]))) >= 0",
           "refId": "G",
           "legendFormat": "21+",
           "instant": true,
