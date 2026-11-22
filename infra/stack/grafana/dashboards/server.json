@@ -1257,7 +1257,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"server\"} | severity_text=~\"WARN|ERROR\"",
+          "expr": "{service_name=\"server\"} | severity_text=~\"WARN|ERROR\" | line_format \"{{ __line__ }}{{ with .exception_message }} · {{ . }}{{ end }}{{ with .err }} · {{ . }}{{ end }}\"",
           "refId": "A",
           "queryType": "range"
         }
