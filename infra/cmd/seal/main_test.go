@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -77,7 +78,7 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-secrets", "litellm-db", "litellm-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-secrets", "litellm-db", "litellm-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY",
@@ -86,6 +87,46 @@ func TestSealKeepsItsKeys(t *testing.T) {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
 		}
+	}
+}
+
+// An older dev.env has RustFS's root key in OBJECT_STORE_ACCESS_KEY: rustfs
+// keeps it, and the server and Restate get keys of their own.
+func TestSealMovesAnOlderRootKey(t *testing.T) {
+	o, dir := setup(t)
+	f, err := os.OpenFile(filepath.Join(dir, "dev.env"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("OBJECT_STORE_ACCESS_KEY=oldroot\nOBJECT_STORE_SECRET_KEY=oldrootsecret\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	data := map[string]map[string]string{}
+	for doc := range strings.SplitSeq(strings.TrimPrefix(dryRun(t, o, "dev"), "---\n"), "---\n") {
+		var s struct {
+			Metadata struct{ Name string }
+			Data     map[string]string
+		}
+		if err := json.Unmarshal([]byte(doc), &s); err != nil {
+			t.Fatal(err)
+		}
+		data[s.Metadata.Name] = s.Data
+	}
+	b64 := func(v string) string { return base64.StdEncoding.EncodeToString([]byte(v)) }
+	if got := data["rustfs-secrets"]["RUSTFS_ACCESS_KEY"]; got != b64("oldroot") {
+		t.Errorf("rustfs's root key = %s, want the old OBJECT_STORE_ACCESS_KEY", got)
+	}
+	for _, got := range []string{data["server-secrets"]["OBJECT_STORE_ACCESS_KEY"], data["restate-secrets"]["AWS_ACCESS_KEY_ID"]} {
+		if got == "" || got == b64("oldroot") {
+			t.Errorf("a user's key = %q, want a new one", got)
+		}
+	}
+	if data["rustfs-secrets"]["SNAPSHOTS_ACCESS_KEY"] != data["restate-secrets"]["AWS_ACCESS_KEY_ID"] {
+		t.Error("the snapshot jobs and Restate have different keys")
 	}
 }
 

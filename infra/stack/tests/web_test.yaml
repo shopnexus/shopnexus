@@ -42,15 +42,20 @@ tests:
       - equal:
           path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
           value: shopnexus-prod-compress@kubernetescrd,shopnexus-prod-security-headers@kubernetescrd,shopnexus-prod-noindex@kubernetescrd
-  - it: answers the media host's robots.txt from the photo cache
+  # RustFS's admin API, the bucket list and restate-snapshots stay off the
+  # internet: the media host reaches only the media bucket.
+  - it: answers the media host's robots.txt from the photo cache and sends only the bucket to RustFS
     template: ingress.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
+      - lengthEqual: { path: 'spec.rules[1].http.paths', count: 2 }
       - equal:
           path: spec.rules[1].http.paths[0]
           value: { path: /robots.txt, pathType: Exact, backend: { service: { name: imgproxy-cache, port: { number: 80 } } } }
-      - equal: { path: 'spec.rules[1].http.paths[1].backend.service.name', value: rustfs }
+      - equal:
+          path: spec.rules[1].http.paths[1]
+          value: { path: /shopnexus/, pathType: Prefix, backend: { service: { name: rustfs, port: { number: 9000 } } } }
   - it: serves the dev hosts
     template: ingress.yaml
     values: [../values-dev.yaml, values-test.yaml]

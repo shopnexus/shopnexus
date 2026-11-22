@@ -251,8 +251,9 @@ x-server-env: &server-env
   TRUSTED_PROXIES: ""
   # The ops dashboards are open locally, so the server serves none of them.
   DASHBOARD_HOSTS: ""
-  OBJECT_STORE_ACCESS_KEY: shopnexus
-  OBJECT_STORE_SECRET_KEY: shopnexus-secret
+  # The server's RustFS user, which objectstore-init makes with the root keys.
+  OBJECT_STORE_ACCESS_KEY: shopnexus-server
+  OBJECT_STORE_SECRET_KEY: shopnexus-server-secret
   # Both kinds of vector on, as the cluster's server.embed turns them on:
   # text through LiteLLM, photos through module ai's SigLIP 2. The other AI
   # settings are in server.env and the keys in the keys volume's .env.
@@ -405,7 +406,10 @@ services:
     <<: [*dev, *server-image]
     entrypoint: ["/objectstore-init"]
     working_dir: /home/nonroot
-    environment: *server-env-dev
+    environment:
+      <<: *server-env-dev
+      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
+      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
       litellm-keys-dev: { condition: service_completed_successfully }
@@ -621,7 +625,10 @@ services:
     <<: [*prod, *server-image]
     entrypoint: ["/objectstore-init"]
     working_dir: /home/nonroot
-    environment: *server-env-prod
+    environment:
+      <<: *server-env-prod
+      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
+      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
       litellm-keys-prod: { condition: service_completed_successfully }

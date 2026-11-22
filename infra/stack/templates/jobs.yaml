@@ -1,10 +1,18 @@
 {{- /* Sync hooks in wave 1: after postgres and rustfs (wave 0) are healthy,
        before the server (wave 2). Each sync runs them again; all three are
-       idempotent. */ -}}
+       idempotent. The objectstore-init jobs work with RustFS's root keys and
+       give each bucket's user (the server's, Restate's) that bucket only. */ -}}
+{{- $root := list
+  (dict "name" "OBJECT_STORE_ROOT_ACCESS_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_ACCESS_KEY")
+  (dict "name" "OBJECT_STORE_ROOT_SECRET_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_SECRET_KEY") }}
+{{- $snapshots := list
+  (dict "name" "OBJECT_STORE_BUCKET" "value" "restate-snapshots")
+  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "rustfs-secrets" "key" "SNAPSHOTS_ACCESS_KEY")
+  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "rustfs-secrets" "key" "SNAPSHOTS_SECRET_KEY") }}
 {{- $jobs := list
   (dict "name" "migrate" "command" "/migrate" "env" (list))
-  (dict "name" "objectstore-init" "command" "/objectstore-init" "env" (list))
-  (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (list (dict "name" "OBJECT_STORE_BUCKET" "value" "restate-snapshots"))) }}
+  (dict "name" "objectstore-init" "command" "/objectstore-init" "env" $root)
+  (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (concat $root $snapshots)) }}
 {{- range $jobs }}
 ---
 apiVersion: batch/v1
@@ -29,6 +37,11 @@ spec:
           command: [{{ .command | quote }}]
           {{- include "sn.serverEnv" $ | nindent 10 }}
           {{- range .env }}
+            {{- if .secret }}
+            - name: {{ .name }}
+              valueFrom: { secretKeyRef: { name: {{ .secret }}, key: {{ .key }} } }
+            {{- else }}
             - { name: {{ .name }}, value: {{ .value | quote }} }
+            {{- end }}
           {{- end }}
 {{- end }}

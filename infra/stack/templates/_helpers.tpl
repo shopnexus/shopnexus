@@ -31,8 +31,10 @@ finish their invocations.
 {{- end }}
 
 {{/* Ingress rules for (dict "routes" (list (list sub service port) ...)
-     "domain" d). The website's host also sends /_img to imgproxy's cache,
-     and the media host its /robots.txt (imgproxy/nginx.conf). */}}
+     "domain" d "bucket" b). The website's host also sends /_img to
+     imgproxy's cache. The media host sends its /robots.txt to the cache
+     (imgproxy/nginx.conf) and only /<bucket>/ to RustFS, so its admin API
+     and other buckets stay off the internet. */}}
 {{- define "sn.ingressRules" -}}
 {{- $d := .domain }}
 {{- range .routes }}
@@ -55,13 +57,18 @@ finish their invocations.
             name: imgproxy-cache
             port: { number: 80 }
       {{- end }}
-      - path: /
+      - path: {{ if eq (index . 0) "media" }}/{{ required "bucket is required" $.bucket }}/{{ else }}/{{ end }}
         pathType: Prefix
         backend:
           service:
             name: {{ index . 1 }}
             port: { number: {{ index . 2 }} }
 {{- end }}
+{{- end }}
+
+{{/* The media bucket, OBJECT_STORE_BUCKET in env/server.env. */}}
+{{- define "sn.bucket" -}}
+{{ (include "sn.envFile" (dict "root" . "file" "env/server.env") | fromJson).OBJECT_STORE_BUCKET }}
 {{- end }}
 
 {{/* Name and namespace of the stack's RestateCluster. */}}

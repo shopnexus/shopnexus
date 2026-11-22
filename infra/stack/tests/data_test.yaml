@@ -102,6 +102,45 @@ tests:
           content:
             name: OBJECT_STORE_BUCKET
             value: restate-snapshots
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_ACCESS_KEY
+            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: SNAPSHOTS_ACCESS_KEY } }
+  # The jobs make each bucket's user with RustFS's root keys; the server's
+  # pods never see them.
+  - it: gives the objectstore-init jobs, and only them, the root keys
+    template: jobs.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_ROOT_ACCESS_KEY
+            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_ROOT_ACCESS_KEY
+            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+        documentIndex: 2
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_ROOT_ACCESS_KEY
+            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+        documentIndex: 0
+  - it: runs RustFS with the root keys
+    template: rustfs.yaml
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUSTFS_ACCESS_KEY
+            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
   # LiteLLM keeps its keys and spend in a database of its own in the stack's
   # Postgres.
   - it: gives LiteLLM its own database and a sealed role password

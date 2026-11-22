@@ -93,12 +93,24 @@ func seal(stack string, o opts, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// OBJECT_STORE_ACCESS_KEY used to be RustFS's root key. An older
+	// <stack>.env keeps it as the root key, and the server gets a key of its own.
+	if env.get("OBJECT_STORE_ROOT_ACCESS_KEY") == "" && env.get("OBJECT_STORE_ACCESS_KEY") != "" {
+		env.set("OBJECT_STORE_ROOT_ACCESS_KEY", env.get("OBJECT_STORE_ACCESS_KEY"))
+		env.set("OBJECT_STORE_ROOT_SECRET_KEY", env.get("OBJECT_STORE_SECRET_KEY"))
+		env.set("OBJECT_STORE_ACCESS_KEY", "")
+		env.set("OBJECT_STORE_SECRET_KEY", "")
+	}
 	for _, k := range []struct {
 		name, prefix string
 		bytes        int
 	}{
-		{"OBJECT_STORE_ACCESS_KEY", "", 12},
+		{"OBJECT_STORE_ROOT_ACCESS_KEY", "", 12}, // RustFS's root
+		{"OBJECT_STORE_ROOT_SECRET_KEY", "", 24},
+		{"OBJECT_STORE_ACCESS_KEY", "", 12}, // the server's user, bucket shopnexus only
 		{"OBJECT_STORE_SECRET_KEY", "", 24},
+		{"SNAPSHOTS_ACCESS_KEY", "", 12}, // Restate's user, bucket restate-snapshots only
+		{"SNAPSHOTS_SECRET_KEY", "", 24},
 		{"LITELLM_MASTER_KEY", "sk-", 24},
 		{"LITELLM_DB_PASSWORD", "", 24},
 		{"LITELLM_UI_PASSWORD", "", 24},     // ai-gateway's admin UI, behind the console's sign-in
@@ -155,8 +167,16 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
-			"AWS_ACCESS_KEY_ID":     env.get("OBJECT_STORE_ACCESS_KEY"),
-			"AWS_SECRET_ACCESS_KEY": env.get("OBJECT_STORE_SECRET_KEY"),
+			"AWS_ACCESS_KEY_ID":     env.get("SNAPSHOTS_ACCESS_KEY"),
+			"AWS_SECRET_ACCESS_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
+		}},
+		// RustFS's root keys, for rustfs and the objectstore-init jobs, which
+		// also make Restate's user.
+		{name: "rustfs-secrets", namespace: ns, data: map[string]string{
+			"RUSTFS_ACCESS_KEY":    env.get("OBJECT_STORE_ROOT_ACCESS_KEY"),
+			"RUSTFS_SECRET_KEY":    env.get("OBJECT_STORE_ROOT_SECRET_KEY"),
+			"SNAPSHOTS_ACCESS_KEY": env.get("SNAPSHOTS_ACCESS_KEY"),
+			"SNAPSHOTS_SECRET_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
 		}},
 		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY", "LLM_UPSTREAM_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD")},
 		// CNPG reads a managed role's password from a basic-auth Secret.

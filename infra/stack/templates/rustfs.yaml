@@ -24,10 +24,11 @@ spec:
         - name: rustfs
           image: {{ include "sn.image" .Values.images.rustfs }}
           env:
+            # The root keys, which only rustfs and the objectstore-init jobs read.
             - name: RUSTFS_ACCESS_KEY
-              valueFrom: { secretKeyRef: { name: server-secrets, key: OBJECT_STORE_ACCESS_KEY } }
+              valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
             - name: RUSTFS_SECRET_KEY
-              valueFrom: { secretKeyRef: { name: server-secrets, key: OBJECT_STORE_SECRET_KEY } }
+              valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_SECRET_KEY } }
             - { name: RUSTFS_VOLUMES, value: /data }
             - { name: RUSTFS_ADDRESS, value: "0.0.0.0:9000" }
             # The web console, which dashboards.yaml serves at s3.<domain>.
