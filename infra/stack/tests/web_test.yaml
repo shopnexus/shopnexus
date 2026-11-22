@@ -39,19 +39,19 @@ tests:
     asserts:
       - equal:
           path: spec.rules[0].host
-          value: dev.shopnexus.id.vn
+          value: shopnexus.id.vn
       - equal:
           path: spec.rules[1].host
-          value: api.dev.shopnexus.id.vn
+          value: api.shopnexus.id.vn
       - equal:
           path: spec.rules[2].host
-          value: media.dev.shopnexus.id.vn
+          value: media.shopnexus.id.vn
       - equal:
           path: spec.rules[3].host
-          value: docs.dev.shopnexus.id.vn
+          value: docs.shopnexus.id.vn
       - equal:
           path: spec.rules[4].host
-          value: console.dev.shopnexus.id.vn
+          value: console.shopnexus.id.vn
   - it: sends the main host's /_img to the photo cache, the rest to the website
     template: ingress.yaml
     values: [../values-prod.yaml, values-test.yaml]
