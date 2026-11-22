@@ -167,4 +167,6 @@ CI runs it on every change under `infra/`. The design is in
 
 ## License
 
-MIT, in `LICENSE` here and in each component's repository.
+GNU AGPL-3.0, in `LICENSE` here and in each component's repository. Code
+committed before 2026-11-23 was released under MIT, and copies taken from it
+stay under MIT.
