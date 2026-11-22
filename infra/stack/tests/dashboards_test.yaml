@@ -180,7 +180,46 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.template.spec.volumes
-          count: 1
+          count: 2
+  - it: provisions the ShopNexus dashboards, Pods on the stack's namespace
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: lgtm-dashboards }
+    values: [../values-dev.yaml, values-test.yaml]
+    release: { namespace: shopnexus-dev }
+    asserts:
+      - matchRegex:
+          path: data["provider.yaml"]
+          pattern: "path: /otel-lgtm/shopnexus-dashboards"
+      - matchRegex:
+          path: data["server.json"]
+          pattern: '"uid": "shopnexus-server"'
+      - matchRegex:
+          path: data["pods.json"]
+          pattern: '"value": "shopnexus-dev"'
+  - it: leaves out Pods without the cluster's Prometheus
+    template: dashboards.yaml
+    documentSelector: { path: metadata.name, value: lgtm-dashboards }
+    values: [../values-prod.yaml, values-test.yaml]
+    set: { lgtm.clusterPrometheus: "" }
+    asserts:
+      - notExists:
+          path: data["pods.json"]
+      - exists:
+          path: data["server.json"]
+  - it: mounts the dashboards where the provider reads them
+    template: dashboards.yaml
+    documentSelector: { path: "spec.template.spec.containers[0].name", value: lgtm }
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: dashboards
+            mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/shopnexus.yaml
+            subPath: provider.yaml
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: dashboards, mountPath: /otel-lgtm/shopnexus-dashboards, readOnly: true }
   # pgweb asks for no sign-in, so it stays on the stack's database.
   - it: keeps pgweb on the stack's database
     template: dashboards.yaml

@@ -1,0 +1,11 @@
+# Grafana loads the ShopNexus dashboards from this folder, read-only. The
+# chart and docker-compose.yml mount the JSON of grafana/dashboards there.
+apiVersion: 1
+providers:
+  - name: shopnexus
+    folder: ShopNexus
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/shopnexus-dashboards

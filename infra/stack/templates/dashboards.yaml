@@ -27,6 +27,27 @@ data:
     {{- include "sn.grafanaDatasources" . | nindent 4 }}
 ---
 {{- end }}
+# The ShopNexus dashboards (grafana/), which docker-compose.yml mounts too.
+# Pods reads the cluster's Prometheus, so only the cluster gets it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lgtm-dashboards
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  provider.yaml: |
+    {{- .Files.Get "grafana/provider.yaml" | nindent 4 }}
+  {{- range $path, $_ := .Files.Glob "grafana/dashboards/*.json" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+  {{- if .Values.lgtm.clusterPrometheus }}
+  {{- range $path, $_ := .Files.Glob "grafana/cluster/*.json" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | replace "__NAMESPACE__" $ns | nindent 4 }}
+  {{- end }}
+  {{- end }}
+---
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector; the
 # server sends its traces, metrics and logs to port 4318. Grafana takes the
 # console member from the headers the forwardAuth answer sets (env/lgtm.env).
@@ -66,6 +87,10 @@ spec:
             httpGet: { path: /api/health, port: grafana }
           volumeMounts:
             - { name: data, mountPath: /data }
+            - name: dashboards
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/shopnexus.yaml
+              subPath: provider.yaml
+            - { name: dashboards, mountPath: /otel-lgtm/shopnexus-dashboards, readOnly: true }
             {{- if .Values.lgtm.clusterPrometheus }}
             - name: datasources
               mountPath: /otel-lgtm/grafana/conf/provisioning/datasources/cluster.yaml
@@ -77,6 +102,8 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim: { claimName: lgtm }
+        - name: dashboards
+          configMap: { name: lgtm-dashboards }
         {{- if .Values.lgtm.clusterPrometheus }}
         - name: datasources
           configMap: { name: lgtm-datasources }

@@ -152,10 +152,13 @@ x-restate: &restate
   restart: unless-stopped
 
 # Grafana with Loki, Tempo, Prometheus and an OpenTelemetry collector in one
-# container. It signs in the member that Caddy names in X-Console-Email.
+# container. It signs in the member that Caddy names in X-Console-Email and
+# loads the dashboards of infra/stack/grafana, as the chart does.
 x-lgtm: &lgtm
   image: grafana/otel-lgtm:0.37.0
   env_file: [./infra/stack/env/lgtm.env]
+  configs:
+    - { source: grafana-provider, target: /otel-lgtm/grafana/conf/provisioning/dashboards/shopnexus.yaml }
   restart: unless-stopped
 
 # imgproxy reads the stack's RustFS, which each stack names in
@@ -369,7 +372,7 @@ services:
 
   lgtm-dev:
     <<: [*dev, *lgtm]
-    volumes: [lgtm-dev:/data]
+    volumes: [lgtm-dev:/data, ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro]
 
   pgweb-dev:
     <<: [*dev, *pgweb]
@@ -583,7 +586,7 @@ services:
 
   lgtm-prod:
     <<: [*prod, *lgtm]
-    volumes: [lgtm-prod:/data]
+    volumes: [lgtm-prod:/data, ./infra/stack/grafana/dashboards:/otel-lgtm/shopnexus-dashboards:ro]
 
   pgweb-prod:
     <<: [*prod, *pgweb]
@@ -816,6 +819,8 @@ networks:
 configs:
   imgproxy-nginx:
     file: ./infra/stack/imgproxy/nginx.conf
+  grafana-provider:
+    file: ./infra/stack/grafana/provider.yaml
   air-dev:
     content: |
       tmp_dir = "/tmp/air"
