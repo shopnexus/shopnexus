@@ -1,0 +1,1639 @@
+{
+  "uid": "shopnexus-clients",
+  "title": "Clients",
+  "description": "What the website and the app see: page speed, script errors, request times on the network and search clicks.",
+  "tags": [
+    "shopnexus",
+    "clients"
+  ],
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "fiscalYearStartMonth": 0,
+  "links": [],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "app",
+        "label": "App",
+        "type": "custom",
+        "query": "website,android",
+        "includeAll": true,
+        "multi": false,
+        "allValue": ".+",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "website",
+            "value": "website"
+          },
+          {
+            "selected": false,
+            "text": "android",
+            "value": "android"
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "id": 1,
+      "title": "LCP p75",
+      "description": "Largest contentful paint of website page views; Google counts under 2.5 s as good.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"LCP\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 2.5
+              },
+              {
+                "color": "#d03b3b",
+                "value": 4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "INP p75",
+      "description": "Interaction to next paint; good is under 200 ms.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"INP\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.2
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "CLS p75",
+      "description": "Cumulative layout shift; good is under 0.1.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_cls_bucket{app=~\"$app\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.1
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.25
+              }
+            ]
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 4,
+      "title": "Script errors",
+      "description": "Uncaught website errors in the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_errors_total{app=~\"$app\"}[$__range])) or vector(0)",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 5,
+      "title": "App request p95",
+      "description": "API calls as the app timed them, network included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(client_request_duration_seconds_bucket{app=~\"$app\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              },
+              {
+                "color": "#d03b3b",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 6,
+      "title": "Search CTR",
+      "description": "Results opened per result shown, in the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\"}[$__range]))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 7,
+      "title": "Website speed",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 8,
+      "title": "LCP p75",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"LCP\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "LCP"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 2.5
+              },
+              {
+                "color": "#d03b3b",
+                "value": 4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "INP p75",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"INP\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "INP"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.2
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 10,
+      "title": "CLS p75",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_cls_bucket{app=~\"$app\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "CLS"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.1
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.25
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 11,
+      "title": "First paint and first byte, p75",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"FCP\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "FCP"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.75, sum by (le) (rate(client_web_vital_duration_seconds_bucket{app=~\"$app\",name=\"TTFB\"}[$__rate_interval])))",
+          "refId": "B",
+          "legendFormat": "TTFB"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FCP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TTFB"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d95926"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "id": 12,
+      "title": "Website errors",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 13,
+      "title": "Script errors",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 21
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_errors_total{app=~\"$app\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "errors"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d03b3b"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "logs",
+      "id": 14,
+      "title": "Latest script errors",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 8,
+        "y": 21
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"server\"} |= \"client error\" | line_format \"{{ .app }} {{ .page }} · {{ .error }}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "type": "row",
+      "id": 15,
+      "title": "App requests",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "id": 16,
+      "title": "Routes",
+      "description": "App p95 minus server p95 is roughly the time on the network. Failed counts no answer and 5xx.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range]))",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(client_request_duration_seconds_bucket{app=~\"$app\"}[$__range])))",
+          "refId": "B",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"server\"}[$__range]))) and on (http_route) sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range]))",
+          "refId": "C",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\",http_response_status_code=~\"0|5..\"}[$__range]))) or (sum by (http_route) (rate(client_request_duration_seconds_count{app=~\"$app\"}[$__range])) * 0)",
+          "refId": "D",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "http_route",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "Calls / s",
+              "Value #B": "App p95",
+              "Value #C": "Server p95",
+              "Value #D": "Failed / s",
+              "http_route": "Route"
+            },
+            "indexByName": {
+              "Route": 0,
+              "Calls / s": 1,
+              "App p95": 2,
+              "Server p95": 3,
+              "Failed / s": 4
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Calls / s",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Calls / s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "App p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "#d03b3b",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Server p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "#d03b3b",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed / s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#fab219",
+                      "value": 0.001
+                    },
+                    {
+                      "color": "#d03b3b",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 17,
+      "title": "App p95 by network",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, network) (rate(client_request_duration_seconds_bucket{app=~\"$app\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wifi"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cellular"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d95926"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "other"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#898781"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "id": 18,
+      "title": "Search results",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "id": 19,
+      "title": "Opened per shown, by position",
+      "description": "Clicks over impressions at each result position, in the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"1\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"1\"}[$__range]))",
+          "refId": "A",
+          "legendFormat": "1",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"2\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"2\"}[$__range]))",
+          "refId": "B",
+          "legendFormat": "2",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"3\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"3\"}[$__range]))",
+          "refId": "C",
+          "legendFormat": "3",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"4-5\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"4-5\"}[$__range]))",
+          "refId": "D",
+          "legendFormat": "4-5",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"6-10\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"6-10\"}[$__range]))",
+          "refId": "E",
+          "legendFormat": "6-10",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"11-20\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"11-20\"}[$__range]))",
+          "refId": "F",
+          "legendFormat": "11-20",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(client_search_clicks_total{app=~\"$app\",position=\"21+\"}[$__range])) / sum(increase(client_search_impressions_total{app=~\"$app\",position=\"21+\"}[$__range]))",
+          "refId": "G",
+          "legendFormat": "21+",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "text",
+        "namePlacement": "left",
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 18,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "noValue": "–",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#3987e5"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 20,
+      "title": "Shown and opened",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(client_search_impressions_total{app=~\"$app\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "shown"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(client_search_clicks_total{app=~\"$app\"}[$__rate_interval]))",
+          "refId": "B",
+          "legendFormat": "opened"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "shown"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#898781"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "opened"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
