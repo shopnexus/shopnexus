@@ -1,6 +1,7 @@
 stack: prod
 domain: shopnexus.id.vn
 appEnv: prod
+indexed: true
 argocdDashboard: true
 # The release workflow (.github/workflows/release.yml) writes these tags:
 # every image of a release has the same X.Y.Z, and stack-prod runs the

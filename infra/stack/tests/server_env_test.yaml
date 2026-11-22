@@ -49,10 +49,10 @@ tests:
           value: http://restate.restate-dev:8080
       - equal:
           path: data.DOCS_ORIGINS
-          value: https://docs.shopnexus.id.vn,http://localhost:4321
+          value: https://docs.shopnexus.id.vn,https://docs.dev.shopnexus.id.vn,http://localhost:4321
       - equal:
           path: data.WEBSITE_ORIGINS
-          value: https://shopnexus.id.vn,http://localhost:4321
+          value: https://shopnexus.id.vn,https://dev.shopnexus.id.vn,http://localhost:4321
   # config.Load reads every variable below. The rest come from server-secrets,
   # which infra/cmd/seal writes, and DATABASE_URL from CloudNativePG's secret.
   - it: sets every variable config.Load reads that is not a secret

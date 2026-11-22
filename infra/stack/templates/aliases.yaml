@@ -1,0 +1,73 @@
+{{- /* Alias domains serve the same website, API, media and docs as domain,
+       with noindex. The console and the dashboards redirect to domain
+       (api.<alias>/x would go to api.<domain>/x): the server takes one
+       console origin. The redirect Ingress's backend is never reached. */ -}}
+{{- if .Values.aliasDomains }}
+{{- $d := required "domain is required" .Values.domain }}
+{{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- $redirect := list "console" }}
+{{- range include "sn.dashboards" . | fromJsonArray }}{{ $redirect = append $redirect .app }}{{ end }}
+{{- $alt := list }}
+{{- range .Values.aliasDomains }}{{ $alt = append $alt (replace "." "\\." .) }}{{ end }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: noindex
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  headers:
+    customResponseHeaders:
+      X-Robots-Tag: "noindex, nofollow"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aliases
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations:
+    {{- include "sn.wave" "2" | nindent 4 }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-compress@kubernetescrd,{{ .Release.Namespace }}-security-headers@kubernetescrd,{{ .Release.Namespace }}-noindex@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  {{- range .Values.aliasDomains }}
+    {{- include "sn.ingressRules" (dict "routes" $routes "domain" .) | trim | nindent 4 }}
+  {{- end }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: to-main-domain
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  redirectRegex:
+    regex: {{ printf "^https?://([a-z0-9-]+\\.)?(%s)(:[0-9]+)?(.*)$" (join "|" $alt) | squote }}
+    replacement: {{ printf "https://${1}%s${4}" $d | squote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alias-redirect
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations:
+    {{- include "sn.wave" "2" | nindent 4 }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-to-main-domain@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  {{- range $alias := .Values.aliasDomains }}
+  {{- range $redirect }}
+    - host: {{ . }}.{{ $alias }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: website
+                port: { number: 3000 }
+  {{- end }}
+  {{- end }}
+{{- end }}

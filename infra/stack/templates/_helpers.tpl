@@ -30,6 +30,31 @@ finish their invocations.
 {{- if .sub }}{{ .sub }}.{{ $d }}{{ else }}{{ $d }}{{ end -}}
 {{- end }}
 
+{{/* Ingress rules for (dict "routes" (list (list sub service port) ...)
+     "domain" d). The website's host also sends /_img to imgproxy's cache. */}}
+{{- define "sn.ingressRules" -}}
+{{- $d := .domain }}
+{{- range .routes }}
+- host: {{ if index . 0 }}{{ index . 0 }}.{{ end }}{{ $d }}
+  http:
+    paths:
+      {{- if eq (index . 0) "" }}
+      - path: /_img
+        pathType: Prefix
+        backend:
+          service:
+            name: imgproxy-cache
+            port: { number: 80 }
+      {{- end }}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ index . 1 }}
+            port: { number: {{ index . 2 }} }
+{{- end }}
+{{- end }}
+
 {{/* Name and namespace of the stack's RestateCluster. */}}
 {{- define "sn.restate" -}}
 restate-{{ required "stack is required" .Values.stack }}

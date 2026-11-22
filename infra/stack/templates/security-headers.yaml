@@ -1,7 +1,7 @@
 # Every answer tells browsers to come back over HTTPS for a year and not to
 # guess content types. forceSTSHeader: behind the outer proxy Traefik sees
 # plain HTTP, while browsers only ever reach the stack over HTTPS.
-# Only prod is indexed: every other stack answers with noindex.
+# Without indexed, every answer also carries noindex.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -13,7 +13,7 @@ spec:
     stsSeconds: 31536000
     forceSTSHeader: true
     contentTypeNosniff: true
-    {{- if ne .Values.appEnv "prod" }}
+    {{- if not .Values.indexed }}
     customResponseHeaders:
       X-Robots-Tag: "noindex, nofollow"
     {{- end }}

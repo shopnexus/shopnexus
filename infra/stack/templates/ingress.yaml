@@ -14,24 +14,4 @@ metadata:
     traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-compress@kubernetescrd,{{ .Release.Namespace }}-security-headers@kubernetescrd
 spec:
   ingressClassName: traefik
-  rules:
-  {{- range $routes }}
-    - host: {{ include "sn.host" (dict "root" $ "sub" (index . 0)) }}
-      http:
-        paths:
-          {{- if eq (index . 0) "" }}
-          # The website's photos, resized by imgproxy behind its cache.
-          - path: /_img
-            pathType: Prefix
-            backend:
-              service:
-                name: imgproxy-cache
-                port: { number: 80 }
-          {{- end }}
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ index . 1 }}
-                port: { number: {{ index . 2 }} }
-  {{- end }}
+  rules: {{- include "sn.ingressRules" (dict "routes" $routes "domain" (required "domain is required" .Values.domain)) | trim | nindent 4 }}

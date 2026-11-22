@@ -1,0 +1,48 @@
+suite: alias domains
+templates: [aliases.yaml]
+release: { namespace: shopnexus-dev }
+tests:
+  - it: serves the website, API, media and docs on dev. with noindex
+    values: [../values-dev.yaml, values-test.yaml]
+    documentSelector: { path: metadata.name, value: aliases }
+    asserts:
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
+          value: shopnexus-dev-compress@kubernetescrd,shopnexus-dev-security-headers@kubernetescrd,shopnexus-dev-noindex@kubernetescrd
+      - lengthEqual: { path: spec.rules, count: 4 }
+      - equal: { path: 'spec.rules[0].host', value: dev.shopnexus.id.vn }
+      - equal: { path: 'spec.rules[0].http.paths[0].backend.service.name', value: imgproxy-cache }
+      - equal: { path: 'spec.rules[0].http.paths[1].backend.service.name', value: website }
+      - equal: { path: 'spec.rules[1].host', value: api.dev.shopnexus.id.vn }
+      - equal: { path: 'spec.rules[1].http.paths[0].backend.service.name', value: server-api }
+      - equal: { path: 'spec.rules[3].host', value: docs.dev.shopnexus.id.vn }
+  - it: answers dev. with noindex
+    values: [../values-dev.yaml, values-test.yaml]
+    documentSelector: { path: metadata.name, value: noindex }
+    asserts:
+      - equal:
+          path: spec.headers.customResponseHeaders["X-Robots-Tag"]
+          value: noindex, nofollow
+  - it: sends the console and the dashboards on dev. to the main domain
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal:
+          path: spec.redirectRegex
+          value:
+            regex: '^https?://([a-z0-9-]+\.)?(dev\.shopnexus\.id\.vn)(:[0-9]+)?(.*)$'
+            replacement: 'https://${1}shopnexus.id.vn${4}'
+        documentSelector: { path: metadata.name, value: to-main-domain }
+      - equal:
+          path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
+          value: shopnexus-dev-to-main-domain@kubernetescrd
+        documentSelector: { path: metadata.name, value: alias-redirect }
+      - lengthEqual: { path: spec.rules, count: 6 }
+        documentSelector: { path: metadata.name, value: alias-redirect }
+      - equal: { path: 'spec.rules[0].host', value: console.dev.shopnexus.id.vn }
+        documentSelector: { path: metadata.name, value: alias-redirect }
+      - equal: { path: 'spec.rules[1].host', value: grafana.dev.shopnexus.id.vn }
+        documentSelector: { path: metadata.name, value: alias-redirect }
+  - it: renders nothing without alias domains
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }

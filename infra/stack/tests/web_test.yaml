@@ -133,14 +133,15 @@ tests:
       - equal:
           path: metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"]
           value: shopnexus-prod-compress@kubernetescrd,shopnexus-prod-security-headers@kubernetescrd
-  - it: keeps search engines off every stack but prod
+  - it: keeps search engines off a stack without indexed
     template: security-headers.yaml
     values: [../values-dev.yaml, values-test.yaml]
+    set: { indexed: false }
     asserts:
       - equal:
           path: spec.headers.customResponseHeaders["X-Robots-Tag"]
           value: noindex, nofollow
-  - it: lets search engines index prod
+  - it: lets search engines index prod and, for now, dev
     template: security-headers.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:

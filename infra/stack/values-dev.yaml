@@ -1,7 +1,9 @@
 stack: dev
-# Temporary: dev serves the prod domain until prod runs from a release tag.
-# Then this goes back to dev.shopnexus.id.vn.
+# Temporary: dev serves the prod domain, indexed, until prod runs from a
+# release tag. Then domain goes back to dev.shopnexus.id.vn, without
+# indexed and aliasDomains.
 domain: shopnexus.id.vn
+indexed: true
 aliasDomains: [dev.shopnexus.id.vn]
 appEnv: dev
 server:

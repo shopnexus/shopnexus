@@ -48,7 +48,9 @@ restate:
 rustfs:
   storage: 10Gi
 
-# Other domains that redirect to the same host under domain.
+# Whether search engines may index domain. Alias domains never are.
+indexed: false
+# Other domains serving the same stack, with noindex (templates/aliases.yaml).
 aliasDomains: []
 
 # Argo CD has one server per cluster, and one stack routes argocd.<domain>
