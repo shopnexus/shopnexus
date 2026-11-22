@@ -12,9 +12,9 @@ spec:
 ---
 # Pods of this stack reach each other: server to postgres and rustfs, the
 # jobs, postgres replication, imgproxy to rustfs. The server and the agent
-# take only the ports to-server and to-agent open, and imgproxy only its
-# cache. pgweb asks for no sign-in, so only Traefik, behind the console's
-# gate, reaches it.
+# take only the ports to-server and to-agent open, imgproxy only its cache
+# and lgtm only OTLP. pgweb and Grafana trust the console's gate, so only
+# Traefik reaches them.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,7 +23,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm] }
   ingress:
     - from:
         - podSelector: {}
@@ -136,6 +136,22 @@ spec:
             matchLabels: { app.kubernetes.io/name: server }
       ports:
         - { protocol: TCP, port: 3000 }
+---
+# Grafana (3000) signs in whoever X-Console-Email names, so only Traefik
+# reaches it (from-traefik). The stack sends telemetry to OTLP (4318).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-lgtm
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: lgtm }
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { protocol: TCP, port: 4318 }
 ---
 # imgproxy takes requests from its cache only, so every photo is resized
 # once per format.

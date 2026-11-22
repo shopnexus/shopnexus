@@ -51,3 +51,24 @@ spec:
             hs.status = "Healthy"
           end
           return hs
+    # Anonymous users are admins, so outside its namespace only Traefik,
+    # behind the console's gate, reaches Argo CD. The chart's own policies
+    # let any pod reach argocd-server.
+    global:
+      networkPolicy:
+        create: false
+    extraObjects:
+      - apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: from-argocd-and-traefik
+        spec:
+          podSelector: {}
+          policyTypes: [Ingress]
+          ingress:
+            - from:
+                - podSelector: {}
+                - namespaceSelector:
+                    matchLabels: { kubernetes.io/metadata.name: kube-system }
+                  podSelector:
+                    matchLabels: { app.kubernetes.io/name: traefik }
