@@ -15,6 +15,9 @@ tests:
       - equal:
           path: spec.postgresql.shared_preload_libraries[0]
           value: pg_search
+      - equal:
+          path: spec.postgresql.parameters.max_connections
+          value: "300"
       # CNPG reads the major version from a tag like 18.1; ParadeDB's
       # 0.26.4-pg18 needs a catalog entry.
       - equal:

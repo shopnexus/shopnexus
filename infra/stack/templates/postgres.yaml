@@ -33,6 +33,7 @@ spec:
     parameters:
       shared_buffers: {{ .Values.postgres.sharedBuffers | quote }}
       effective_cache_size: {{ .Values.postgres.effectiveCacheSize | quote }}
+      max_connections: {{ .Values.postgres.maxConnections | quote }}
   managed:
     roles:
       # LiteLLM keeps its keys and spend in a database of its own.

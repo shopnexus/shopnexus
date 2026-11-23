@@ -40,6 +40,9 @@ postgres:
   # The vector and BM25 indexes search reads must fit in memory.
   sharedBuffers: 2GB
   effectiveCacheSize: 6GB
+  # Above the default 100: four server processes at DATABASE_MAX_CONNS=20
+  # double while a Restate version drains, plus LiteLLM and pgweb.
+  maxConnections: 300
 
 restate:
   replicas: 1

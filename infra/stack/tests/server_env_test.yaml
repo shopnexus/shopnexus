@@ -61,6 +61,7 @@ tests:
     asserts:
       - exists: { path: data.APP_ENV }
       - exists: { path: data.HTTP_ADDR }
+      - equal: { path: data.DATABASE_MAX_CONNS, value: "20" }
       - exists: { path: data.LOG_LEVEL }
       - exists: { path: data.LOG_FORMAT }
       - exists: { path: data.RESTATE_INGRESS_URL }
@@ -126,7 +127,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c4e582c52eaadaa4
+          value: 51e24cfe5fab14c5
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -134,7 +135,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: c4e582c52eaadaa4
+          value: 51e24cfe5fab14c5
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
