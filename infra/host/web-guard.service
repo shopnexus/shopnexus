@@ -1,0 +1,14 @@
+[Unit]
+Description=Per-address flood limits on ports 80 and 443 (nft table inet web_guard)
+After=nftables.service
+Wants=nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nft -f /etc/nftables.d/web-guard.nft
+ExecReload=/usr/bin/nft -f /etc/nftables.d/web-guard.nft
+ExecStop=/usr/bin/nft destroy table inet web_guard
+
+[Install]
+WantedBy=multi-user.target
