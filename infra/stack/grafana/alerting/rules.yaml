@@ -7,7 +7,7 @@ groups:
   interval: 1m
   rules:
   - uid: sn-api-5xx
-    title: API 5xx share
+    title: API trả lỗi 5xx
     condition: B
     for: 5m
     noDataState: OK
@@ -39,7 +39,7 @@ groups:
             params:
             - 0.02
   - uid: sn-api-p95
-    title: API p95 latency
+    title: API chậm
     condition: B
     for: 10m
     noDataState: OK
@@ -72,7 +72,7 @@ groups:
             params:
             - 2
   - uid: sn-server-silent
-    title: Server not reporting
+    title: Server im lặng
     condition: B
     for: 5m
     noDataState: OK
@@ -104,7 +104,7 @@ groups:
             params:
             - 1
   - uid: sn-external-failing
-    title: External calls failing
+    title: Gọi dịch vụ ngoài lỗi
     condition: B
     for: 5m
     noDataState: OK
@@ -137,7 +137,7 @@ groups:
             params:
             - 0.2
   - uid: sn-sign-in-failures
-    title: Sign-in failures
+    title: Đăng nhập thất bại nhiều
     condition: B
     for: 0s
     noDataState: OK
@@ -169,7 +169,7 @@ groups:
             params:
             - 30
   - uid: sn-refresh-reuse
-    title: Refresh token reused
+    title: Refresh token bị dùng lại
     condition: B
     for: 0s
     noDataState: OK
@@ -201,7 +201,7 @@ groups:
             params:
             - 0
   - uid: sn-client-errors
-    title: Website script errors
+    title: Website lỗi script
     condition: B
     for: 0s
     noDataState: OK

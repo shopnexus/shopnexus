@@ -1,6 +1,21 @@
 # Every alert goes to Telegram; the chart adds this with lgtm.telegram and
 # Secret grafana-secrets.
 apiVersion: 1
+templates:
+- orgId: 1
+  name: sn.telegram
+  template: |-
+    {{ define "sn.telegram" -}}
+    {{ range .Alerts.Firing -}}
+    {{ if eq .Labels.severity "critical" }}🔴{{ else }}🟠{{ end }} <b>{{ .Labels.alertname }}</b>
+    {{ .Annotations.summary | html }}
+    <i>Từ {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "15:04, 02/01" }}</i> · <a href="{{ .GeneratorURL | html }}">Xem</a> · <a href="{{ .SilenceURL | html }}">Tạm tắt</a>
+
+    {{ end -}}
+    {{ range .Alerts.Resolved -}}
+    ✅ <b>{{ .Labels.alertname }}</b>: đã ổn lúc {{ .EndsAt | tz "Asia/Ho_Chi_Minh" | date "15:04" }} (lỗi từ {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "15:04" }})
+    {{ end -}}
+    {{- end }}
 contactPoints:
 - orgId: 1
   name: Telegram
@@ -10,7 +25,9 @@ contactPoints:
     settings:
       bottoken: $TELEGRAM_BOT_TOKEN
       chatid: $TELEGRAM_CHAT_ID
-      parse_mode: None
+      parse_mode: HTML
+      disable_web_page_preview: true
+      message: '{{ template "sn.telegram" . }}'
 policies:
 - orgId: 1
   receiver: Telegram

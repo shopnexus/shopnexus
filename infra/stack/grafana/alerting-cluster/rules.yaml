@@ -7,7 +7,7 @@ groups:
   interval: 1m
   rules:
   - uid: sn-site-down
-    title: Site down
+    title: Site không truy cập được
     condition: B
     for: 2m
     noDataState: OK
@@ -39,7 +39,7 @@ groups:
             params:
             - 1
   - uid: sn-cert-expiry
-    title: Certificate expiring
+    title: Chứng chỉ TLS sắp hết hạn
     condition: B
     for: 1h
     noDataState: OK
@@ -71,7 +71,7 @@ groups:
             params:
             - 14
   - uid: sn-pod-restarts
-    title: Pod restarting
+    title: Pod khởi động lại liên tục
     condition: B
     for: 0s
     noDataState: OK
@@ -103,7 +103,7 @@ groups:
             params:
             - 2
   - uid: sn-pod-not-ready
-    title: Pod not ready
+    title: Pod chưa sẵn sàng
     condition: B
     for: 10m
     noDataState: OK
@@ -135,7 +135,7 @@ groups:
             params:
             - 0
   - uid: sn-node-disk
-    title: Node disk full
+    title: Disk node sắp đầy
     condition: B
     for: 15m
     noDataState: OK
@@ -167,7 +167,7 @@ groups:
             params:
             - 0.9
   - uid: sn-postgres-down
-    title: Postgres down
+    title: Postgres không chạy
     condition: B
     for: 3m
     noDataState: OK
@@ -199,7 +199,7 @@ groups:
             params:
             - 1
   - uid: sn-postgres-connections
-    title: Postgres connections nearly full
+    title: Postgres sắp hết kết nối
     condition: B
     for: 10m
     noDataState: OK
@@ -231,7 +231,7 @@ groups:
             params:
             - 0.85
   - uid: sn-postgres-long-transaction
-    title: Postgres long transaction
+    title: Postgres có transaction treo
     condition: B
     for: 5m
     noDataState: OK
@@ -263,7 +263,7 @@ groups:
             params:
             - 600
   - uid: sn-litellm-failing
-    title: Model calls failing
+    title: Gọi model lỗi
     condition: B
     for: 5m
     noDataState: OK
@@ -296,7 +296,7 @@ groups:
             params:
             - 0.2
   - uid: sn-node-memory
-    title: Node memory full
+    title: RAM node sắp đầy
     condition: B
     for: 15m
     noDataState: OK
