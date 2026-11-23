@@ -111,5 +111,5 @@ server:
   # (GHTK and GHN) waits for the GHTK partner contract.
   logLevel: info
   pnvTestNumbers: "true"
-  # How sign-in codes are mailed: log or resend. APP_ENV=prod refuses log.
+  # How sign-in codes and notices are mailed: log or resend. APP_ENV=prod refuses log.
   emailSender: log
