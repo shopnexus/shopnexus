@@ -126,7 +126,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b86407dbd18ded6c
+          value: c4e582c52eaadaa4
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -134,7 +134,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b86407dbd18ded6c
+          value: c4e582c52eaadaa4
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
@@ -161,6 +161,7 @@ tests:
       - equal: { path: data.EMBED_SLOTS, value: "2" }
       - equal: { path: data.EMBED_TEXT_MIN_SIMILARITY, value: "0.45" }
       - equal: { path: data.EMBED_PHOTO_MIN_SIMILARITY, value: "0.6" }
+      - equal: { path: data.EMBED_LOOK_MIN_SIMILARITY, value: "0.08" }
   # A video read cuts frames and transcribes in module ai, from the model
   # files under /models, and fills the listing through LiteLLM's alias.
   - it: sets the video read settings
