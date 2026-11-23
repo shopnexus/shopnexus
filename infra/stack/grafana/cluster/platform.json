@@ -1,0 +1,1645 @@
+{
+  "uid": "shopnexus-platform",
+  "title": "Platform",
+  "description": "What the server stands on: the public hosts, Traefik, Postgres, Restate and LiteLLM, from the cluster's Prometheus.",
+  "tags": [
+    "shopnexus",
+    "kubernetes"
+  ],
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "fiscalYearStartMonth": 0,
+  "links": [],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Uptime",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "Public hosts",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "description": "Probed every minute from inside the cluster through Traefik.",
+      "gridPos": {
+        "h": 4,
+        "w": 16,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "probe_success{job=\"blackbox\"}",
+          "refId": "A",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "down",
+                  "color": "#d03b3b"
+                },
+                "1": {
+                  "text": "up",
+                  "color": "#0ca30c"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d03b3b",
+                "value": null
+              },
+              {
+                "color": "#0ca30c",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "Certificate expires in",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "min ((probe_ssl_earliest_cert_expiry{job=\"blackbox\"} - time()) / 86400)",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d03b3b",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 14
+              },
+              {
+                "color": "#0ca30c",
+                "value": 30
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 4,
+      "title": "Probe time",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "probe_duration_seconds{job=\"blackbox\"}",
+          "refId": "A",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 5,
+      "title": "Edge (Traefik)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 6,
+      "title": "Requests / s by app",
+      "description": "Every request through Traefik, the website, media and dashboards included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (app) (label_replace(sum by (service) (rate(traefik_service_requests_total{service=~\"__NAMESPACE__-.*\"}[$__rate_interval])), \"app\", \"$1\", \"service\", \"__NAMESPACE__-(.+?)(-[0-9]+|-[0-9a-f]{20})@.*\"))",
+          "refId": "A",
+          "legendFormat": "{{app}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 7,
+      "title": "5xx / s by app",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (app) (label_replace(sum by (service) (rate(traefik_service_requests_total{service=~\"__NAMESPACE__-.*\",code=~\"5..\"}[$__rate_interval])) > 0, \"app\", \"$1\", \"service\", \"__NAMESPACE__-(.+?)(-[0-9]+|-[0-9a-f]{20})@.*\"))",
+          "refId": "A",
+          "legendFormat": "{{app}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 8,
+      "title": "Postgres",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "id": 9,
+      "title": "Up",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "min (cnpg_collector_up{namespace=\"__NAMESPACE__\"})",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d03b3b",
+                "value": null
+              },
+              {
+                "color": "#0ca30c",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 10,
+      "title": "Database size",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum (cnpg_pg_database_size_bytes{namespace=\"__NAMESPACE__\",datname=\"app\"})",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 11,
+      "title": "Connections in use",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum (cnpg_backends_total{namespace=\"__NAMESPACE__\"}) / max (cnpg_pg_settings_setting{namespace=\"__NAMESPACE__\",name=\"max_connections\"})",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 0.8
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.9
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 12,
+      "title": "Longest transaction",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "max (cnpg_backends_max_tx_duration_seconds{namespace=\"__NAMESPACE__\"})",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 60
+              },
+              {
+                "color": "#d03b3b",
+                "value": 300
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 13,
+      "title": "Waiting on locks",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum (cnpg_backends_waiting_total{namespace=\"__NAMESPACE__\"})",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#199e70",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "id": 14,
+      "title": "WAL archive failures",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum (increase(cnpg_pg_stat_archiver_failed_count{namespace=\"__NAMESPACE__\"}[$__range]))",
+          "refId": "A",
+          "legendFormat": "__auto"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "–",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c",
+                "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "Connections by user",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (usename) (cnpg_backends_total{namespace=\"__NAMESPACE__\"})",
+          "refId": "A",
+          "legendFormat": "{{usename}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 16,
+      "title": "Database size",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (datname) (cnpg_pg_database_size_bytes{namespace=\"__NAMESPACE__\"})",
+          "refId": "A",
+          "legendFormat": "{{datname}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 17,
+      "title": "Restate",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 18,
+      "title": "Handler attempts by status",
+      "description": "Started attempts that never complete are retries.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (status) (rate(restate_invoker_invocation_tasks_total{cluster_name=\"__RESTATE__\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "completed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0ca30c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "started"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "suspended"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#898781"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 19,
+      "title": "Attempt time",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "max by (quantile) (restate_invoker_task_duration_seconds{cluster_name=\"__RESTATE__\",quantile=~\"0.5|0.9|0.99\"})",
+          "refId": "A",
+          "legendFormat": "p{{quantile}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p0.5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#86b6ef"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p0.9"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p0.99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1c5cab"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "id": 20,
+      "title": "Models (LiteLLM)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 21,
+      "title": "Requests / min by alias",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total{namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "legendFormat": "{{requested_model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 22,
+      "title": "Latency p95 by alias",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 44
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, model_group) (rate(litellm_request_total_latency_metric_bucket{namespace=\"__NAMESPACE__\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{model_group}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 23,
+      "title": "Failed requests / min",
+      "description": "Calls LiteLLM answered with an error, upstream failures and budget refusals included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 44
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (requested_model) (rate(litellm_proxy_failed_requests_metric_total{namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "legendFormat": "{{requested_model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "id": 24,
+      "title": "Spend and tokens by key",
+      "description": "In the time range. Spend is in the units of litellm/config.yaml: 1 is 1M tokens, dollars for console-agent.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (api_key_alias) (increase(litellm_spend_metric_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0",
+          "refId": "A",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "(sum by (api_key_alias) (increase(litellm_total_tokens_metric_total{namespace=\"__NAMESPACE__\"}[$__range]))) > 0 or ((sum by (api_key_alias) (increase(litellm_spend_metric_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0) * 0)",
+          "refId": "B",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "api_key_alias",
+                "Value #A",
+                "Value #B"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "Spend",
+              "Value #B": "Tokens",
+              "api_key_alias": "Key"
+            },
+            "indexByName": {
+              "Key": 0,
+              "Spend": 1,
+              "Tokens": 2
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Spend",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spend"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tokens"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 25,
+      "title": "Tokens / hour by alias",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cluster"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cluster"
+          },
+          "expr": "sum by (requested_model) (increase(litellm_total_tokens_metric_total{namespace=\"__NAMESPACE__\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "{{requested_model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      },
+      "interval": "1h"
+    }
+  ]
+}

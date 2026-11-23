@@ -401,7 +401,7 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container!=\"\",container!=\"POD\"}[5m]))",
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container!=\"\",container!=\"POD\"}[5m])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -425,7 +425,7 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "(sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\"}[$__range]))) or (sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\",container!=\"\",container!=\"POD\"}) * 0)",
+          "expr": "(sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\"}[$__range]))) > 0 or ((sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\",container!=\"\",container!=\"POD\"}) > 0) * 0)",
           "refId": "C",
           "legendFormat": "__auto",
           "instant": true,

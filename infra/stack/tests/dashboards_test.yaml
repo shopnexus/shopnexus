@@ -196,6 +196,9 @@ tests:
       - matchRegex:
           path: data["pods.json"]
           pattern: '"value": "shopnexus-dev"'
+      - matchRegex:
+          path: data["platform.json"]
+          pattern: 'cluster_name=.{2}restate-dev'
   - it: leaves out Pods without the cluster's Prometheus
     template: dashboards.yaml
     documentSelector: { path: metadata.name, value: lgtm-dashboards }

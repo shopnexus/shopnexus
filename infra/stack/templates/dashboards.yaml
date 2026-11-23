@@ -28,7 +28,8 @@ data:
 ---
 {{- end }}
 # The ShopNexus dashboards (grafana/), which docker-compose.yml mounts too.
-# Pods reads the cluster's Prometheus, so only the cluster gets it.
+# Pods and Platform read the cluster's Prometheus, so only the cluster gets
+# them, with the stack's namespaces filled in.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -44,7 +45,7 @@ data:
   {{- if .Values.lgtm.clusterPrometheus }}
   {{- range $path, $_ := .Files.Glob "grafana/cluster/*.json" }}
   {{ base $path }}: |
-    {{- $.Files.Get $path | replace "__NAMESPACE__" $ns | nindent 4 }}
+    {{- $.Files.Get $path | replace "__NAMESPACE__" $ns | replace "__RESTATE__" (include "sn.restate" $) | nindent 4 }}
   {{- end }}
   {{- end }}
 ---

@@ -166,6 +166,135 @@ groups:
             type: gt
             params:
             - 0.9
+  - uid: sn-postgres-down
+    title: Postgres down
+    condition: B
+    for: 3m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Exporter của Postgres báo database không lên, hoặc không còn được scrape.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: min(cnpg_collector_up{namespace="__NAMESPACE__"}) or vector(0)
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+  - uid: sn-postgres-connections
+    title: Postgres connections nearly full
+    condition: B
+    for: 10m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Postgres đang dùng {{ humanizePercentage $values.A.Value }} số kết nối cho phép.
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: sum(cnpg_backends_total{namespace="__NAMESPACE__"}) / max(cnpg_pg_settings_setting{namespace="__NAMESPACE__",name="max_connections"})
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.85
+  - uid: sn-postgres-long-transaction
+    title: Postgres long transaction
+    condition: B
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Có transaction Postgres đã mở {{ humanizeDuration $values.A.Value }}: nó giữ lock và cản vacuum.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: max(cnpg_backends_max_tx_duration_seconds{namespace="__NAMESPACE__"})
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 600
+  - uid: sn-litellm-failing
+    title: Model calls failing
+    condition: B
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ humanizePercentage $values.A.Value }} lượt gọi model qua LiteLLM thất bại trong 10 phút qua.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: sum(rate(litellm_proxy_failed_requests_metric_total{namespace="__NAMESPACE__"}[10m])) / sum(rate(litellm_proxy_total_requests_metric_total{namespace="__NAMESPACE__"}[10m])) and on () sum(rate(litellm_proxy_total_requests_metric_total{namespace="__NAMESPACE__"}[10m]))
+          > 0.01
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0.2
   - uid: sn-node-memory
     title: Node memory full
     condition: B
