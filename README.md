@@ -1,6 +1,8 @@
 # ShopNexus
 
-Umbrella repository for ShopNexus. Each component lives in its own git submodule.
+Umbrella repository for ShopNexus, a C2C marketplace for used goods in Vietnam where buyers pay cash on delivery and look at the item first. The website, the Android app, the server and the rest each live in their own git submodule, listed below.
+
+![The website's Home for a guest: a search typed as people ask, read back as chips, while one photo fills a listing](https://raw.githubusercontent.com/shopnexus/website/main/.github/media/home-demo.gif)
 
 ## Components
 
