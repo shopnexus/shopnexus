@@ -1,9 +1,9 @@
 {
   "model_name": "search",
   "litellm_params": {
-    "model": "openai/claude-haiku-5-5",
-    "api_base": "os.environ/LLM_UPSTREAM_BASE_URL",
-    "api_key": "os.environ/LLM_UPSTREAM_API_KEY",
+    "model": "openai/google/gemini-2.5-flash",
+    "api_base": "https://openrouter.ai/api/v1",
+    "api_key": "os.environ/OPENROUTER_API_KEY",
     "input_cost_per_token": 0.000001,
     "output_cost_per_token": 0.000001
   },

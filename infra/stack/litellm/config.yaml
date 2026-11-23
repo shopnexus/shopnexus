@@ -19,9 +19,11 @@
 # infra/stack/secrets/compose.env; LLM_UPSTREAM_BASE_URL is in
 # env/litellm.env.
 #
-# The LLM aliases (search, listing-read, scam-check, console-agent) go to the
-# LLM upstream, an OpenAI-compatible API that serves the Claude models in
-# place of Anthropic's own. embed-text goes to OpenRouter, which serves
+# The LLM aliases listing-read, scam-check and console-agent go to the LLM
+# upstream, an OpenAI-compatible API that serves the Claude models in place
+# of Anthropic's own. search goes to Gemini 2.5 Flash on OpenRouter, which
+# read hard queries better than Claude Haiku at about the same speed
+# (2026-11-23). embed-text goes to OpenRouter, which serves
 # bge-m3 from DeepInfra (fp32), whose vectors match the TEI the stack ran
 # before at a cosine of 0.999999, and from Parasail at 0.996. Its provider
 # pin keeps stored vectors and new ones in one space.
