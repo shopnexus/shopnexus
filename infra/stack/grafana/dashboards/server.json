@@ -1,7 +1,7 @@
 {
   "uid": "shopnexus-server",
   "title": "Server",
-  "description": "The API, the calls it makes, its background work, the database, sign-ins and events, and its warnings.",
+  "description": "How close the server is to its CPU, memory and connection limits, the API, the calls it makes, its background work, the database, sign-ins and events, and its warnings.",
   "tags": [
     "shopnexus",
     "server"
@@ -451,6 +451,499 @@
     },
     {
       "type": "row",
+      "id": 28,
+      "title": "Saturation",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 29,
+      "title": "CPU",
+      "description": "CPU used per instance against GOMAXPROCS, which Go takes from the pod's CPU limit or, without one, the node's cores. Above the dashed line at 80%, requests start to wait for a free CPU.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (instance) (rate(process_cpu_time_seconds_total{job=\"server\",instance=~\"$instance\"}[$__rate_interval])) / sum by (instance) (go_processor_limit{job=\"server\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          },
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "#898781",
+                "value": 0.8
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 30,
+      "title": "Memory",
+      "description": "Container memory per instance against its limit. At 100% the container is OOM-killed. The panel stays empty for a container that runs without a memory limit.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (instance) (container_memory_usage_bytes{job=\"server\",instance=~\"$instance\"}) / sum by (instance) (container_memory_limit_bytes{job=\"server\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          },
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "#898781",
+                "value": 0.8
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 31,
+      "title": "Database pool in use",
+      "description": "Connections in use per instance against the pool's maximum. At 100% requests wait for a connection (Waiting for a connection, under Database).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (instance) (db_client_connection_acquired{job=\"server\",instance=~\"$instance\"}) / sum by (instance) (db_client_connection_max{job=\"server\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          },
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "#898781",
+                "value": 0.8
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 32,
+      "title": "Scheduler wait p99",
+      "description": "How long a goroutine that is ready to run waits for a CPU. It rises when CPU is short, often before request latency does.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, instance) (rate(go_schedule_duration_seconds_bucket{job=\"server\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 33,
+      "title": "Goroutines",
+      "description": "Goroutines per instance. A count that keeps rising under steady traffic means work is stuck or leaking.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (instance) (go_goroutine_count{job=\"server\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 34,
+      "title": "Turned away",
+      "description": "Requests the server's rate limits refused, by route, and calls an outside service refused with 429, by host.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (http_route) (rate(http_server_rate_limited_total{job=\"server\",instance=~\"$instance\"}[$__rate_interval])) > 0",
+          "legendFormat": "limited {{http_route}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "sum by (server_address) (rate(http_client_request_duration_seconds_count{job=\"server\",instance=~\"$instance\",http_response_status_code=\"429\"}[$__rate_interval])) > 0",
+          "legendFormat": "429 from {{server_address}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0,
+            "axisBorderShow": false,
+            "barAlignment": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name",
+            "fixedColor": "#199e70"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
       "id": 7,
       "title": "API",
       "collapsed": false,
@@ -458,7 +951,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 21
       },
       "panels": []
     },
@@ -475,7 +968,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 22
       },
       "targets": [
         {
@@ -606,7 +1099,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 22
       },
       "targets": [
         {
@@ -740,7 +1233,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 30
       },
       "targets": [
         {
@@ -1020,7 +1513,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 40
       },
       "panels": []
     },
@@ -1037,7 +1530,7 @@
         "h": 9,
         "w": 10,
         "x": 0,
-        "y": 24
+        "y": 41
       },
       "targets": [
         {
@@ -1264,7 +1757,7 @@
         "h": 9,
         "w": 14,
         "x": 10,
-        "y": 24
+        "y": 41
       },
       "targets": [
         {
@@ -1330,7 +1823,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 50
       },
       "panels": []
     },
@@ -1347,7 +1840,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 51
       },
       "targets": [
         {
@@ -1520,7 +2013,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 51
       },
       "targets": [
         {
@@ -1586,7 +2079,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 60
       },
       "panels": []
     },
@@ -1603,7 +2096,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 61
       },
       "targets": [
         {
@@ -1751,7 +2244,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 44
+        "y": 61
       },
       "targets": [
         {
@@ -1816,7 +2309,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 44
+        "y": 61
       },
       "targets": [
         {
@@ -1982,7 +2475,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 69
       },
       "panels": []
     },
@@ -1999,7 +2492,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 53
+        "y": 70
       },
       "targets": [
         {
@@ -2068,7 +2561,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 53
+        "y": 70
       },
       "targets": [
         {
@@ -2177,7 +2670,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 53
+        "y": 70
       },
       "targets": [
         {
@@ -2231,7 +2724,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 78
       },
       "panels": []
     },
@@ -2248,7 +2741,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 62
+        "y": 79
       },
       "targets": [
         {
@@ -2379,7 +2872,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 85
       },
       "targets": [
         {
