@@ -36,4 +36,4 @@ trace-rename:
 # docs/i18n/format-cases.json, and the UI text follows docs/i18n/glossary.yaml.
 i18n:
 	docs/i18n/sync.sh --check
-	bun docs/i18n/glossary.ts check
+	bun docs/i18n/glossary.ts
