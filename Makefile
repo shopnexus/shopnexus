@@ -1,6 +1,6 @@
 # The three stacks of docker-compose.yml; README.md, Development, has the
 # details and the URLs.
-.PHONY: dev prod test down trace trace-rename
+.PHONY: dev prod test down trace trace-rename i18n
 
 # Everything with live reload, behind http://localhost:56481, detached.
 dev:
@@ -31,3 +31,9 @@ trace:
 # make trace-rename FROM_WAS=1 replaces every old ID by its current one.
 trace-rename:
 	$(if $(FROM_WAS),$(TRACE) rename --from-was,$(TRACE) rename $(FROM) $(TO))
+
+# Checks the products' words: the format cases each repo tests against match
+# docs/i18n/format-cases.json, and the UI text follows docs/manual/thuat-ngu.md.
+i18n:
+	docs/i18n/sync.sh --check
+	bun docs/i18n/check-terms.ts
