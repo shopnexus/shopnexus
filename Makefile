@@ -33,7 +33,7 @@ trace-rename:
 	$(if $(FROM_WAS),$(TRACE) rename --from-was,$(TRACE) rename $(FROM) $(TO))
 
 # Checks the products' words: the format cases each repo tests against match
-# docs/i18n/format-cases.json, and the UI text follows docs/manual/thuat-ngu.md.
+# docs/i18n/format-cases.json, and the UI text follows docs/i18n/glossary.yaml.
 i18n:
 	docs/i18n/sync.sh --check
-	bun docs/i18n/check-terms.ts
+	bun docs/i18n/glossary.ts check
