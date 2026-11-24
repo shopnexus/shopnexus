@@ -112,6 +112,7 @@ tests:
       - exists: { path: data.GHTK_CLIENT_SOURCE }
       - exists: { path: data.GHTK_WEBHOOK_SECRET }
       - exists: { path: data.GHN_API_URL }
+      - exists: { path: data.GHN_PARTNER_TOKEN }
       - exists: { path: data.GHN_WEBHOOK_SECRET }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
@@ -127,7 +128,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 51e24cfe5fab14c5
+          value: 709f71f5061af2e2
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -135,7 +136,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 51e24cfe5fab14c5
+          value: 709f71f5061af2e2
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
