@@ -806,6 +806,8 @@ services:
       context: ./server
       dockerfile_inline: |
         FROM golang:1.27.3
+        # ai/speech and ai/frames tests shell out to ffmpeg.
+        RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
         WORKDIR /src
         COPY go.mod go.sum ./
         RUN go mod download
