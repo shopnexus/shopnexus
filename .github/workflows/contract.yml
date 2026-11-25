@@ -1,13 +1,13 @@
 name: API contract
 
-# The website's generated API types must match the server's OpenAPI at the
+# The website's and the app's generated API types must match the server's OpenAPI at the
 # commits the umbrella pins, the pair a release ships together.
 on:
   pull_request:
-    paths: [server, website, .github/workflows/contract.yml]
+    paths: [server, website, app, .github/workflows/contract.yml]
   push:
     branches: [main]
-    paths: [server, website, .github/workflows/contract.yml]
+    paths: [server, website, app, .github/workflows/contract.yml]
 
 jobs:
   website:
@@ -22,3 +22,12 @@ jobs:
         run: |
           bun install --frozen-lockfile
           SERVER_API=../server/api bun run api:check
+
+  app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: git submodule update --init --depth 1 server app
+      - run: app/core/network/openapi/sync.sh --check
