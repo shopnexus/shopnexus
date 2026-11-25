@@ -81,7 +81,9 @@ for s in postgres restate rustfs litellm imgproxy; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
 eq "$(yq '.x-imgproxy-cache.image' ../docker-compose.yml)" "$(yq '.images.nginx.repository + ":" + .images.nginx.tag' stack/values.yaml)" "compose imgproxy-cache image"
-eq "$(yq '.x-server-env.CARRIER' ../docker-compose.yml)" "$(yq '.server.carrier' stack/values-dev.yaml)" "compose CARRIER"
+for c in ghtk ghn; do
+  eq "$(yq ".x-server-env.CARRIER_${c^^}" ../docker-compose.yml)" "$(yq ".server.carriers.$c.mode" stack/values-dev.yaml)" "compose CARRIER_${c^^}"
+done
 # The settings every stack shares are in stack/env/*.env, which compose
 # (env_file) and the chart both read; a key
 # there is written nowhere else.

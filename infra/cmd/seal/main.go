@@ -162,7 +162,8 @@ func seal(stack string, o opts, out io.Writer) error {
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "ASSIST_LLM_API_KEY",
 			"TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
-			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
+			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN",
+			"GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET")},
 		// The console agent has the server's two tokens and its own LiteLLM key.
 		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{

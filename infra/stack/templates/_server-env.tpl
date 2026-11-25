@@ -55,7 +55,32 @@ OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" 
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
 {{- /* The console agent, in-cluster only; its two tokens are in server-secrets. */}}
 AGENT_BASE_URL: http://agent:3000
-CARRIER: {{ required "server.carrier is required: fake or none, in the stack's values file" .Values.server.carrier | quote }}
+{{- /* Each carrier's switch. A carrier live takes its URL from the values
+       and its partner token and webhook secret from server-secrets; fake
+       and off leave all its settings empty. */}}
+{{- $ghtk := .Values.server.carriers.ghtk }}
+{{- $ghn := .Values.server.carriers.ghn }}
+{{- range $name, $mode := dict "ghtk" $ghtk.mode "ghn" $ghn.mode }}
+{{- if not (has $mode (list "live" "fake" "off")) }}{{ fail (printf "server.carriers.%s.mode must be live, fake or off, in the stack's values file" $name) }}{{ end }}
+{{- end }}
+CARRIER_GHTK: {{ $ghtk.mode | quote }}
+CARRIER_GHN: {{ $ghn.mode | quote }}
+{{- if eq $ghtk.mode "live" }}
+GHTK_API_URL: {{ required "server.carriers.ghtk.apiUrl is required with mode live" $ghtk.apiUrl | quote }}
+GHTK_CLIENT_SOURCE: {{ required "server.carriers.ghtk.clientSource is required with mode live" $ghtk.clientSource | quote }}
+{{- else }}
+GHTK_API_URL: ""
+GHTK_CLIENT_SOURCE: ""
+GHTK_PARTNER_TOKEN: ""
+GHTK_WEBHOOK_SECRET: ""
+{{- end }}
+{{- if eq $ghn.mode "live" }}
+GHN_API_URL: {{ required "server.carriers.ghn.apiUrl is required with mode live" $ghn.apiUrl | quote }}
+{{- else }}
+GHN_API_URL: ""
+GHN_PARTNER_TOKEN: ""
+GHN_WEBHOOK_SECRET: ""
+{{- end }}
 {{- /* A kind turned off gets an empty model, and the server writes and
        reads no vectors of it. */}}
 {{- $e := .Values.server.embed }}

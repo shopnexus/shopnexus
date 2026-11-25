@@ -105,7 +105,8 @@ tests:
       - exists: { path: data.AGENT_BASE_URL }
       - exists: { path: data.LITELLM_URL }
       - exists: { path: data.AGENT_MCP_ADDR }
-      - exists: { path: data.CARRIER }
+      - exists: { path: data.CARRIER_GHTK }
+      - exists: { path: data.CARRIER_GHN }
       - exists: { path: data.CARRIER_POLL_EVERY }
       - exists: { path: data.GHTK_API_URL }
       - exists: { path: data.GHTK_PARTNER_TOKEN }
@@ -128,7 +129,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 709f71f5061af2e2
+          value: 537cf426f4ff74b6
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -136,7 +137,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 709f71f5061af2e2
+          value: 537cf426f4ff74b6
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key
@@ -186,20 +187,53 @@ tests:
       - equal: { path: data.TRUST_LLM_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.TRUST_LLM_MODEL, value: scam-check }
       - equal: { path: data.TRUST_CALL_TIMEOUT, value: 20s }
-  # Production has no carrier until GHTK's client comes; the dev stack runs
-  # the fake, whose dev endpoint moves its shipments.
-  - it: runs production without a carrier
+  # Production runs both carriers off until a partner contract each; the
+  # dev stack runs the fakes, whose dev endpoint moves their shipments.
+  - it: runs production with both carriers off
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.CARRIER, value: none }
+      - equal: { path: data.CARRIER_GHTK, value: "off" }
+      - equal: { path: data.CARRIER_GHN, value: "off" }
       - equal: { path: data.CARRIER_POLL_EVERY, value: 2h }
       - equal: { path: data.GHTK_PARTNER_TOKEN, value: "" }
-  - it: runs the dev stack on the fake carrier
+      - equal: { path: data.GHN_PARTNER_TOKEN, value: "" }
+  - it: runs the dev stack on the fake carriers
     documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.CARRIER, value: fake }
+      - equal: { path: data.CARRIER_GHTK, value: fake }
+      - equal: { path: data.CARRIER_GHN, value: fake }
+      - equal: { path: data.GHN_API_URL, value: "" }
+  # A carrier live takes its URL from the values and its partner token and
+  # webhook secret from server-secrets, so the ConfigMap leaves them out;
+  # the other carrier keeps its own switch.
+  - it: runs GHN live with its URL and its secrets from server-secrets
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    set:
+      server.carriers.ghn: { mode: live, apiUrl: https://dev-online-gateway.ghn.vn/shiip/public-api }
+    asserts:
+      - equal: { path: data.CARRIER_GHN, value: live }
+      - equal: { path: data.GHN_API_URL, value: https://dev-online-gateway.ghn.vn/shiip/public-api }
+      - notExists: { path: data.GHN_PARTNER_TOKEN }
+      - notExists: { path: data.GHN_WEBHOOK_SECRET }
+      - equal: { path: data.CARRIER_GHTK, value: fake }
+      - equal: { path: data.GHTK_PARTNER_TOKEN, value: "" }
+  - it: refuses a carrier live without its URL
+    values: [../values-prod.yaml, values-test.yaml]
+    set:
+      server.carriers.ghn.mode: live
+    asserts:
+      - failedTemplate:
+          errorPattern: server.carriers.ghn.apiUrl is required with mode live
+  - it: refuses a switch that is not live, fake or off
+    values: [../values-prod.yaml, values-test.yaml]
+    set:
+      server.carriers.ghtk.mode: none
+    asserts:
+      - failedTemplate:
+          errorPattern: server.carriers.ghtk.mode must be live, fake or off
   # dev's server-ai loads no SigLIP 2, so photo vectors are off there.
   - it: turns photo vectors off on dev and keeps text vectors
     documentIndex: 0
