@@ -1,0 +1,56 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>shopnexus/shopnexus//.github/renovate/default.json5"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**"
+  ],
+  "argocd": {
+    "managerFilePatterns": [
+      "/^infra/(argocd|platform)/.+\\.ya?ml$/"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Images and charts here reach the cluster, so each dependency gets its own PR and waits for a person.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "groupName": null,
+      "automerge": false
+    },
+    {
+      "description": "Restate moves as one, as the shared preset groups it.",
+      "matchPackageNames": [
+        "restatedev/restate",
+        "ghcr.io/restatedev/**"
+      ],
+      "groupName": "restate"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The chart's images; helm-values reads only keys that end in image.",
+      "managerFilePatterns": [
+        "/^infra/stack/values\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "\\{ repository: (?<depName>[^,\\s]+), tag: (?<currentValue>[^\\s}]+) \\}"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Image tags the chart's unit tests expect, so they move with values.yaml.",
+      "managerFilePatterns": [
+        "/^infra/stack/tests/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "value: \"?(?<depName>[a-z0-9][a-z0-9.-]*(?:/[a-z0-9._-]+)+):(?<currentValue>[A-Za-z0-9._-]+)\"?"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

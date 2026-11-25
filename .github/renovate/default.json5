@@ -1,0 +1,45 @@
+// Renovate rules every shopnexus repo extends from its .github/renovate.json.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended', ':timezone(Asia/Ho_Chi_Minh)'],
+  schedule: ['before 9am on monday'],
+  // A release waits 3 days, so a pulled or hijacked one never lands.
+  minimumReleaseAge: '3 days',
+  internalChecksFilter: 'strict',
+  prConcurrentLimit: 5,
+  postUpdateOptions: ['gomodTidy'],
+  osvVulnerabilityAlerts: true,
+  // Renovate merges by itself once every check passes; a PR without checks stays open.
+  platformAutomerge: false,
+  automergeStrategy: 'rebase',
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+    schedule: ['before 9am on the first day of the month'],
+  },
+  packageRules: [
+    // One weekly PR per repo for minor and patch updates.
+    {
+      matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
+      groupName: 'minor and patch',
+      automerge: true,
+    },
+    // Our own images move with Argo CD Image Updater and releases.
+    {
+      matchPackageNames: ['ghcr.io/shopnexus/**'],
+      enabled: false,
+    },
+    // Node's types follow the Node image's major, which moves by hand.
+    {
+      matchPackageNames: ['@types/node'],
+      matchUpdateTypes: ['major'],
+      enabled: false,
+    },
+    // Restate's server, operator and SDK move together, by hand.
+    {
+      matchPackageNames: ['restatedev/restate', 'ghcr.io/restatedev/**', 'github.com/restatedev/**', '@restatedev/**'],
+      groupName: 'restate',
+      automerge: false,
+    },
+  ],
+}
