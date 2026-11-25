@@ -25,6 +25,8 @@ cd shopnexus
 make dev
 ```
 
+`app` (`shopnexus/app-android`), `website` and `brand` are private repositories, so the recursive clone needs a GitHub account with access to them.
+
 The storefront is available at `http://shopnexus.localhost:56481`. `make test` runs the server tests, and `make down` stops the local stacks while keeping their data.
 
 ## Deployment
