@@ -24,7 +24,8 @@ restate:
   replicas: 3
   storageBytes: 4294967296 # 4 GiB
 server:
-  carrier: none
+  # Both off until a partner contract each; sellers link neither.
+  carriers: { ghtk: { mode: "off" }, ghn: { mode: "off" } }
   logLevel: info
   pnvTestNumbers: "false"
   emailSender: resend

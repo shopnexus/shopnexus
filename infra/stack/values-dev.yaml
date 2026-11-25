@@ -11,7 +11,10 @@ server:
   # 4.5 GB (2026-11-17), so no photo vectors.
   embed:
     image: false
-  carrier: fake
+  # The fakes; GHN live would be mode live and apiUrl
+  # https://dev-online-gateway.ghn.vn/shiip/public-api, with GHN's staging
+  # partner token and webhook secret sealed in server-secrets.
+  carriers: { ghtk: { mode: fake }, ghn: { mode: fake } }
   logLevel: debug
   pnvTestNumbers: "true"
   emailSender: log

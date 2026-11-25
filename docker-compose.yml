@@ -263,9 +263,17 @@ x-server-env: &server-env
   AI_EMBED_MODELS: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
   # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
   # dev cluster stack runs them. With them the server serves the dev
-  # endpoint that moves their shipments. The token key comes from the keys
-  # service.
-  CARRIER: fake
+  # endpoint that moves their shipments. Each carrier's settings are for
+  # live only, so empty. The token key comes from the keys service.
+  CARRIER_GHTK: fake
+  CARRIER_GHN: fake
+  GHTK_API_URL: ""
+  GHTK_PARTNER_TOKEN: ""
+  GHTK_CLIENT_SOURCE: ""
+  GHTK_WEBHOOK_SECRET: ""
+  GHN_API_URL: ""
+  GHN_PARTNER_TOKEN: ""
+  GHN_WEBHOOK_SECRET: ""
   PNV_TEST_NUMBERS: "true"
   FCM_CREDENTIALS: ""
   EMAIL_SENDER: log

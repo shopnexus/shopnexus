@@ -107,11 +107,17 @@ server:
   embed:
     text: true
     image: true
-  # carrier: where the server makes and reads shipments, set per stack:
-  # fake in values-dev.yaml (with it the server serves
-  # POST /v1/dev/shipments/{code}/status to anyone), none in
-  # values-prod.yaml. The server refuses fake with APP_ENV=prod. live
-  # (GHTK and GHN) waits for the GHTK partner contract.
+  # carriers: where the server makes and reads shipments, one switch per
+  # carrier (CARRIER_GHTK, CARRIER_GHN), each mode set per stack: live,
+  # fake or off. A seller links only the carriers not off. With a fake the
+  # server serves POST /v1/dev/shipments/{code}/status to anyone, and it
+  # refuses fake with APP_ENV=prod. live needs the carrier's apiUrl (and
+  # GHTK's clientSource) here, and its partner token and webhook secret in
+  # server-secrets: GHTK_PARTNER_TOKEN and GHTK_WEBHOOK_SECRET, or
+  # GHN_PARTNER_TOKEN and GHN_WEBHOOK_SECRET (infra/cmd/seal).
+  carriers:
+    ghtk: { mode: "", apiUrl: "", clientSource: "" }
+    ghn: { mode: "", apiUrl: "" }
   logLevel: info
   pnvTestNumbers: "true"
   # How sign-in codes and notices are mailed: log or resend. APP_ENV=prod refuses log.
