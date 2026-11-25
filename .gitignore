@@ -6,6 +6,7 @@
 !/AGENTS.md
 !/agent
 !/.gitignore
+!/.gitleaks.toml
 !/.gitmodules
 !/LICENSE
 !/Makefile

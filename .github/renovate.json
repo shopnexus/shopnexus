@@ -51,6 +51,18 @@
         "value: \"?(?<depName>[a-z0-9][a-z0-9.-]*(?:/[a-z0-9._-]+)+):(?<currentValue>[A-Za-z0-9._-]+)\"?"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "The helm-unittest plugin infra.yml installs.",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/infra\\.yml$/"
+      ],
+      "matchStrings": [
+        "helm-unittest --version (?<currentValue>v[0-9.]+)"
+      ],
+      "depNameTemplate": "helm-unittest/helm-unittest",
+      "datasourceTemplate": "github-releases"
     }
   ]
 }

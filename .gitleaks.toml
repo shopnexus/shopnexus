@@ -1,0 +1,7 @@
+# gitleaks' own rules; the SealedSecrets hold ciphertext that looks like keys.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "SealedSecrets"
+paths = ['''^infra/stack/secrets/[^/]+/[^/]+\.yaml$''']

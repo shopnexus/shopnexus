@@ -1,7 +1,7 @@
 // Renovate rules every shopnexus repo extends from its .github/renovate.json.
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  extends: ['config:recommended', ':timezone(Asia/Ho_Chi_Minh)'],
+  extends: ['config:recommended', ':timezone(Asia/Ho_Chi_Minh)', 'helpers:pinGitHubActionDigestsToSemver'],
   schedule: ['before 9am on monday'],
   // A release waits 3 days, so a pulled or hijacked one never lands.
   minimumReleaseAge: '3 days',
@@ -29,6 +29,12 @@
       matchPackageNames: ['ghcr.io/shopnexus/**'],
       enabled: false,
     },
+    // Repos call the umbrella's reusable workflows at @main on purpose.
+    {
+      matchManagers: ['github-actions'],
+      matchPackageNames: ['shopnexus/**'],
+      enabled: false,
+    },
     // Node's types follow the Node image's major, which moves by hand.
     {
       matchPackageNames: ['@types/node'],
@@ -40,6 +46,21 @@
       matchPackageNames: ['restatedev/restate', 'ghcr.io/restatedev/**', 'github.com/restatedev/**', '@restatedev/**'],
       groupName: 'restate',
       automerge: false,
+    },
+  ],
+  // Tools the workflows install by version.
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: ['go (?:install|run) (?<depName>[a-z0-9.-]+\\.[a-z]+/[^/\\s@]+/[^/\\s@]+(?:/v\\d+)?)(?:/[^\\s@]*)?@(?<currentValue>v[0-9.]+)'],
+      datasourceTemplate: 'go',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: ['pipx run (?<depName>[A-Za-z0-9_.-]+)==(?<currentValue>[0-9.]+)'],
+      datasourceTemplate: 'pypi',
     },
   ],
 }

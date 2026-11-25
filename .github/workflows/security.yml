@@ -1,0 +1,59 @@
+name: Security
+
+# Every shopnexus repo calls this from its own security.yml, and the
+# umbrella runs it too. zizmor and actionlint check the workflows; gitleaks
+# checks the commits a push or pull request adds. The tools come from Go's
+# checksum database or PyPI, pinned to a version Renovate bumps.
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  workflows:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint"
+      # Actions are pinned by SHA; shopnexus's own reusable workflows by ref.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/zizmor.yml" <<'EOF'
+          rules:
+            unpinned-uses:
+              config:
+                policies:
+                  shopnexus/*: ref-pin
+                  "*": hash-pin
+          EOF
+          pipx run zizmor==1.33.1 --format github --config "$RUNNER_TEMP/zizmor.yml" .github/workflows
+
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 0 }
+      # The new commits only; --redact keeps a found secret out of the public log.
+      - name: gitleaks
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          range=HEAD~1..HEAD
+          if [[ -n $BASE && ! $BASE =~ ^0+$ ]] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            range=$BASE..HEAD
+          fi
+          "$(go env GOPATH)/bin/gitleaks" git --no-banner --redact --log-opts="$range" .
