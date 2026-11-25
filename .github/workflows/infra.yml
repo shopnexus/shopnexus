@@ -2,10 +2,10 @@ name: Infra checks
 
 on:
   pull_request:
-    paths: ["infra/**"]
+    paths: ["infra/**", .github/workflows/infra.yml]
   push:
     branches: [main]
-    paths: ["infra/**"]
+    paths: ["infra/**", .github/workflows/infra.yml]
 
 jobs:
   check:
