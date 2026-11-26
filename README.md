@@ -33,6 +33,8 @@ The storefront is available at `http://shopnexus.localhost:56481`. `make test` r
 
 GitHub Actions builds each component's container image. The Kubernetes cluster runs separate development and production stacks, managed by Argo CD. Compose provides local development and a production-image profile for checking the same components on one machine.
 
+Dev follows `main`; prod changes only through a release. [infra/RELEASING.md](infra/RELEASING.md) describes both, hotfixes and rollback.
+
 ## License
 
 GNU AGPL-3.0. Code committed before 2026-11-23 remains under MIT.
