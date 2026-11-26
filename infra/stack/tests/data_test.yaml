@@ -38,6 +38,12 @@ tests:
       - equal: { path: 'spec.postgresql.shared_preload_libraries[1]', value: pg_prewarm }
       - equal: { path: spec.postgresql.parameters.shared_buffers, value: 2GB }
       - equal: { path: spec.postgresql.parameters.effective_cache_size, value: 6GB }
+  - it: turns on pg_stat_statements through CNPG
+    template: postgres.yaml
+    documentIndex: 1
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: 'spec.postgresql.parameters["pg_stat_statements.track"]', value: top }
   - it: runs one dev Postgres instance
     template: postgres.yaml
     documentIndex: 1

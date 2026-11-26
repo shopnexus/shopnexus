@@ -34,6 +34,10 @@ spec:
       shared_buffers: {{ .Values.postgres.sharedBuffers | quote }}
       effective_cache_size: {{ .Values.postgres.effectiveCacheSize | quote }}
       max_connections: {{ .Values.postgres.maxConnections | quote }}
+      # A pg_stat_statements.* parameter makes CNPG preload the extension
+      # and create it in every database, as compose's image already does.
+      pg_stat_statements.max: "10000"
+      pg_stat_statements.track: top
   managed:
     roles:
       # LiteLLM keeps its keys and spend in a database of its own.
