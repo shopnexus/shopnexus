@@ -15,7 +15,7 @@ server:
   # https://dev-online-gateway.ghn.vn/shiip/public-api, with GHN's staging
   # partner token and webhook secret sealed in server-secrets.
   carriers: { ghtk: { mode: fake }, ghn: { mode: fake } }
-  scamChecks: "off" # load test, 2026-11-26; back to on after
+  scamChecks: "on"
   logLevel: debug
   pnvTestNumbers: "true"
   emailSender: log
