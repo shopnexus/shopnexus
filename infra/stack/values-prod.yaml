@@ -5,7 +5,7 @@ indexed: true
 argocdDashboard: true
 # The release workflow (.github/workflows/release.yml) writes these: each
 # image's digest as its tag and the commit it was built from, which the next
-# release's plan compares (RELEASING.md). stack-prod runs the umbrella tag
+# release's plan compares (infra/RELEASING.md). stack-prod runs the umbrella tag
 # vX.Y.Z (infra/argocd/stacks.yaml). Until the first release they are X.Y.Z.
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }

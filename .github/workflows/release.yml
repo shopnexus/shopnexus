@@ -9,7 +9,7 @@ name: Release
 # change renders the same, so Argo CD leaves it running), points stack-prod
 # at vX.Y.Z, commits "release X.Y.Z" on main, tags it vX.Y.Z and pushes.
 # Argo CD then syncs prod. Rollback: revert the release commit on main.
-# RELEASING.md has the whole process.
+# infra/RELEASING.md has the whole process.
 #
 # Each of the five GHCR packages must grant this repository write access
 # (package settings, Manage Actions access), so that GITHUB_TOKEN can tag it.
