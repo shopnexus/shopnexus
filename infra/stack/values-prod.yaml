@@ -9,9 +9,9 @@ argocdDashboard: true
 # vX.Y.Z (infra/argocd/stacks.yaml). Until the first release they are X.Y.Z.
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: 0.1.0 }
-  website: { repository: ghcr.io/shopnexus/website, tag: 0.1.0 }
+  website: { repository: ghcr.io/shopnexus/clients/website, tag: 0.1.0 }
   docs: { repository: ghcr.io/shopnexus/docs, tag: 0.1.0 }
-  console: { repository: ghcr.io/shopnexus/console, tag: 0.1.0 }
+  console: { repository: ghcr.io/shopnexus/clients/console, tag: 0.1.0 }
   agent: { repository: ghcr.io/shopnexus/agent, tag: 0.1.0 }
 replicas:
   server: 3

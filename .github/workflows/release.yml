@@ -84,7 +84,8 @@ jobs:
       - name: Tag the images X.Y.Z
         run: |
           while read -r name _ digest; do
-            docker buildx imagetools create --tag "ghcr.io/shopnexus/$name:$VERSION" "ghcr.io/shopnexus/$name@$digest"
+            repo=$(yq ".images.$name.repository" infra/stack/values-prod.yaml)
+            docker buildx imagetools create --tag "$repo:$VERSION" "$repo@$digest"
           done < images.txt
 
       # sed edits the release's lines alone, keeping the files' layout; yq

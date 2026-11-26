@@ -120,7 +120,7 @@ tests:
         documentIndex: 2
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: '^ghcr.io/shopnexus/console(:[0-9]+\.[0-9]+\.[0-9]+|@sha256:[0-9a-f]{64})$'
+          pattern: '^ghcr.io/shopnexus/clients/console(:[0-9]+\.[0-9]+\.[0-9]+|@sha256:[0-9a-f]{64})$'
         documentIndex: 4
   - it: runs an image by digest when the tag is one
     template: web.yaml
@@ -131,7 +131,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/shopnexus/website@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: ghcr.io/shopnexus/clients/website@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   # Image Updater's digest strategy writes main@sha256:… into the tag.
   - it: keeps Image Updater's tag@digest as a tag
     template: web.yaml
@@ -142,7 +142,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/shopnexus/website:main@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: ghcr.io/shopnexus/clients/website:main@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: rolls the website and the console after the server, the docs with it
     template: web.yaml
     values: [../values-prod.yaml, values-test.yaml]
@@ -160,7 +160,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/shopnexus/console:main
+          value: ghcr.io/shopnexus/clients/console:main
   - it: keeps a browser on one website pod
     template: web.yaml
     values: [../values-prod.yaml, values-test.yaml]

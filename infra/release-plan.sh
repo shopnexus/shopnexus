@@ -11,7 +11,8 @@
 # server, docs and agent are submodules: their commit is the pointer.
 # website and console live in the clients submodule: their commit is the
 # last clients commit that changed their folders, the one clients' CI built
-# ghcr.io/shopnexus/<name>:sha-<commit> for. CLIENTS_DIR is clients' checkout.
+# <repository>:sha-<commit> for. CLIENTS_DIR is clients' checkout. Each
+# image's repository comes from values-prod.yaml.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -70,7 +71,7 @@ for c in "${components[@]}"; do
     if [[ $old == "$new" && $pinned == sha256:* ]]; then
       echo "$name $new $pinned" >> "$resolve"; continue
     fi
-    image="ghcr.io/shopnexus/$name:sha-$new"
+    image="$(yq ".images.$name.repository" "$values"):sha-$new"
     if digest=$(docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' 2>/dev/null | jq -er .digest); then
       echo "$name $new $digest" >> "$resolve"
     else

@@ -9,9 +9,9 @@ secretsDir: secrets
 
 images:
   server: { repository: ghcr.io/shopnexus/server, tag: main }
-  website: { repository: ghcr.io/shopnexus/website, tag: main }
+  website: { repository: ghcr.io/shopnexus/clients/website, tag: main }
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
-  console: { repository: ghcr.io/shopnexus/console, tag: main }
+  console: { repository: ghcr.io/shopnexus/clients/console, tag: main }
   agent: { repository: ghcr.io/shopnexus/agent, tag: main }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
