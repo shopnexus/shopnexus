@@ -1,10 +1,11 @@
 {{- /* Stateless HTTP apps: one Deployment and one Service each. The website
-  keeps each browser on one pod: its session refresh runs once per pod. */ -}}
+  keeps each browser on one pod: its session refresh runs once per pod. The
+  website and the console call the API, so they roll after the server. */ -}}
 {{- $apps := list
-  (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website "sticky" true)
-  (dict "name" "docs" "port" 80 "image" .Values.images.docs "replicas" .Values.replicas.docs) }}
+  (dict "name" "website" "port" 3000 "image" .Values.images.website "replicas" .Values.replicas.website "sticky" true "wave" "3")
+  (dict "name" "docs" "port" 80 "image" .Values.images.docs "replicas" .Values.replicas.docs "wave" "2") }}
 {{- if .Values.console.enabled }}
-{{- $apps = append $apps (dict "name" "console" "port" .Values.console.port "image" .Values.images.console "replicas" .Values.replicas.console) }}
+{{- $apps = append $apps (dict "name" "console" "port" .Values.console.port "image" .Values.images.console "replicas" .Values.replicas.console "wave" "3") }}
 {{- end }}
 {{- range $apps }}
 ---
@@ -13,7 +14,7 @@ kind: Deployment
 metadata:
   name: {{ .name }}
   labels: {{- include "sn.labels" $ | nindent 4 }}
-  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+  annotations: {{- include "sn.wave" .wave | nindent 4 }}
 spec:
   replicas: {{ .replicas }}
   selector:

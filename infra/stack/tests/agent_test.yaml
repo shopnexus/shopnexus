@@ -10,7 +10,7 @@ tests:
       - isKind: { of: Deployment }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
       - equal: { path: spec.replicas, value: 1 }
-      - matchRegex: { path: 'spec.template.spec.containers[0].image', pattern: '^ghcr.io/shopnexus/agent:[0-9]+\.[0-9]+\.[0-9]+$' }
+      - matchRegex: { path: 'spec.template.spec.containers[0].image', pattern: '^ghcr.io/shopnexus/agent(:[0-9]+\.[0-9]+\.[0-9]+|@sha256:[0-9a-f]{64})$' }
       - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
       - equal: { path: spec.template.spec.securityContext.runAsUser, value: 1000 }
       - exists: { path: 'spec.template.metadata.annotations["checksum/secrets"]' }

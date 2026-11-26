@@ -19,9 +19,14 @@ finish their invocations.
 {{ printf "%s|%s|%s" (include "sn.image" .Values.images.server) (include "sn.serverEnvData" .) (include "sn.secretsSum" .) | sha256sum | trunc 16 }}
 {{- end }}
 
-{{/* repository:tag of one images.* entry. */}}
+{{/* repository:tag of one images.* entry; a tag that is a digest
+     (sha256:…, as a release writes) gives repository@digest. */}}
 {{- define "sn.image" -}}
+{{- if hasPrefix "sha256:" (toString .tag) -}}
+{{ .repository }}@{{ .tag }}
+{{- else -}}
 {{ .repository }}:{{ .tag }}
+{{- end -}}
 {{- end }}
 
 {{/* (dict "root" $ "sub" "api") gives api.<domain>; an empty sub gives <domain>. */}}
