@@ -22,7 +22,7 @@
 #   grafana    http://grafana.shopnexus.localhost:56481   http://grafana.shopnexus.localhost:56480
 #   restate    http://restate.shopnexus.localhost:56481   http://restate.shopnexus.localhost:56480
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
-#   litellm    (no host: only the server and the agent call it)
+#   bifrost    (no host: only the server and the agent call it)
 #
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
@@ -48,21 +48,13 @@
 # the endpoints the tests serve on 127.0.0.1.
 #
 # Every model call of the server and the console agent goes to the stack's
-# LiteLLM, as in the cluster: the same config
-# (infra/stack/litellm/config.yaml), the same starting aliases
-# (infra/stack/litellm/models/) and the same keys, one
-# per purpose (infra/stack/litellm/keys.txt). litellm-keys-* adds those keys
-# to the stack's keys volume and litellm-sync-* registers them with a
-# budget. LiteLLM reads the upstream keys, LLM_UPSTREAM_API_KEY and
-# OPENROUTER_API_KEY, from infra/stack/secrets/compose.env, and the rest of
-# its settings from infra/stack/env/litellm.env. Inside a stack litellm
-# answers by that name, as its Service does in the cluster.
-#
-# LiteLLM keeps its aliases in its database; litellm-sync-* adds the ones of
-# infra/stack/litellm/models/ it lacks before it registers the keys. The
-# server reaches LiteLLM's admin API at LITELLM_URL (server.env) with
-# LITELLM_MASTER_KEY, which the keys volume's .env holds for it as for
-# LiteLLM.
+# Bifrost, as in the cluster: the same config (infra/stack/bifrost/) and
+# settings (infra/stack/env/bifrost.env). It reads the upstream keys,
+# LLM_UPSTREAM_API_KEY and OPENROUTER_API_KEY, from
+# infra/stack/secrets/compose.env; bifrost-keys-* adds its admin password
+# and encryption key to the keys volume. The server writes the callers'
+# keys and budgets through its admin API. Inside a stack bifrost answers by
+# that name, as its Service does in the cluster.
 #
 # Speech, photo vectors and video frames are the server's module ai, which
 # runs in the server container here (SERVER_ROLE unset, so all) with the
@@ -72,7 +64,7 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate, RustFS, LiteLLM, imgproxy and its
+# Image versions of Postgres, Restate, RustFS, Bifrost, imgproxy and its
 # nginx follow infra/stack/values.yaml; infra/check.sh fails when they differ.
 name: shopnexus
 
@@ -197,39 +189,52 @@ x-server-image: &server-image
   build: ./server
   env_file: [./infra/stack/env/server.env]
 
-# LiteLLM with the stack chart's config and image, its database litellm in
-# the stack's Postgres. It takes LITELLM_MASTER_KEY from the keys volume.
-x-litellm: &litellm
-  image: ghcr.io/berriai/litellm-database:v1.108.0
+# Bifrost with the chart's config and image, its database bifrost in the
+# stack's Postgres. It runs as the keys volume's user, to read its two keys
+# there; group 0 owns its data directory.
+x-bifrost: &bifrost
+  image: maximhq/bifrost:v2.6.0
+  user: "65532:0"
   env_file:
-    - ./infra/stack/env/litellm.env
+    - ./infra/stack/env/bifrost.env
     - { path: ./infra/stack/secrets/compose.env, required: false }
-  entrypoint: ["sh", "-ec", "export $$(grep -E '^LITELLM_MASTER_KEY=' /keys/.env); exec litellm --config /etc/litellm/config.yaml --port 4000"]
+  entrypoint: ["sh", "-ec", "export $$(grep -E '^BIFROST_(ADMIN_PASSWORD|ENCRYPTION_KEY)=' /keys/.env); exec sh /etc/bifrost/start.sh"]
   healthcheck:
-    test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness')"]
+    test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/health"]
     interval: 5s
-    timeout: 5s
-    retries: 60
-    # Startup takes ~25s; check each second then, so the stack waits no longer.
+    timeout: 3s
+    retries: 30
     start_period: 2m
     start_interval: 1s
   restart: unless-stopped
 
-# infra/stack/litellm/keys.sh: litellm-keys-* adds LiteLLM's keys missing
-# from the keys volume's .env as the keys service's user, and litellm-sync-*
-# adds the aliases of models/ LiteLLM lacks and registers the keys. Each key gets 20 of budget a day (20 USD for the agent,
-# 20M tokens or requests for the others) and 600 requests a minute.
-x-litellm-keys: &litellm-keys
-  image: curlimages/curl:8.23.0
-  user: "65532:65532"
-  restart: "no"
+x-bifrost-env-dev: &bifrost-env-dev
+  BIFROST_DB_HOST: postgres-dev
+  BIFROST_DB_USER: shopnexus
+  BIFROST_DB_PASSWORD: shopnexus
 
-x-litellm-sync: &litellm-sync
-  <<: *litellm-keys
-  entrypoint: ["sh", "-ec", "export $$(grep -E '^[A-Z_]*KEY=' /keys/.env); export MASTER_KEY=$$LITELLM_MASTER_KEY; sh /etc/keys/keys.sh models /etc/keys/models; exec sh /etc/keys/keys.sh sync /etc/keys/keys.txt"]
-  environment:
-    LITELLM_URL: http://litellm:4000
-    LIMITS_DEFAULT: '"max_budget":20,"rpm_limit":600'
+x-bifrost-env-prod: &bifrost-env-prod
+  BIFROST_DB_HOST: postgres-prod
+  BIFROST_DB_USER: shopnexus
+  BIFROST_DB_PASSWORD: shopnexus
+
+# Adds Bifrost's admin password and encryption key to the keys volume's .env
+# when missing, as the keys service's user. The server reads the password
+# as GATEWAY_ADMIN_PASSWORD.
+x-bifrost-keys: &bifrost-keys
+  image: maximhq/bifrost:v2.6.0
+  user: "65532:65532"
+  entrypoint:
+    - sh
+    - -ec
+    - |
+      f=/keys/.env
+      gen() { head -c "$$1" /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+      grep -q '^BIFROST_ADMIN_PASSWORD=.' "$$f" || echo "BIFROST_ADMIN_PASSWORD=$$(gen 24)" >>"$$f"
+      grep -q '^BIFROST_ENCRYPTION_KEY=.' "$$f" || echo "BIFROST_ENCRYPTION_KEY=$$(gen 32)" >>"$$f"
+      pw=$$(sed -n 's/^BIFROST_ADMIN_PASSWORD=//p' "$$f")
+      grep -q '^GATEWAY_ADMIN_PASSWORD=.' "$$f" || echo "GATEWAY_ADMIN_PASSWORD=$$pw" >>"$$f"
+  restart: "no"
 
 # Fills in the server's keys (JWT, CONSOLE_KEY, the Restate request identity
 # key) in the stack's keys volume, as make run does in server/.env. Keys
@@ -256,9 +261,8 @@ x-server-env: &server-env
   OBJECT_STORE_ACCESS_KEY: shopnexus-server
   OBJECT_STORE_SECRET_KEY: shopnexus-server-secret
   # Both kinds of vector on, as the cluster's server.embed turns them on:
-  # text through LiteLLM, photos through module ai's SigLIP 2. The other AI
-  # settings are in server.env and the keys in the keys volume's .env.
-  EMBED_TEXT_BASE_URL: http://litellm:4000/v1
+  # text through Bifrost, photos through module ai's SigLIP 2. The other AI
+  # settings are in server.env and the admin password in the keys volume's .env.
   EMBED_TEXT_MODEL: embed-text
   AI_EMBED_MODELS: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384
   # Shipments (modules deal and shipping): the fake GHTK and GHN, as the
@@ -314,8 +318,8 @@ x-server-env-prod: &server-env-prod
   AGENT_BASE_URL: http://agent-prod:3000
 
 # The console agent (submodule agent): a runtime with no state of its own.
-# The server keeps the runs; the agent takes AGENT_SERVICE_TOKEN,
-# AGENT_MCP_TOKEN and AGENT_LLM_API_KEY from the keys volume's .env.
+# The server keeps the runs and sends each its gateway key; the agent takes
+# AGENT_SERVICE_TOKEN and AGENT_MCP_TOKEN from the keys volume's .env.
 x-agent-image: &agent-image
   image: shopnexus-agent:local
   build: ./agent
@@ -334,10 +338,10 @@ x-create-db: &create-db
   entrypoint: ["sh", "-ec"]
   restart: "no"
 
-# Exports the two tokens and the LiteLLM key (as LITELLM_API_KEY) from the
-# keys volume, then starts the agent; a .env without them stops the start.
+# Exports the two tokens from the keys volume, then starts the agent; a
+# .env without them stops the start.
 x-agent-run: &agent-run
-  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); key=$$(sed -n 's/^AGENT_LLM_API_KEY=/LITELLM_API_KEY=/p' /keys/.env); export $$tokens $$key; exec node dist/main.js"]
+  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); export $$tokens; exec node dist/main.js"]
   restart: unless-stopped
 
 # A web app's dev server on its mounted source. It installs the packages
@@ -413,7 +417,7 @@ services:
     environment: *server-env-dev
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
-      litellm-keys-dev: { condition: service_completed_successfully }
+      bifrost-keys-dev: { condition: service_completed_successfully }
       postgres-dev: { condition: service_healthy }
 
   objectstore-init-dev:
@@ -426,7 +430,7 @@ services:
       OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
-      litellm-keys-dev: { condition: service_completed_successfully }
+      bifrost-keys-dev: { condition: service_completed_successfully }
       rustfs-dev: { condition: service_healthy }
 
   # air rebuilds the server on a .go or .sql change and runs the migrations
@@ -461,7 +465,7 @@ services:
       migrate-dev: { condition: service_completed_successfully }
       objectstore-init-dev: { condition: service_completed_successfully }
       restate-dev: { condition: service_healthy }
-      litellm-sync-dev: { condition: service_completed_successfully }
+      bifrost-dev: { condition: service_healthy }
       fetch-models-dev: { condition: service_completed_successfully }
     healthcheck: *health-server
     restart: unless-stopped
@@ -507,39 +511,31 @@ services:
     volumes: [models-dev:/models]
     restart: "no"
 
-  litellm-keys-dev:
-    <<: [*dev, *litellm-keys]
-    command: ["sh", "/etc/keys/keys.sh", "gen", "/etc/keys/keys.txt", "/keys/.env"]
-    volumes: [keys-dev:/keys, ./infra/stack/litellm:/etc/keys:ro]
+  bifrost-keys-dev:
+    <<: [*dev, *bifrost-keys]
+    volumes: [keys-dev:/keys]
     depends_on:
       keys-dev: { condition: service_completed_successfully }
 
-  litellm-db-dev:
+  bifrost-db-dev:
     <<: [*dev, *create-db]
     environment: { PGPASSWORD: shopnexus }
     command:
       - |
         psql -h postgres-dev -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
-        SELECT 'CREATE DATABASE litellm' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm') \gexec
+        SELECT 'CREATE DATABASE bifrost' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'bifrost') \gexec
         SQL
     depends_on:
       postgres-dev: { condition: service_healthy }
 
-  litellm-dev:
-    <<: [*dev, *litellm]
-    networks: { dev: { aliases: [litellm] } }
-    environment:
-      DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-dev:5432/litellm
-    volumes: [keys-dev:/keys:ro, ./infra/stack/litellm/config.yaml:/etc/litellm/config.yaml:ro]
+  bifrost-dev:
+    <<: [*dev, *bifrost]
+    networks: { dev: { aliases: [bifrost] } }
+    environment: *bifrost-env-dev
+    volumes: [keys-dev:/keys:ro, ./infra/stack/bifrost:/etc/bifrost:ro]
     depends_on:
-      litellm-keys-dev: { condition: service_completed_successfully }
-      litellm-db-dev: { condition: service_completed_successfully }
-
-  litellm-sync-dev:
-    <<: [*dev, *litellm-sync]
-    volumes: [keys-dev:/keys:ro, ./infra/stack/litellm:/etc/keys:ro]
-    depends_on:
-      litellm-dev: { condition: service_healthy }
+      bifrost-keys-dev: { condition: service_completed_successfully }
+      bifrost-db-dev: { condition: service_completed_successfully }
 
   # The agent's source under node --watch and ts-node. Root reads the keys
   # volume's .env (mode 600).
@@ -560,15 +556,14 @@ services:
           cp package-lock.json node_modules/.package-lock.copy
         fi
         tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env)
-        key=$$(sed -n 's/^AGENT_LLM_API_KEY=/LITELLM_API_KEY=/p' /keys/.env)
-        export $$tokens $$key
+        export $$tokens
         exec node --watch -r ts-node/register src/main.ts
     volumes:
       - ./agent:/app
       - agent-node-modules-dev:/app/node_modules
       - keys-dev:/keys:ro
     depends_on:
-      litellm-sync-dev: { condition: service_completed_successfully }
+      bifrost-dev: { condition: service_healthy }
     healthcheck: *health-agent
     restart: unless-stopped
 
@@ -635,7 +630,7 @@ services:
     environment: *server-env-prod
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      litellm-keys-prod: { condition: service_completed_successfully }
+      bifrost-keys-prod: { condition: service_completed_successfully }
       postgres-prod: { condition: service_healthy }
 
   objectstore-init-prod:
@@ -648,7 +643,7 @@ services:
       OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
-      litellm-keys-prod: { condition: service_completed_successfully }
+      bifrost-keys-prod: { condition: service_completed_successfully }
       rustfs-prod: { condition: service_healthy }
 
   server-prod:
@@ -661,7 +656,7 @@ services:
       migrate-prod: { condition: service_completed_successfully }
       objectstore-init-prod: { condition: service_completed_successfully }
       restate-prod: { condition: service_healthy }
-      litellm-sync-prod: { condition: service_completed_successfully }
+      bifrost-prod: { condition: service_healthy }
     healthcheck: *health-server
     restart: unless-stopped
 
@@ -698,39 +693,31 @@ services:
     volumes: [models-prod:/models]
     restart: "no"
 
-  litellm-keys-prod:
-    <<: [*prod, *litellm-keys]
-    command: ["sh", "/etc/keys/keys.sh", "gen", "/etc/keys/keys.txt", "/keys/.env"]
-    volumes: [keys-prod:/keys, ./infra/stack/litellm:/etc/keys:ro]
+  bifrost-keys-prod:
+    <<: [*prod, *bifrost-keys]
+    volumes: [keys-prod:/keys]
     depends_on:
       keys-prod: { condition: service_completed_successfully }
 
-  litellm-db-prod:
+  bifrost-db-prod:
     <<: [*prod, *create-db]
     environment: { PGPASSWORD: shopnexus }
     command:
       - |
         psql -h postgres-prod -U shopnexus -d shopnexus -v ON_ERROR_STOP=1 <<'SQL'
-        SELECT 'CREATE DATABASE litellm' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm') \gexec
+        SELECT 'CREATE DATABASE bifrost' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'bifrost') \gexec
         SQL
     depends_on:
       postgres-prod: { condition: service_healthy }
 
-  litellm-prod:
-    <<: [*prod, *litellm]
-    networks: { prod: { aliases: [litellm] } }
-    environment:
-      DATABASE_URL: postgresql://shopnexus:shopnexus@postgres-prod:5432/litellm
-    volumes: [keys-prod:/keys:ro, ./infra/stack/litellm/config.yaml:/etc/litellm/config.yaml:ro]
+  bifrost-prod:
+    <<: [*prod, *bifrost]
+    networks: { prod: { aliases: [bifrost] } }
+    environment: *bifrost-env-prod
+    volumes: [keys-prod:/keys:ro, ./infra/stack/bifrost:/etc/bifrost:ro]
     depends_on:
-      litellm-keys-prod: { condition: service_completed_successfully }
-      litellm-db-prod: { condition: service_completed_successfully }
-
-  litellm-sync-prod:
-    <<: [*prod, *litellm-sync]
-    volumes: [keys-prod:/keys:ro, ./infra/stack/litellm:/etc/keys:ro]
-    depends_on:
-      litellm-prod: { condition: service_healthy }
+      bifrost-keys-prod: { condition: service_completed_successfully }
+      bifrost-db-prod: { condition: service_completed_successfully }
 
   # The keys service's user, which owns the .env (mode 600).
   agent-prod:
@@ -739,7 +726,7 @@ services:
     environment: *agent-env-prod
     volumes: [keys-prod:/keys:ro]
     depends_on:
-      litellm-sync-prod: { condition: service_completed_successfully }
+      bifrost-prod: { condition: service_healthy }
     healthcheck: *health-agent
 
   imgproxy-prod:
