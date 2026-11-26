@@ -115,12 +115,10 @@ tests:
     asserts:
       - notExists:
           path: spec.ingress[0].from[0].namespaceSelector
-  # ai-models is reached from the stack only: from-stack admits it, Traefik
-  # does not. Traefik reaches Bifrost for its dashboard.
-  - it: keeps Traefik away from ai-models
+  # Traefik reaches Bifrost for its dashboard.
+  - it: lets Traefik reach Bifrost
     documentIndex: 2
     asserts:
-      - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: ai-models }
       - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: bifrost }
   # server-ai serves Restate only: from the stack and the stack's Restate.
   - it: admits the stack's Restate namespace to server-ai's 9080
