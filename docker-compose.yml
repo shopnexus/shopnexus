@@ -531,6 +531,8 @@ services:
   bifrost-dev:
     <<: [*dev, *bifrost]
     networks: { dev: { aliases: [bifrost] } }
+    # For a server run on the host (make run in server/).
+    ports: ["127.0.0.1:56482:8080"]
     environment: *bifrost-env-dev
     volumes: [keys-dev:/keys:ro, ./infra/stack/bifrost:/etc/bifrost:ro]
     depends_on:
