@@ -40,11 +40,16 @@ eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | selec
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[].alias' | sort | tr '\n' ' ')" "agent console docs server website " "stack-dev images"
 # Prod runs one release of the umbrella (.github/workflows/release.yml):
 # Image Updater leaves it alone, stack-prod runs the tag vX.Y.Z, every prod
-# image is X.Y.Z.
+# image is pinned by digest with the commit it was built from (X.Y.Z only
+# before the first release).
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[].namePattern' | sort | tr '\n' ' ')" "stack-dev " "Image Updater moves dev only"
 release=$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") | .spec.source.targetRevision')
 [[ $release =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL: stack-prod's targetRevision $release is not vX.Y.Z" >&2; fails=$((fails + 1)); }
-eq "$(yq '.images | to_entries | .[] | select(.key | test("^(server|website|docs|console|agent)$")) | .value.tag' stack/values-prod.yaml | sort -u)" "${release#v}" "every prod image is the release's"
+for i in server website docs console agent; do
+  pin=$(yq ".images.$i.tag + \" \" + (.images.$i.commit // \"\")" stack/values-prod.yaml)
+  [[ $pin =~ ^sha256:[0-9a-f]{64}\ [0-9a-f]{40}$ || $pin == "${release#v} " ]] ||
+    { echo "FAIL: values-prod $i is '$pin', not a digest and its commit" >&2; fails=$((fails + 1)); }
+done
 eq "$(yq '.images | keys | .[]' stack/values-prod.yaml | sort | tr '\n' ' ')" "agent console docs server website " "values-prod names the five images"
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health

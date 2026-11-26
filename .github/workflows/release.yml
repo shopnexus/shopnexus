@@ -1,16 +1,19 @@
 name: Release
 
-# A prod release of the whole system: the commits the umbrella's submodules
-# point at on main. For each of server, website, docs, console and agent
-# it adds the tag X.Y.Z to the image CI built for that commit
-# (ghcr.io/shopnexus/<repo>:sha-<commit>), without a rebuild. Then it writes
-# the release into infra/ (values-prod.yaml, stack-prod's targetRevision
-# vX.Y.Z), commits "release X.Y.Z" on
-# main, tags that commit vX.Y.Z and pushes both; Argo CD deploys prod from
-# them. Rollback: revert the release commit on main.
+# A prod release of the whole system at the umbrella's main. Each image is
+# the one CI built and dev ran, without a rebuild: server, docs and agent at
+# the commit their submodule points at; website and console at the last
+# commit of the clients submodule that changed their folder
+# (infra/release-plan.sh). The job prints which images change, tags each
+# image X.Y.Z, pins the digests in values-prod.yaml (an image that did not
+# change renders the same, so Argo CD leaves it running), points stack-prod
+# at vX.Y.Z, commits "release X.Y.Z" on main, tags it vX.Y.Z and pushes.
+# Argo CD then syncs prod. Rollback: revert the release commit on main.
+# RELEASING.md has the whole process.
 #
 # Each of the five GHCR packages must grant this repository write access
 # (package settings, Manage Actions access), so that GITHUB_TOKEN can tag it.
+# CLIENTS_DEPLOY_KEY is a read-only deploy key of shopnexus/clients.
 on:
   workflow_dispatch:
     inputs:
@@ -34,6 +37,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # zizmor: ignore[artipacked] the job pushes the release commit and tag.
         with: { ref: main, fetch-depth: 0 }
+      # clients is private: its read-only deploy key fetches the commit the
+      # umbrella pins, with the history the plan reads.
+      - id: clients
+        run: echo "sha=$(git rev-parse HEAD:clients)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: shopnexus/clients
+          ref: ${{ steps.clients.outputs.sha }}
+          path: clients
+          fetch-depth: 0
+          ssh-key: ${{ secrets.CLIENTS_DEPLOY_KEY }}
+          persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
@@ -61,39 +76,33 @@ jobs:
 
       # Every image must exist before any gets the tag, so a release is
       # tagged whole or not at all.
-      - name: Find each submodule's image
+      - name: Plan
         run: |
-          : > images.txt
-          for repo in server website docs console agent; do
-            commit=$(git rev-parse "HEAD:$repo")
-            image="ghcr.io/shopnexus/$repo:sha-$commit"
-            if ! docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
-              echo "::error::$image does not exist: $repo's CI has not built $commit, or cleanup removed it (it keeps the 10 newest builds)"
-              exit 1
-            fi
-            echo "$repo $commit" >> images.txt
-          done
-          cat images.txt
+          set -o pipefail
+          infra/release-plan.sh --resolve images.txt | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Tag the images X.Y.Z
         run: |
-          while read -r repo commit; do
-            docker buildx imagetools create --tag "ghcr.io/shopnexus/$repo:$VERSION" "ghcr.io/shopnexus/$repo:sha-$commit"
+          while read -r name _ digest; do
+            docker buildx imagetools create --tag "ghcr.io/shopnexus/$name:$VERSION" "ghcr.io/shopnexus/$name@$digest"
           done < images.txt
 
       # sed edits the release's lines alone, keeping the files' layout; yq
       # then reads them back.
       - name: Write the release into infra
         run: |
-          sed -Ei "s/^(  (server|website|docs|console|agent): \{ repository: [^,]+, tag: )[^ ]+( \})$/\1$VERSION\3/" infra/stack/values-prod.yaml
+          while read -r name commit digest; do
+            sed -Ei "s/^(  $name: \{ repository: [^,]+, ).*\}$/\1tag: $digest, commit: $commit }/" infra/stack/values-prod.yaml
+          done < images.txt
           sed -Ei "s/^(    targetRevision: )v[0-9]+\.[0-9]+\.[0-9]+$/\1v$VERSION/" infra/argocd/stacks.yaml
-          rm images.txt
           fail=0
           check() { [[ $2 == "$3" ]] || { echo "::error::$1 is $2, want $3"; fail=1; }; }
-          for repo in server website docs console agent; do
-            check "values-prod $repo" "$(yq ".images.$repo.tag" infra/stack/values-prod.yaml)" "$VERSION"
-          done
+          while read -r name commit digest; do
+            check "values-prod $name tag" "$(yq ".images.$name.tag" infra/stack/values-prod.yaml)" "$digest"
+            check "values-prod $name commit" "$(yq ".images.$name.commit" infra/stack/values-prod.yaml)" "$commit"
+          done < images.txt
           check "stack-prod targetRevision" "$(yq 'select(.metadata.name == "stack-prod") | .spec.source.targetRevision' infra/argocd/stacks.yaml)" "v$VERSION"
+          rm images.txt
           (( fail == 0 ))
           git diff --stat
 
