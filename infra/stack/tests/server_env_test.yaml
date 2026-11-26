@@ -107,6 +107,7 @@ tests:
       - exists: { path: data.LITELLM_URL }
       - exists: { path: data.AGENT_MCP_ADDR }
       - exists: { path: data.CARRIER_GHTK }
+      - exists: { path: data.TRUST_SCAM_CHECKS }
       - exists: { path: data.CARRIER_GHN }
       - exists: { path: data.CARRIER_POLL_EVERY }
       - exists: { path: data.GHTK_API_URL }
@@ -130,7 +131,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 9e2fa6602aaff09b
+          value: 89b4e30874387ce2
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -138,7 +139,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 9e2fa6602aaff09b
+          value: 89b4e30874387ce2
   # The console's AI settings call LiteLLM's admin API with the master key
   # LiteLLM itself reads.
   - it: reaches LiteLLM's admin API with its master key

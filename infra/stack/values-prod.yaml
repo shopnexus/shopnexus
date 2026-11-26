@@ -26,6 +26,7 @@ restate:
 server:
   # Both off until a partner contract each; sellers link neither.
   carriers: { ghtk: { mode: "off" }, ghn: { mode: "off" } }
+  scamChecks: "on"
   logLevel: info
   pnvTestNumbers: "false"
   emailSender: resend

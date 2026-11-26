@@ -274,6 +274,8 @@ x-server-env: &server-env
   GHN_API_URL: ""
   GHN_PARTNER_TOKEN: ""
   GHN_WEBHOOK_SECRET: ""
+  # Each chat message goes to the scam classifier, as on the cluster.
+  TRUST_SCAM_CHECKS: "on"
   PNV_TEST_NUMBERS: "true"
   FCM_CREDENTIALS: ""
   EMAIL_SENDER: log

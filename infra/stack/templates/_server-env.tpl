@@ -87,6 +87,8 @@ GHN_WEBHOOK_SECRET: ""
 EMBED_TEXT_BASE_URL: {{ ternary "http://litellm:4000/v1" "" $e.text | quote }}
 EMBED_TEXT_MODEL: {{ ternary "embed-text" "" $e.text | quote }}
 AI_EMBED_MODELS: {{ ternary "siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384" "" $e.image | quote }}
+{{- if not (has .Values.server.scamChecks (list "on" "off")) }}{{ fail "server.scamChecks must be on or off, in the stack's values file" }}{{ end }}
+TRUST_SCAM_CHECKS: {{ .Values.server.scamChecks | quote }}
 PNV_TEST_NUMBERS: {{ .Values.server.pnvTestNumbers | quote }}
 EMAIL_SENDER: {{ .Values.server.emailSender | quote }}
 {{- end }}

@@ -118,6 +118,9 @@ server:
   carriers:
     ghtk: { mode: "", apiUrl: "", clientSource: "" }
     ghn: { mode: "", apiUrl: "" }
+  # scamChecks: on sends each chat message to the scam classifier, a paid
+  # model call; off sends none, as for a load test (TRUST_SCAM_CHECKS).
+  scamChecks: ""
   logLevel: info
   pnvTestNumbers: "true"
   # How sign-in codes and notices are mailed: log or resend. APP_ENV=prod refuses log.
