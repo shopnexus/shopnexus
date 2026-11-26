@@ -1,5 +1,9 @@
 # shopnexus (umbrella)
 
+How the system works, flow by flow, is the docs site
+(`docs/web/src/content/docs/en/`); read the page of the part you change.
+Each repository's own `AGENTS.md` holds its code conventions.
+
 ## Compose and the cluster stay in step
 
 The system runs two ways: `docker-compose.yml` locally and the k3s cluster
