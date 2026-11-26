@@ -3,18 +3,22 @@ templates: [networkpolicy.yaml]
 release: { namespace: shopnexus-prod }
 values: [../values-prod.yaml, values-test.yaml]
 tests:
-  - it: denies ingress by default, opens it to five sources and five services, and lets Prometheus scrape
+  - it: denies ingress by default, opens it to five sources and six services, and lets Prometheus scrape
     asserts:
       - hasDocuments:
-          count: 12
+          count: 13
       - equal:
           path: metadata.name
           value: from-monitoring
         documentIndex: 10
       - equal:
           path: metadata.name
-          value: from-monitoring-litellm
+          value: to-bifrost
         documentIndex: 11
+      - equal:
+          path: metadata.name
+          value: bifrost-egress
+        documentIndex: 12
       - equal:
           path: metadata.name
           value: default-deny-ingress
@@ -64,11 +68,11 @@ tests:
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
   # The server and the agent are left to to-server and to-agent, which open
   # each port to its callers only.
-  - it: leaves the server, the agent, pgweb, imgproxy and lgtm out of from-stack, and the server out of from-traefik
+  - it: leaves the server, the agent, pgweb, imgproxy, lgtm and Bifrost out of from-stack, and the server out of from-traefik
     asserts:
       - equal:
           path: spec.podSelector.matchExpressions[0]
-          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm] }
+          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm, bifrost] }
         documentSelector: { path: metadata.name, value: from-stack }
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: server }
         documentSelector: { path: metadata.name, value: from-traefik }
@@ -111,13 +115,13 @@ tests:
     asserts:
       - notExists:
           path: spec.ingress[0].from[0].namespaceSelector
-  # ai-models is reached by LiteLLM and the server only: from-stack admits
-  # it, Traefik does not. Traefik reaches LiteLLM for its dashboard.
+  # ai-models is reached from the stack only: from-stack admits it, Traefik
+  # does not. Traefik reaches Bifrost for its dashboard.
   - it: keeps Traefik away from ai-models
     documentIndex: 2
     asserts:
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: ai-models }
-      - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: litellm }
+      - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: bifrost }
   # server-ai serves Restate only: from the stack and the stack's Restate.
   - it: admits the stack's Restate namespace to server-ai's 9080
     documentSelector: { path: metadata.name, value: to-server-ai }
@@ -143,3 +147,27 @@ tests:
           path: spec.ingress
           value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: imgproxy-cache } } }], ports: [{ protocol: TCP, port: 8080 }] }]
         documentSelector: { path: metadata.name, value: to-imgproxy }
+  # Bifrost takes calls from the server and the agent and scrapes from
+  # Prometheus, on 8080 only.
+  - it: opens Bifrost to the server, the agent and Prometheus
+    documentSelector: { path: metadata.name, value: to-bifrost }
+    asserts:
+      - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: bifrost }
+      - lengthEqual: { path: spec.ingress, count: 1 }
+      - equal: { path: 'spec.ingress[0].ports', value: [{ protocol: TCP, port: 8080 }] }
+      - equal: { path: 'spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/name"]', value: server }
+      - equal: { path: 'spec.ingress[0].from[1].podSelector.matchLabels["app.kubernetes.io/name"]', value: agent }
+      - equal: { path: 'spec.ingress[0].from[2].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]', value: monitoring }
+      - equal: { path: 'spec.ingress[0].from[2].podSelector.matchLabels["app.kubernetes.io/name"]', value: prometheus }
+  # Egress: DNS, Postgres, the upstream's port from env/bifrost.env, and 443
+  # off the private ranges for openrouter.ai and getbifrost.ai.
+  - it: lets Bifrost reach DNS, Postgres, the upstream and public HTTPS only
+    documentSelector: { path: metadata.name, value: bifrost-egress }
+    asserts:
+      - equal: { path: spec.policyTypes, value: [Egress] }
+      - lengthEqual: { path: spec.egress, count: 4 }
+      - equal: { path: 'spec.egress[0].to[0].podSelector.matchLabels["k8s-app"]', value: kube-dns }
+      - equal: { path: 'spec.egress[1].ports', value: [{ protocol: TCP, port: 5432 }] }
+      - equal: { path: 'spec.egress[2].ports', value: [{ protocol: TCP, port: 8317 }] }
+      - equal: { path: 'spec.egress[3].ports', value: [{ protocol: TCP, port: 443 }] }
+      - equal: { path: 'spec.egress[3].to[0].ipBlock.except', value: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }

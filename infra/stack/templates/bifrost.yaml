@@ -1,0 +1,91 @@
+{{- /* Bifrost, the stack's door to the remote models. Its providers are
+       bifrost/config.json; the server writes its teams, keys and budgets
+       through the admin API. Its database is bifrost (postgres.yaml). */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bifrost-config
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{- .Files.Get "bifrost/config.json" | nindent 4 }}
+  start.sh: |
+    {{- .Files.Get "bifrost/start.sh" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bifrost
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: bifrost }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "bifrost") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+        checksum/config: {{ print (.Files.Get "bifrost/config.json") (.Files.Get "bifrost/start.sh") (.Files.Get "env/bifrost.env") | sha256sum | trunc 16 }}
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+      containers:
+        - name: bifrost
+          image: {{ include "sn.image" .Values.images.bifrost }}
+          command: [sh, /etc/bifrost/start.sh]
+          env:
+            {{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/bifrost.env") | fromJson }}
+            - { name: {{ $k }}, value: {{ $v | quote }} }
+            {{- end }}
+            {{- range $k := list "BIFROST_ADMIN_PASSWORD" "BIFROST_ENCRYPTION_KEY" "LLM_UPSTREAM_API_KEY" "OPENROUTER_API_KEY" }}
+            - name: {{ $k }}
+              valueFrom: { secretKeyRef: { name: bifrost-secrets, key: {{ $k }} } }
+            {{- end }}
+            - { name: BIFROST_DB_HOST, value: postgres-rw }
+            - { name: BIFROST_DB_USER, value: bifrost }
+            - name: BIFROST_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: bifrost-db, key: password } }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 30
+          # An empty database takes about 20 s of migrations.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+          volumeMounts:
+            - { name: config, mountPath: /etc/bifrost }
+            - { name: data, mountPath: /app/data }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: config
+          configMap: { name: bifrost-config }
+        # config.json is written here at start; the state is in Postgres.
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bifrost
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: bifrost }
+  ports:
+    - { name: http, port: 8080, targetPort: http }

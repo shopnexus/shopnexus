@@ -150,13 +150,13 @@ tests:
           content:
             name: RUSTFS_ACCESS_KEY
             valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
-  # LiteLLM keeps its keys and spend in a database of its own in the stack's
-  # Postgres.
-  - it: gives LiteLLM its own database and a sealed role password
+  # Bifrost keeps its config and logs in a database of its own in the
+  # stack's Postgres.
+  - it: gives Bifrost its own database and a sealed role password
     template: postgres.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: spec.owner, value: litellm }
+      - equal: { path: spec.owner, value: bifrost }
         documentIndex: 2
-      - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: litellm-db }
+      - equal: { path: 'spec.managed.roles[0].passwordSecret.name', value: bifrost-db }
         documentIndex: 1

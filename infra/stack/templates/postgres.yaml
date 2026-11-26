@@ -40,11 +40,11 @@ spec:
       pg_stat_statements.track: top
   managed:
     roles:
-      # LiteLLM keeps its keys and spend in a database of its own.
-      - name: litellm
+      # Bifrost keeps its config and logs in a database of its own.
+      - name: bifrost
         ensure: present
         login: true
-        passwordSecret: { name: litellm-db }
+        passwordSecret: { name: bifrost-db }
   bootstrap:
     initdb:
       database: app
@@ -62,10 +62,10 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: litellm
+  name: bifrost
   labels: {{- include "sn.labels" . | nindent 4 }}
   annotations: {{- include "sn.wave" "1" | nindent 4 }}
 spec:
-  name: litellm
-  owner: litellm
+  name: bifrost
+  owner: bifrost
   cluster: { name: postgres }

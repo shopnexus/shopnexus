@@ -262,7 +262,7 @@ groups:
             type: gt
             params:
             - 600
-  - uid: sn-litellm-failing
+  - uid: sn-bifrost-failing
     title: Gọi model lỗi
     condition: B
     for: 5m
@@ -271,7 +271,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: '{{ humanizePercentage $values.A.Value }} lượt gọi model qua LiteLLM thất bại trong 10 phút qua.'
+      summary: '{{ humanizePercentage $values.A.Value }} lượt gọi model qua Bifrost thất bại trong 10 phút qua.'
     data:
     - refId: A
       relativeTimeRange:
@@ -280,7 +280,7 @@ groups:
       datasourceUid: cluster
       model:
         refId: A
-        expr: sum(rate(litellm_proxy_failed_requests_metric_total{namespace="__NAMESPACE__"}[10m])) / sum(rate(litellm_proxy_total_requests_metric_total{namespace="__NAMESPACE__"}[10m])) and on () sum(rate(litellm_proxy_total_requests_metric_total{namespace="__NAMESPACE__"}[10m]))
+        expr: sum(rate(bifrost_error_requests_total{namespace="__NAMESPACE__"}[10m])) / sum(rate({__name__=~"bifrost_(success|error)_requests_total",namespace="__NAMESPACE__"}[10m])) and on () sum(rate({__name__=~"bifrost_(success|error)_requests_total",namespace="__NAMESPACE__"}[10m]))
           > 0.01
         instant: true
         range: false
@@ -295,6 +295,38 @@ groups:
             type: gt
             params:
             - 0.2
+  - uid: sn-bifrost-key-down
+    title: Khóa nhà cung cấp model lỗi
+    condition: B
+    for: 10m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Lần gọi gần nhất bằng khóa {{ $labels.key_name }} của {{ $labels.provider }} đã thất bại.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: min by (provider, key_name) (bifrost_provider_key_up{namespace="__NAMESPACE__"})
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
   - uid: sn-node-memory
     title: RAM node sắp đầy
     condition: B

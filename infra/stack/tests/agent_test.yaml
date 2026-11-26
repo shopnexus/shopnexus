@@ -26,16 +26,16 @@ tests:
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - notExists: { path: spec.template.spec.initContainers }
-  - it: calls the console-agent alias and the server's MCP
+  - it: calls Bifrost and the server's MCP
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PORT, value: "3000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MODEL_ID, value: console-agent } }
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LITELLM_BASE_URL, value: http://litellm:4000/v1 } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: GATEWAY_BASE_URL, value: http://bifrost:8080/v1 } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp } }
-  - it: takes the two tokens and its LiteLLM key from agent-secrets
+  - it: takes the two tokens from agent-secrets, and no gateway key
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
@@ -46,16 +46,16 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: AGENT_MCP_TOKEN, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_MCP_TOKEN } } }
-      - contains:
+      - notContains:
           path: spec.template.spec.containers[0].env
           content: { name: LITELLM_API_KEY, valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_LLM_API_KEY } } }
-  # env/agent.env, the three secrets and the MCP URL.
+  # env/agent.env, the two tokens and the MCP URL.
   - it: sets the agent's settings
     template: agent.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 16 }
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 15 }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_TURN_DEADLINE_MS, value: "60000" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: AGENT_MAX_TURNS, value: "0" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FEATURE_ALL_AGENT, value: "true" } }

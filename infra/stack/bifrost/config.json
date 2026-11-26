@@ -1,0 +1,80 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "source_of_truth": "config.json",
+  "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
+  "client": {
+    "enable_logging": true,
+    "disable_content_logging": true,
+    "log_retention_days": 30,
+    "enforce_auth_on_inference": true,
+    "extra_fields_placement": "headers",
+    "whitelisted_routes": ["/metrics"]
+  },
+  "governance": {
+    "auth_config": {
+      "is_enabled": true,
+      "admin_username": "env.BIFROST_ADMIN_USERNAME",
+      "admin_password": "env.BIFROST_ADMIN_PASSWORD"
+    }
+  },
+  "providers": {
+    "upstream": {
+      "keys": [
+        { "name": "upstream", "value": "env.LLM_UPSTREAM_API_KEY", "models": ["*"], "weight": 1 }
+      ],
+      "network_config": {
+        "base_url": "${LLM_UPSTREAM_BASE_URL}",
+        "allow_private_network": true,
+        "default_request_timeout_in_seconds": 120,
+        "max_retries": 2
+      },
+      "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+          "list_models": true,
+          "chat_completion": true,
+          "chat_completion_stream": true
+        }
+      }
+    },
+    "openrouter": {
+      "keys": [
+        { "name": "openrouter", "value": "env.OPENROUTER_API_KEY", "models": ["*"], "weight": 1 }
+      ],
+      "network_config": {
+        "base_url": "https://openrouter.ai/api",
+        "default_request_timeout_in_seconds": 60,
+        "max_retries": 2
+      },
+      "ignore_provider_cost": true
+    }
+  },
+  "config_store": {
+    "enabled": true,
+    "type": "postgres",
+    "config": {
+      "host": "env.BIFROST_DB_HOST",
+      "port": "5432",
+      "user": "env.BIFROST_DB_USER",
+      "password": "env.BIFROST_DB_PASSWORD",
+      "db_name": "bifrost",
+      "ssl_mode": "disable",
+      "max_open_conns": 10,
+      "max_idle_conns": 2
+    }
+  },
+  "logs_store": {
+    "enabled": true,
+    "type": "postgres",
+    "config": {
+      "host": "env.BIFROST_DB_HOST",
+      "port": "5432",
+      "user": "env.BIFROST_DB_USER",
+      "password": "env.BIFROST_DB_PASSWORD",
+      "db_name": "bifrost",
+      "ssl_mode": "disable",
+      "max_open_conns": 20,
+      "max_idle_conns": 5
+    }
+  }
+}

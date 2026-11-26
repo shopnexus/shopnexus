@@ -27,7 +27,6 @@ func setup(t *testing.T) (opts, string) {
 	}
 	filled := strings.Replace(string(example), "\nOPENROUTER_API_KEY=\n", "\nOPENROUTER_API_KEY=test\n", 1)
 	filled = strings.Replace(filled, "\nLLM_UPSTREAM_API_KEY=\n", "\nLLM_UPSTREAM_API_KEY=test\n", 1)
-	filled = strings.Replace(filled, "\nLITELLM_UI_USERNAME=\n", "\nLITELLM_UI_USERNAME=admin\n", 1)
 	for _, s := range []string{"dev", "prod"} {
 		if err := os.WriteFile(filepath.Join(dir, s+".env"), []byte(filled), 0o600); err != nil {
 			t.Fatal(err)
@@ -78,14 +77,20 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-secrets", "litellm-db", "litellm-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
-	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "LLM_API_KEY",
-		"ASSIST_LLM_API_KEY", "TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "private.pem", "LITELLM_MASTER_KEY", "LLM_UPSTREAM_API_KEY",
-		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD"} {
+	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "private.pem",
+		"BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY",
+		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
+		}
+	}
+	// Bifrost makes the callers' keys; no Secret holds one.
+	for _, k := range []string{"LLM_API_KEY", "AGENT_LLM_API_KEY", "EMBED_INDEX_API_KEY", "LITELLM_MASTER_KEY"} {
+		if strings.Contains(first, `"`+k+`"`) {
+			t.Errorf("%s in\n%s", k, first)
 		}
 	}
 }
