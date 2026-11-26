@@ -32,7 +32,7 @@ tests:
           value: { name: restate, namespace: restate-prod, port: 9070 }
       - equal:
           path: spec.routes[5].services[0]
-          value: { name: litellm, namespace: shopnexus-prod, port: 4000 }
+          value: { name: bifrost, namespace: shopnexus-prod, port: 8080 }
       - equal:
           path: spec.routes[7].services[0]
           value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
@@ -107,7 +107,7 @@ tests:
     asserts:
       - equal:
           path: data.DASHBOARD_HOSTS
-          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,litellm=litellm.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn,argocd=argocd.shopnexus.id.vn
+          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,bifrost=bifrost.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn,argocd=argocd.shopnexus.id.vn
       - equal:
           path: data.OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://lgtm:4318
@@ -118,7 +118,7 @@ tests:
     asserts:
       - equal:
           path: data.DASHBOARD_HOSTS
-          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,litellm=litellm.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn
+          value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,bifrost=bifrost.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn
   - it: serves RustFS's console on port 9001
     template: rustfs.yaml
     values: [../values-prod.yaml, values-test.yaml]
@@ -139,7 +139,7 @@ tests:
       - equal:
           path: spec.security.networkPeers.admin[1].podSelector.matchLabels["app.kubernetes.io/name"]
           value: traefik
-  - it: admits Traefik to Grafana, LiteLLM and pgweb
+  - it: admits Traefik to Grafana, Bifrost and pgweb
     template: networkpolicy.yaml
     documentSelector: { path: metadata.name, value: from-traefik }
     values: [../values-prod.yaml, values-test.yaml]
@@ -149,7 +149,7 @@ tests:
           content: lgtm
       - contains:
           path: spec.podSelector.matchExpressions[0].values
-          content: litellm
+          content: bifrost
       - contains:
           path: spec.podSelector.matchExpressions[0].values
           content: pgweb

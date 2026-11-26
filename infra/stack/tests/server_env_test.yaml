@@ -30,13 +30,10 @@ tests:
       - equal:
           path: data.WEBSITE_ORIGINS
           value: https://shopnexus.id.vn
-      # The server reaches models only through the stack's LiteLLM, under one alias.
+      # The server reaches models only through the stack's Bifrost.
       - equal:
-          path: data.LLM_BASE_URL
-          value: http://litellm:4000/v1
-      - equal:
-          path: data.LLM_MODEL
-          value: search
+          path: data.GATEWAY_URL
+          value: http://bifrost:8080
   - it: sets the dev values
     documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
@@ -89,22 +86,17 @@ tests:
       - exists: { path: data.EMAIL_FROM }
       - exists: { path: data.GOOGLE_CLIENT_ID }
       - exists: { path: data.GOOGLE_JWKS_URL }
-      - exists: { path: data.LLM_BASE_URL }
-      - exists: { path: data.LLM_MODEL }
       - exists: { path: data.AI_STT_MODELS }
       - exists: { path: data.AI_VAD_MODEL }
       - exists: { path: data.AI_FRAMES_MAX_SECONDS }
-      - exists: { path: data.ASSIST_LLM_BASE_URL }
-      - exists: { path: data.ASSIST_LLM_MODEL }
       - exists: { path: data.ASSIST_LLM_REASONING_EFFORT }
       - exists: { path: data.ASSIST_CALL_TIMEOUT }
       - exists: { path: data.CHOTOT_GATEWAY_URL }
       - exists: { path: data.CHOTOT_CDN_URL }
-      - exists: { path: data.TRUST_LLM_BASE_URL }
-      - exists: { path: data.TRUST_LLM_MODEL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
       - exists: { path: data.AGENT_BASE_URL }
-      - exists: { path: data.LITELLM_URL }
+      - exists: { path: data.GATEWAY_URL }
+      - exists: { path: data.GATEWAY_ADMIN_USERNAME }
       - exists: { path: data.AGENT_MCP_ADDR }
       - exists: { path: data.CARRIER_GHTK }
       - exists: { path: data.TRUST_SCAM_CHECKS }
@@ -131,7 +123,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 89b4e30874387ce2
+          value: 81c4d5d647aba3e0
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -139,25 +131,37 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 89b4e30874387ce2
-  # The console's AI settings call LiteLLM's admin API with the master key
-  # LiteLLM itself reads.
-  - it: reaches LiteLLM's admin API with its master key
+          value: 81c4d5d647aba3e0
+  # The reconciler calls Bifrost's admin API with the password Bifrost
+  # itself reads.
+  - it: reaches Bifrost's admin API with its admin password
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.LITELLM_URL, value: http://litellm:4000 }
+      - equal: { path: data.GATEWAY_URL, value: http://bifrost:8080 }
+        documentIndex: 0
+      - equal: { path: data.GATEWAY_ADMIN_USERNAME, value: admin }
         documentIndex: 0
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: LITELLM_MASTER_KEY, valueFrom: { secretKeyRef: { name: litellm-secrets, key: LITELLM_MASTER_KEY } } }
+          content: { name: GATEWAY_ADMIN_PASSWORD, valueFrom: { secretKeyRef: { name: bifrost-secrets, key: BIFROST_ADMIN_PASSWORD } } }
         documentIndex: 1
-  # Text vectors come from LiteLLM's alias embed-text and photo vectors from
+  # The keys and URLs of the LiteLLM aliases are gone.
+  - it: sets none of the old gateway settings
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - notExists: { path: data.LITELLM_URL }
+      - notExists: { path: data.LLM_BASE_URL }
+      - notExists: { path: data.LLM_MODEL }
+      - notExists: { path: data.ASSIST_LLM_BASE_URL }
+      - notExists: { path: data.TRUST_LLM_MODEL }
+      - notExists: { path: data.EMBED_TEXT_BASE_URL }
+  # Text vectors come from Bifrost's agent embed-text and photo vectors from
   # module ai's SigLIP 2; each model's version is stored with its vectors.
   - it: sets the embedding settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.EMBED_TEXT_BASE_URL, value: http://litellm:4000/v1 }
       - equal: { path: data.EMBED_TEXT_MODEL, value: embed-text }
       - equal: { path: data.AI_EMBED_MODELS, value: siglip2-so400m-patch16-384=/models/siglip2-so400m-patch16-384 }
       - equal: { path: data.EMBED_TEXT_VERSION, value: bge-m3@5617a9f61b028005a4858fdac845db406aefb181 }
@@ -168,26 +172,22 @@ tests:
       - equal: { path: data.EMBED_PHOTO_MIN_SIMILARITY, value: "0.6" }
       - equal: { path: data.EMBED_LOOK_MIN_SIMILARITY, value: "0.08" }
   # A video read cuts frames and transcribes in module ai, from the model
-  # files under /models, and fills the listing through LiteLLM's alias.
+  # files under /models, and fills the listing through Bifrost.
   - it: sets the video read settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - equal: { path: data.AI_STT_MODELS, value: gipformer-1.5=/models/gipformer-1.5 }
       - equal: { path: data.AI_VAD_MODEL, value: /models/silero_vad.onnx }
-      - equal: { path: data.ASSIST_LLM_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.ASSIST_LLM_MODEL, value: listing-read }
       - equal: { path: data.ASSIST_LLM_REASONING_EFFORT, value: none }
       - equal: { path: data.ASSIST_CALL_TIMEOUT, value: 30s }
       - equal: { path: data.CHOTOT_GATEWAY_URL, value: https://gateway.chotot.com }
       - equal: { path: data.CHOTOT_CDN_URL, value: https://cdn.chotot.com }
-  # A scam check calls the model through LiteLLM's alias scam-check.
+  # A scam check calls the model through Bifrost.
   - it: sets the scam check settings
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
-      - equal: { path: data.TRUST_LLM_BASE_URL, value: http://litellm:4000/v1 }
-      - equal: { path: data.TRUST_LLM_MODEL, value: scam-check }
       - equal: { path: data.TRUST_CALL_TIMEOUT, value: 20s }
   # Production runs both carriers off until a partner contract each; the
   # dev stack runs the fakes, whose dev endpoint moves their shipments.

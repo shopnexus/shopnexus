@@ -111,15 +111,9 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"OBJECT_STORE_SECRET_KEY", "", 24},
 		{"SNAPSHOTS_ACCESS_KEY", "", 12}, // Restate's user, bucket restate-snapshots only
 		{"SNAPSHOTS_SECRET_KEY", "", 24},
-		{"LITELLM_MASTER_KEY", "sk-", 24},
-		{"LITELLM_DB_PASSWORD", "", 24},
-		{"LITELLM_UI_PASSWORD", "", 24},     // ai-gateway's admin UI, behind the console's sign-in
-		{"LLM_API_KEY", "sk-", 24},          // the server's search key in LiteLLM (server-llm)
-		{"ASSIST_LLM_API_KEY", "sk-", 24},   // the server's listing-read key in LiteLLM (server-assist)
-		{"TRUST_LLM_API_KEY", "sk-", 24},    // the server's scam-check key in LiteLLM (server-trust)
-		{"EMBED_INDEX_API_KEY", "sk-", 24},  // the server's key for indexing listings (server-embed-index)
-		{"EMBED_SEARCH_API_KEY", "sk-", 24}, // the server's key for query embeddings (server-embed-search)
-		{"AGENT_LLM_API_KEY", "sk-", 24},    // the console agent's key in LiteLLM (agent)
+		{"BIFROST_ADMIN_PASSWORD", "", 24}, // Bifrost's admin API and UI; the server signs in with it
+		{"BIFROST_ENCRYPTION_KEY", "", 32}, // fixed once set: Bifrost's stored keys are encrypted with it
+		{"BIFROST_DB_PASSWORD", "", 24},
 	} {
 		if env.get(k.name) == "" {
 			b := make([]byte, k.bytes)
@@ -142,9 +136,6 @@ func seal(stack string, o opts, out io.Writer) error {
 			return fmt.Errorf("%s: set %s", envFile, k)
 		}
 	}
-	if env.get("LITELLM_UI_USERNAME") == "" {
-		return fmt.Errorf("%s: set LITELLM_UI_USERNAME", envFile)
-	}
 	if stack == "prod" && env.get("FCM_CREDENTIALS") == "" {
 		return fmt.Errorf("%s: prod needs FCM_CREDENTIALS (APP_ENV=prod refuses to only log pushes)", envFile)
 	}
@@ -160,12 +151,11 @@ func seal(stack string, o opts, out io.Writer) error {
 	secrets := []secret{
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
-			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "LLM_API_KEY", "ASSIST_LLM_API_KEY",
-			"TRUST_LLM_API_KEY", "EMBED_INDEX_API_KEY", "EMBED_SEARCH_API_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
+			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
 			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN",
 			"GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET")},
-		// The console agent has the server's two tokens and its own LiteLLM key.
-		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_LLM_API_KEY")},
+		// The console agent has the server's two tokens; its gateway key comes with each run.
+		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("SNAPSHOTS_ACCESS_KEY"),
@@ -179,11 +169,11 @@ func seal(stack string, o opts, out io.Writer) error {
 			"SNAPSHOTS_ACCESS_KEY": env.get("SNAPSHOTS_ACCESS_KEY"),
 			"SNAPSHOTS_SECRET_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
 		}},
-		{name: "litellm-secrets", namespace: ns, data: env.pick("LITELLM_MASTER_KEY", "OPENROUTER_API_KEY", "LLM_UPSTREAM_API_KEY", "LITELLM_UI_USERNAME", "LITELLM_UI_PASSWORD")},
+		{name: "bifrost-secrets", namespace: ns, data: env.pick("BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY")},
 		// CNPG reads a managed role's password from a basic-auth Secret.
-		{name: "litellm-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
-			"username": "litellm",
-			"password": env.get("LITELLM_DB_PASSWORD"),
+		{name: "bifrost-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{
+			"username": "bifrost",
+			"password": env.get("BIFROST_DB_PASSWORD"),
 		}},
 	}
 

@@ -1,6 +1,8 @@
 {{- $restate := include "sn.restate" . }}
-# Ingress is denied unless a policy below admits it. Egress stays open: the
-# server calls Firebase, FCM and the language model.
+{{- $up := urlParse ((include "sn.envFile" (dict "root" . "file" "env/bifrost.env") | fromJson).LLM_UPSTREAM_BASE_URL) }}
+{{- $upPort := ternary (regexReplaceAll "^.*:" $up.host "") (ternary "443" "80" (eq $up.scheme "https")) (contains ":" $up.host) }}
+# Ingress is denied unless a policy below admits it. Egress stays open but
+# for Bifrost's (bifrost-egress).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,7 +16,7 @@ spec:
 # jobs, postgres replication, imgproxy to rustfs. The server and the agent
 # take only the ports to-server and to-agent open, imgproxy only its cache
 # and lgtm only OTLP. pgweb and Grafana trust the console's gate, so only
-# Traefik reaches them.
+# Traefik reaches them. Bifrost takes only to-bifrost's callers.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,7 +25,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm, bifrost] }
   ingress:
     - from:
         - podSelector: {}
@@ -36,7 +38,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, litellm, pgweb, imgproxy-cache] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, bifrost, pgweb, imgproxy-cache] }
   ingress:
     - from:
         - namespaceSelector:
@@ -171,7 +173,7 @@ spec:
         - { protocol: TCP, port: 8080 }
 ---
 # The cluster's Prometheus scrapes Postgres's exporter (9187, the job cnpg
-# of infra/platform/prometheus.yaml) and LiteLLM's /metrics (4000).
+# of infra/platform/prometheus.yaml).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -189,18 +191,62 @@ spec:
             matchLabels: { app.kubernetes.io/name: prometheus }
       ports: [{ port: 9187 }]
 ---
+# Bifrost (8080) from the server, the agent and the cluster's Prometheus
+# (/metrics); Traefik reaches it for its dashboard (from-traefik).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: from-monitoring-litellm
+  name: to-bifrost
   labels: {{- include "sn.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: { app.kubernetes.io/name: litellm }
+    matchLabels: { app.kubernetes.io/name: bifrost }
   ingress:
     - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: server }
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: agent }
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
           podSelector:
             matchLabels: { app.kubernetes.io/name: prometheus }
-      ports: [{ port: 4000 }]
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# Bifrost reaches DNS, its database, the upstream (LLM_UPSTREAM_BASE_URL)
+# and, on 443, openrouter.ai and getbifrost.ai (its price sheet). A policy
+# names no host, so the upstream is its port anywhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bifrost-egress
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: bifrost }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels: { cnpg.io/cluster: postgres }
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { protocol: TCP, port: {{ $upPort }} }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      ports:
+        - { protocol: TCP, port: 443 }

@@ -1,7 +1,7 @@
 {
   "uid": "shopnexus-platform",
   "title": "Platform",
-  "description": "What the server stands on: the public hosts, Traefik, Postgres, Restate and LiteLLM, from the cluster's Prometheus.",
+  "description": "What the server stands on: the public hosts, Traefik, Postgres, Restate and Bifrost, from the cluster's Prometheus.",
   "tags": [
     "shopnexus",
     "kubernetes"
@@ -1207,7 +1207,7 @@
     {
       "type": "row",
       "id": 20,
-      "title": "Models (LiteLLM)",
+      "title": "Models (Bifrost)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1220,7 +1220,7 @@
     {
       "type": "timeseries",
       "id": 21,
-      "title": "Requests / min by alias",
+      "title": "Requests / min by agent",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1238,9 +1238,9 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total{namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
+          "expr": "sum by (team_name) (rate({__name__=~\"bifrost_(success|error)_requests_total\",namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
           "refId": "A",
-          "legendFormat": "{{requested_model}}"
+          "legendFormat": "{{team_name}}"
         }
       ],
       "options": {
@@ -1290,7 +1290,7 @@
     {
       "type": "timeseries",
       "id": 22,
-      "title": "Latency p95 by alias",
+      "title": "Upstream latency p95 by model",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1308,9 +1308,9 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, model_group) (rate(litellm_request_total_latency_metric_bucket{namespace=\"__NAMESPACE__\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, provider, model) (rate(bifrost_upstream_latency_seconds_bucket{namespace=\"__NAMESPACE__\"}[$__rate_interval])))",
           "refId": "A",
-          "legendFormat": "{{model_group}}"
+          "legendFormat": "{{provider}}/{{model}}"
         }
       ],
       "options": {
@@ -1361,7 +1361,7 @@
       "type": "timeseries",
       "id": 23,
       "title": "Failed requests / min",
-      "description": "Calls LiteLLM answered with an error, upstream failures and budget refusals included.",
+      "description": "Calls Bifrost answered with an error, by agent and error type: upstream failures, spent budgets (402) and rate limits (429) included.",
       "datasource": {
         "type": "prometheus",
         "uid": "cluster"
@@ -1378,9 +1378,9 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "sum by (requested_model) (rate(litellm_proxy_failed_requests_metric_total{namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
+          "expr": "sum by (team_name, error_type) (rate(bifrost_error_requests_total{namespace=\"__NAMESPACE__\"}[$__rate_interval])) * 60",
           "refId": "A",
-          "legendFormat": "{{requested_model}}"
+          "legendFormat": "{{team_name}} {{error_type}}"
         }
       ],
       "options": {
@@ -1430,8 +1430,8 @@
     {
       "type": "table",
       "id": 24,
-      "title": "Spend and tokens by key",
-      "description": "In the time range. Spend is in the units of litellm/config.yaml: 1 is 1M tokens, dollars for console-agent.",
+      "title": "Spend and tokens by agent",
+      "description": "In the time range. Spend is in USD at the server's prices.",
       "datasource": {
         "type": "prometheus",
         "uid": "cluster"
@@ -1448,7 +1448,7 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "sum by (api_key_alias) (increase(litellm_spend_metric_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0",
+          "expr": "sum by (team_name) (increase(bifrost_cost_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0",
           "refId": "A",
           "legendFormat": "__auto",
           "instant": true,
@@ -1460,7 +1460,7 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "(sum by (api_key_alias) (increase(litellm_total_tokens_metric_total{namespace=\"__NAMESPACE__\"}[$__range]))) > 0 or ((sum by (api_key_alias) (increase(litellm_spend_metric_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0) * 0)",
+          "expr": "(sum by (team_name) (increase({__name__=~\"bifrost_(input|output)_tokens_total\",namespace=\"__NAMESPACE__\"}[$__range]))) > 0 or ((sum by (team_name) (increase(bifrost_cost_total{namespace=\"__NAMESPACE__\"}[$__range])) > 0) * 0)",
           "refId": "B",
           "legendFormat": "__auto",
           "instant": true,
@@ -1478,7 +1478,7 @@
           "options": {
             "include": {
               "names": [
-                "api_key_alias",
+                "team_name",
                 "Value #A",
                 "Value #B"
               ]
@@ -1491,10 +1491,10 @@
             "renameByName": {
               "Value #A": "Spend",
               "Value #B": "Tokens",
-              "api_key_alias": "Key"
+              "team_name": "Agent"
             },
             "indexByName": {
-              "Key": 0,
+              "Agent": 0,
               "Spend": 1,
               "Tokens": 2
             }
@@ -1544,7 +1544,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "short"
+                "value": "currencyUSD"
               },
               {
                 "id": "custom.width",
@@ -1574,7 +1574,7 @@
     {
       "type": "timeseries",
       "id": 25,
-      "title": "Tokens / hour by alias",
+      "title": "Tokens / hour by agent",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1592,9 +1592,9 @@
             "type": "prometheus",
             "uid": "cluster"
           },
-          "expr": "sum by (requested_model) (increase(litellm_total_tokens_metric_total{namespace=\"__NAMESPACE__\"}[1h]))",
+          "expr": "sum by (team_name) (increase({__name__=~\"bifrost_(input|output)_tokens_total\",namespace=\"__NAMESPACE__\"}[1h]))",
           "refId": "A",
-          "legendFormat": "{{requested_model}}"
+          "legendFormat": "{{team_name}}"
         }
       ],
       "options": {

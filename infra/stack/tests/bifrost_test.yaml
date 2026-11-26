@@ -1,0 +1,58 @@
+suite: bifrost
+templates: [bifrost.yaml]
+release: { namespace: shopnexus-prod }
+values: [../values-prod.yaml, values-test.yaml]
+tests:
+  # The ConfigMap is bifrost/config.json and start.sh as is, the files
+  # compose mounts.
+  - it: holds bifrost/config.json and start.sh
+    documentIndex: 0
+    asserts:
+      - equal: { path: metadata.name, value: bifrost-config }
+      - matchRegex: { path: 'data["config.json"]', pattern: '"source_of_truth": "config.json"' }
+      - matchRegex: { path: 'data["config.json"]', pattern: '"base_url": "https://openrouter.ai/api"' }
+      - matchRegex: { path: 'data["config.json"]', pattern: '"ignore_provider_cost": true' }
+      - matchRegex: { path: 'data["config.json"]', pattern: '"disable_content_logging": true' }
+      - matchRegex: { path: 'data["start.sh"]', pattern: 'exec /app/docker-entrypoint.sh' }
+  - it: runs the pinned Bifrost with its secrets and database, and rolls on a config change
+    documentIndex: 1
+    asserts:
+      - isKind: { of: Deployment }
+      - equal: { path: metadata.name, value: bifrost }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "maximhq/bifrost:v2.6.0" }
+      - equal: { path: 'spec.template.spec.containers[0].command', value: [sh, /etc/bifrost/start.sh] }
+      - exists: { path: 'spec.template.metadata.annotations["checksum/config"]' }
+      - equal: { path: 'spec.template.metadata.annotations["prometheus.io/port"]', value: "8080" }
+      - lengthEqual: { path: 'spec.template.spec.containers[0].env', count: 9 }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: LLM_UPSTREAM_BASE_URL, value: "http://khoakomlem-internal.ddns.net:8317" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: BIFROST_ADMIN_USERNAME, value: admin }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BIFROST_ENCRYPTION_KEY
+            valueFrom: { secretKeyRef: { name: bifrost-secrets, key: BIFROST_ENCRYPTION_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPENROUTER_API_KEY
+            valueFrom: { secretKeyRef: { name: bifrost-secrets, key: OPENROUTER_API_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BIFROST_DB_PASSWORD
+            valueFrom: { secretKeyRef: { name: bifrost-db, key: password } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: BIFROST_DB_HOST, value: postgres-rw }
+      - equal: { path: 'spec.template.spec.containers[0].readinessProbe.httpGet.path', value: /health }
+      - equal: { path: 'spec.template.spec.containers[0].resources', value: { requests: { cpu: 50m, memory: 64Mi }, limits: { memory: 512Mi } } }
+  - it: serves on bifrost:8080
+    documentIndex: 2
+    asserts:
+      - equal: { path: metadata.name, value: bifrost }
+      - equal: { path: 'spec.ports[0].port', value: 8080 }

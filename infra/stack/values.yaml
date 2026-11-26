@@ -18,8 +18,7 @@ images:
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
   lgtm: { repository: grafana/otel-lgtm, tag: 0.37.0 }
   pgweb: { repository: sosedoff/pgweb, tag: 0.17.0 }
-  litellm: { repository: ghcr.io/berriai/litellm-database, tag: v1.108.0 }
-  curl: { repository: curlimages/curl, tag: 8.23.0 }
+  bifrost: { repository: maximhq/bifrost, tag: v2.6.0 }
   imgproxy: { repository: ghcr.io/imgproxy/imgproxy, tag: v4.0.24 }
   nginx: { repository: nginx, tag: 1.30.7-alpine }
 
@@ -41,7 +40,7 @@ postgres:
   sharedBuffers: 2GB
   effectiveCacheSize: 6GB
   # Above the default 100: four server processes at DATABASE_MAX_CONNS=20
-  # double while a Restate version drains, plus LiteLLM and pgweb.
+  # double while a Restate version drains, plus Bifrost and pgweb.
   maxConnections: 300
 
 restate:
@@ -78,16 +77,6 @@ agent:
   memoryRequest: 256Mi
   memoryLimit: 512Mi
 
-# LiteLLM (templates/litellm.yaml): its config is litellm/config.yaml, the
-# aliases and costs it starts with are in litellm/models/ and its keys in
-# litellm/keys.txt, files docker-compose.yml reads too. Here is each key's budget: dailyUnits (1M
-# units is 1 of LiteLLM budget) and tpmLimit or rpmLimit, set per stack.
-litellm:
-  keys:
-    # The console agent's key: 20 USD a day in every stack; the stack sets
-    # tpmLimit.
-    agent: { dailyUnits: 20000000 }
-
 # server-ai (templates/server-ai.yaml): the server with SERVER_ROLE=ai and
 # the model files on the PVC models. Each stack sets the memory: SigLIP 2
 # with speech and frames held 4.0 GiB idle and 5.3 GiB on 16 photos
@@ -101,8 +90,8 @@ serverAi:
 # The server's settings that differ between stacks; the ones every stack
 # shares are in env/server.env, which docker-compose.yml reads too.
 server:
-  # text and image turn each kind of vector on: text through LiteLLM's alias
-  # embed-text, image through module ai's SigLIP 2 (AI_EMBED_MODELS). A
+  # text and image turn each kind of vector on: text through Bifrost's
+  # agent embed-text, image through module ai's SigLIP 2 (AI_EMBED_MODELS). A
   # stack without room for SigLIP 2 in server-ai sets image false.
   embed:
     text: true
