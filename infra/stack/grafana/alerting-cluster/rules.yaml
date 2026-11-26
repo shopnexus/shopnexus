@@ -327,6 +327,38 @@ groups:
             type: lt
             params:
             - 1
+  - uid: sn-bifrost-budget-spent
+    title: Agent hết ngân sách tháng
+    condition: B
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Agent {{ $labels.team_name }} đã hết ngân sách tháng, Bifrost đang từ chối các lần gọi.'
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: cluster
+      model:
+        refId: A
+        expr: sum by (team_name) (increase(bifrost_error_requests_total{namespace="__NAMESPACE__", error_type="policy_budget_exceeded"}[10m]))
+        instant: true
+        range: false
+    - refId: B
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
   - uid: sn-node-memory
     title: RAM node sắp đầy
     condition: B
