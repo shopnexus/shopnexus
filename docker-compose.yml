@@ -490,7 +490,9 @@ services:
     environment:
       API_URL: http://server-dev:8080
     volumes:
-      - ./website:/src
+      - ./clients/website:/src
+      # The site reads its art from ../brand/web.
+      - ./clients/brand:/brand:ro
       - website-node-modules-dev:/src/node_modules
       - website-astro-dev:/src/.astro
 
@@ -501,7 +503,7 @@ services:
     command: ["--host", "0.0.0.0"]
     environment: { HEALTH_PORT: 5173 }
     volumes:
-      - ./console:/src
+      - ./clients/console:/src
       - console-node-modules-dev:/src/node_modules
 
   fetch-models-dev:
@@ -665,7 +667,8 @@ services:
   website-prod:
     <<: *prod
     image: shopnexus-website:local
-    build: ./website
+    # The Dockerfile copies the art from a second context named brand.
+    build: { context: ./clients/website, additional_contexts: { brand: ./clients/brand } }
     environment:
       API_URL: http://server-prod:8080
     depends_on: [server-prod]
@@ -677,7 +680,7 @@ services:
   console-prod:
     <<: *prod
     image: shopnexus-console:local
-    build: ./console
+    build: ./clients/console
     healthcheck: *health-wget
     restart: unless-stopped
 

@@ -13,7 +13,7 @@ ShopNexus is a C2C marketplace for used goods in Vietnam. Buyers inspect an item
 | Docs | Product and developer documentation, requirements, and reports |
 | Brand | Shared visual identity and assets |
 
-Each component is maintained in its own repository and included here as a submodule.
+The Android app, website, console and brand live together in `clients` (`shopnexus/clients`); the server, docs and agent each have their own repository. All four are included here as submodules.
 
 ## Local development
 
@@ -25,7 +25,7 @@ cd shopnexus
 make dev
 ```
 
-`app` (`shopnexus/app-android`), `website` and `brand` are private repositories, so the recursive clone needs a GitHub account with access to them.
+`clients` is a private repository, so the recursive clone needs a GitHub account with access to it.
 
 The storefront is available at `http://shopnexus.localhost:56481`. `make test` runs the server tests, and `make down` stops the local stacks while keeping their data.
 

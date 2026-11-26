@@ -11,14 +11,11 @@
 !/LICENSE
 !/Makefile
 !/README.md
-!/app
-!/brand
-!/console
+!/clients
 !/docker-compose.yml
 !/docs
 !/infra/
 !/server
-!/website
 
 # Inside the directories above:
 # OS

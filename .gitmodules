@@ -1,21 +1,12 @@
-[submodule "app"]
-	path = app
-	url = https://github.com/shopnexus/app-android.git
 [submodule "docs"]
 	path = docs
 	url = https://github.com/shopnexus/docs.git
 [submodule "server"]
 	path = server
 	url = https://github.com/shopnexus/server.git
-[submodule "website"]
-	path = website
-	url = https://github.com/shopnexus/website.git
-[submodule "console"]
-	path = console
-	url = https://github.com/shopnexus/console.git
 [submodule "agent"]
 	path = agent
 	url = https://github.com/shopnexus/agent.git
-[submodule "brand"]
-	path = brand
-	url = https://github.com/shopnexus/brand.git
+[submodule "clients"]
+	path = clients
+	url = https://github.com/shopnexus/clients.git

@@ -4,10 +4,10 @@ name: API contract
 # commits the umbrella pins, the pair a release ships together.
 on:
   pull_request:
-    paths: [server, website, .github/workflows/contract.yml]
+    paths: [server, clients, .github/workflows/contract.yml]
   push:
     branches: [main]
-    paths: [server, website, .github/workflows/contract.yml]
+    paths: [server, clients, .github/workflows/contract.yml]
 
 jobs:
   website:
@@ -18,19 +18,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - run: git submodule update --init --depth 1 server
-      # website is private: its read-only deploy key fetches the commit the umbrella pins.
-      - id: website
-        run: echo "sha=$(git rev-parse HEAD:website)" >> "$GITHUB_OUTPUT"
+      # clients is private: its read-only deploy key fetches the commit the umbrella pins.
+      - id: clients
+        run: echo "sha=$(git rev-parse HEAD:clients)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: shopnexus/website
-          ref: ${{ steps.website.outputs.sha }}
-          path: website
-          ssh-key: ${{ secrets.WEBSITE_DEPLOY_KEY }}
+          repository: shopnexus/clients
+          ref: ${{ steps.clients.outputs.sha }}
+          path: clients
+          ssh-key: ${{ secrets.CLIENTS_DEPLOY_KEY }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - working-directory: website
+      - working-directory: clients/website
         run: |
           bun install --frozen-lockfile
-          SERVER_API=../server/api bun run api:check
+          SERVER_API=../../server/api bun run api:check
 
