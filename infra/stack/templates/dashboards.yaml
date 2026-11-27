@@ -114,6 +114,8 @@ spec:
           ports:
             - { name: grafana, containerPort: 3000 }
             - { name: otlp-http, containerPort: 4318 }
+            - { name: prometheus, containerPort: 9090 }
+            - { name: loki, containerPort: 3100 }
           readinessProbe:
             httpGet: { path: /api/health, port: grafana }
             initialDelaySeconds: 25
@@ -165,6 +167,8 @@ spec:
   ports:
     - { name: grafana, port: 3000, targetPort: grafana }
     - { name: otlp-http, port: 4318, targetPort: otlp-http }
+    - { name: prometheus, port: 9090, targetPort: prometheus }
+    - { name: loki, port: 3100, targetPort: loki }
 ---
 # pgweb on the stack's database as its owner, the dashboard db. It asks for
 # no sign-in: the console's gate admits admins only, and the network

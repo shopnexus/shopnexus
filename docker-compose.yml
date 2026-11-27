@@ -307,6 +307,8 @@ x-server-env-dev: &server-env-dev
   RESTATE_ADMIN_URL: http://restate-dev:9070
   RESTATE_ENDPOINT_URL: http://server-dev:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-dev:4318
+  MONITORING_METRICS_URL: http://lgtm-dev:9090
+  MONITORING_LOGS_URL: http://lgtm-dev:3100
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56481
   # The docs site's API playground, here and on a laptop's `bun run dev`.
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56481,http://localhost:4321
@@ -324,6 +326,8 @@ x-server-env-prod: &server-env-prod
   RESTATE_ADMIN_URL: http://restate-prod:9070
   RESTATE_ENDPOINT_URL: http://server-prod:9080
   OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm-prod:4318
+  MONITORING_METRICS_URL: http://lgtm-prod:9090
+  MONITORING_LOGS_URL: http://lgtm-prod:3100
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56480
   WEBSITE_ORIGINS: http://shopnexus.localhost:56480

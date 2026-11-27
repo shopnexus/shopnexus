@@ -117,6 +117,8 @@ tests:
       - exists: { path: data.VNPAY_SERVER_IP }
       - exists: { path: data.BOOST_PACKAGES }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
+      - exists: { path: data.MONITORING_METRICS_URL }
+      - exists: { path: data.MONITORING_LOGS_URL }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
       - exists: { path: data.DASHBOARD_HOSTS }
@@ -130,7 +132,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 9f449912cf14f09d
+          value: 66747c3a84b30b5c
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -138,7 +140,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 9f449912cf14f09d
+          value: 66747c3a84b30b5c
   # The reconciler calls Bifrost's admin API with the password Bifrost
   # itself reads.
   - it: reaches Bifrost's admin API with its admin password

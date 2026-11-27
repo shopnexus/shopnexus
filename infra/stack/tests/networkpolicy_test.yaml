@@ -95,14 +95,18 @@ tests:
       - equal:
           path: spec.ingress[1].from[1].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
           value: restate-prod
-  # Grafana trusts the gate's X-Console-Email; the stack only sends OTLP.
-  - it: opens Grafana to Traefik and lgtm's OTLP port to the stack
+  # Grafana trusts the gate's X-Console-Email; the stack sends OTLP, and
+  # only the server queries Prometheus and Loki.
+  - it: opens Grafana to Traefik, lgtm's OTLP port to the stack and its queries to the server
     asserts:
       - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: lgtm }
         documentSelector: { path: metadata.name, value: from-traefik }
       - equal:
           path: spec.ingress
-          value: [{ from: [{ podSelector: {} }], ports: [{ protocol: TCP, port: 4318 }] }]
+          value:
+            - { from: [{ podSelector: {} }], ports: [{ protocol: TCP, port: 4318 }] }
+            - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: server } } }]
+              ports: [{ protocol: TCP, port: 9090 }, { protocol: TCP, port: 3100 }]
         documentSelector: { path: metadata.name, value: to-lgtm }
   # The runtime's sandboxes have no network; the runtime forwards their
   # package downloads, so package-proxy sees the runtime's pod.

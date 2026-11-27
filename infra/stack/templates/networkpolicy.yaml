@@ -152,7 +152,9 @@ spec:
         - { protocol: TCP, port: 8080 }
 ---
 # Grafana (3000) signs in whoever X-Console-Email names, so only Traefik
-# reaches it (from-traefik). The stack sends telemetry to OTLP (4318).
+# reaches it (from-traefik). The stack sends telemetry to OTLP (4318);
+# the server queries Prometheus (9090) and Loki (3100) for the console's
+# monitoring, which adds its limits and masking (ADR-0007).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -166,6 +168,12 @@ spec:
         - podSelector: {}
       ports:
         - { protocol: TCP, port: 4318 }
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: server }
+      ports:
+        - { protocol: TCP, port: 9090 }
+        - { protocol: TCP, port: 3100 }
 ---
 # imgproxy takes requests from its cache only, so every photo is resized
 # once per format.

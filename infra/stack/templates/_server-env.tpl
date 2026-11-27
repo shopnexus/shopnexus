@@ -31,6 +31,8 @@ APP_ENV: {{ .Values.appEnv | quote }}
 LOG_LEVEL: {{ .Values.server.logLevel | quote }}
 LOG_FORMAT: json
 OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+MONITORING_METRICS_URL: http://lgtm:9090
+MONITORING_LOGS_URL: http://lgtm:3100
 # k3s's pod network; Traefik's X-Forwarded-For is believed.
 TRUSTED_PROXIES: "10.42.0.0/16"
 RESTATE_INGRESS_URL: http://restate.{{ $restate }}:8080

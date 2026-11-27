@@ -100,7 +100,7 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: GF_SERVER_ROOT_URL, value: https://grafana.shopnexus.id.vn }
-  - it: tells the server the dashboard hosts and where to send telemetry
+  - it: tells the server the dashboard hosts, where to send telemetry and where to query it
     template: server.yaml
     documentIndex: 0
     values: [../values-prod.yaml, values-test.yaml]
@@ -111,6 +111,12 @@ tests:
       - equal:
           path: data.OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://lgtm:4318
+      - equal:
+          path: data.MONITORING_METRICS_URL
+          value: http://lgtm:9090
+      - equal:
+          path: data.MONITORING_LOGS_URL
+          value: http://lgtm:3100
   - it: gives the dev server the dev hosts without Argo CD
     template: server.yaml
     documentIndex: 0
