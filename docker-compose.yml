@@ -285,6 +285,13 @@ x-server-env: &server-env
   GHN_API_URL: ""
   GHN_PARTNER_TOKEN: ""
   GHN_WEBHOOK_SECRET: ""
+  # Boosts are paid on the fake VNPay page, as on the dev cluster.
+  PAYMENT_VNPAY: fake
+  VNPAY_TMN_CODE: ""
+  VNPAY_HASH_SECRET: ""
+  VNPAY_PAY_URL: ""
+  VNPAY_API_URL: ""
+  VNPAY_SERVER_IP: ""
   # Each chat message goes to the scam classifier, as on the cluster.
   TRUST_SCAM_CHECKS: "on"
   PNV_TEST_NUMBERS: "true"
@@ -308,6 +315,7 @@ x-server-env-dev: &server-env-dev
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
   AGENT_URL: http://agent-dev:8080
+  API_PUBLIC_URL: http://api.shopnexus.localhost:56481
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -323,6 +331,7 @@ x-server-env-prod: &server-env-prod
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
   AGENT_URL: http://agent-prod:8080
+  API_PUBLIC_URL: http://api.shopnexus.localhost:56480
 
 # The agent: one turn per POST /v1/turns. bwrap needs user namespaces and
 # a fresh /proc, so the container gets the seccomp profile that allows them

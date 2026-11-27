@@ -154,7 +154,8 @@ func seal(stack string, o opts, out io.Writer) error {
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
 			"RESEND_API_KEY", "GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET",
-			"AGENT_KEY")},
+			"AGENT_KEY",
+			"VNPAY_HASH_SECRET")},
 		// The agent: the key the server calls it with, and its RustFS user.
 		// Its gateway key comes with each turn.
 		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},

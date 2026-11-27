@@ -106,6 +106,7 @@ done
 for c in ghtk ghn; do
   eq "$(yq ".x-server-env.CARRIER_${c^^}" ../docker-compose.yml)" "$(yq ".server.carriers.$c.mode" stack/values-dev.yaml)" "compose CARRIER_${c^^}"
 done
+eq "$(yq '.x-server-env.PAYMENT_VNPAY' ../docker-compose.yml)" "$(yq '.server.payment.mode' stack/values-dev.yaml)" "compose PAYMENT_VNPAY"
 # The settings every stack shares are in stack/env/*.env, which compose
 # (env_file) and the chart both read; a key
 # there is written nowhere else.

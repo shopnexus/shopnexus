@@ -108,6 +108,14 @@ tests:
       - exists: { path: data.GHN_API_URL }
       - exists: { path: data.GHN_PARTNER_TOKEN }
       - exists: { path: data.GHN_WEBHOOK_SECRET }
+      - exists: { path: data.PAYMENT_VNPAY }
+      - exists: { path: data.API_PUBLIC_URL }
+      - exists: { path: data.VNPAY_TMN_CODE }
+      - exists: { path: data.VNPAY_HASH_SECRET }
+      - exists: { path: data.VNPAY_PAY_URL }
+      - exists: { path: data.VNPAY_API_URL }
+      - exists: { path: data.VNPAY_SERVER_IP }
+      - exists: { path: data.BOOST_PACKAGES }
       - exists: { path: data.OTEL_EXPORTER_OTLP_ENDPOINT }
       - exists: { path: data.SERVICE_NAME }
       - exists: { path: data.TRUSTED_PROXIES }
@@ -122,7 +130,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b1fb7db3aabbac8c
+          value: 9f449912cf14f09d
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -130,7 +138,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: b1fb7db3aabbac8c
+          value: 9f449912cf14f09d
   # The reconciler calls Bifrost's admin API with the password Bifrost
   # itself reads.
   - it: reaches Bifrost's admin API with its admin password
@@ -221,6 +229,48 @@ tests:
       - notExists: { path: data.GHN_WEBHOOK_SECRET }
       - equal: { path: data.CARRIER_GHTK, value: fake }
       - equal: { path: data.GHTK_PARTNER_TOKEN, value: "" }
+  - it: runs production with payments off
+    documentIndex: 0
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.PAYMENT_VNPAY, value: "off" }
+      - equal: { path: data.VNPAY_HASH_SECRET, value: "" }
+  - it: runs the dev stack on the fake VNPay
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    asserts:
+      - equal: { path: data.PAYMENT_VNPAY, value: fake }
+      - equal: { path: data.VNPAY_TMN_CODE, value: "" }
+  # VNPay live takes its terminal from the values and its hash secret from
+  # server-secrets.
+  - it: runs VNPay live with its terminal and its secret from server-secrets
+    documentIndex: 0
+    values: [../values-dev.yaml, values-test.yaml]
+    set:
+      server.payment:
+        mode: live
+        tmnCode: SNTEST01
+        payUrl: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+        apiUrl: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+        serverIp: 203.0.113.10
+    asserts:
+      - equal: { path: data.PAYMENT_VNPAY, value: live }
+      - equal: { path: data.VNPAY_TMN_CODE, value: SNTEST01 }
+      - notExists: { path: data.VNPAY_HASH_SECRET }
+  - it: refuses VNPay live without its terminal
+    values: [../values-prod.yaml, values-test.yaml]
+    set:
+      server.payment.mode: live
+    asserts:
+      - failedTemplate:
+          errorPattern: server.payment.tmnCode is required with mode live
+  - it: refuses a payment switch that is not live, fake or off
+    values: [../values-prod.yaml, values-test.yaml]
+    set:
+      server.payment.mode: none
+    asserts:
+      - failedTemplate:
+          errorPattern: server.payment.mode must be live, fake or off
   - it: refuses a carrier live without its URL
     values: [../values-prod.yaml, values-test.yaml]
     set:

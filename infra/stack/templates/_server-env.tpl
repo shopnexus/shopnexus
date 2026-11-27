@@ -81,6 +81,24 @@ GHN_API_URL: ""
 GHN_PARTNER_TOKEN: ""
 GHN_WEBHOOK_SECRET: ""
 {{- end }}
+{{- /* VNPay, which boosts are paid through: live with its terminal from the
+       values and its hash secret from server-secrets, fake or off. */}}
+{{- $pay := .Values.server.payment }}
+{{- if not (has $pay.mode (list "live" "fake" "off")) }}{{ fail "server.payment.mode must be live, fake or off, in the stack's values file" }}{{ end }}
+PAYMENT_VNPAY: {{ $pay.mode | quote }}
+API_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "api") }}
+{{- if eq $pay.mode "live" }}
+VNPAY_TMN_CODE: {{ required "server.payment.tmnCode is required with mode live" $pay.tmnCode | quote }}
+VNPAY_PAY_URL: {{ required "server.payment.payUrl is required with mode live" $pay.payUrl | quote }}
+VNPAY_API_URL: {{ required "server.payment.apiUrl is required with mode live" $pay.apiUrl | quote }}
+VNPAY_SERVER_IP: {{ required "server.payment.serverIp is required with mode live" $pay.serverIp | quote }}
+{{- else }}
+VNPAY_TMN_CODE: ""
+VNPAY_HASH_SECRET: ""
+VNPAY_PAY_URL: ""
+VNPAY_API_URL: ""
+VNPAY_SERVER_IP: ""
+{{- end }}
 {{- /* A kind turned off gets an empty model, and the server writes and
        reads no vectors of it. */}}
 {{- $e := .Values.server.embed }}
