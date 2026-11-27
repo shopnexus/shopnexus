@@ -2,7 +2,7 @@
 {{- $up := urlParse ((include "sn.envFile" (dict "root" . "file" "env/bifrost.env") | fromJson).LLM_UPSTREAM_BASE_URL) }}
 {{- $upPort := ternary (regexReplaceAll "^.*:" $up.host "") (ternary "443" "80" (eq $up.scheme "https")) (contains ":" $up.host) }}
 # Ingress is denied unless a policy below admits it. Egress stays open but
-# for Bifrost's (bifrost-egress).
+# for Bifrost's (bifrost-egress) and the agent's (agent-egress).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -262,3 +262,40 @@ spec:
             except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
       ports:
         - { protocol: TCP, port: 443 }
+---
+# The agent runtime reaches DNS, the server's API, Bifrost, package-proxy
+# and its bucket on RustFS, nothing else. Its sandbox has no network of
+# its own; this holds should a turn get out of the sandbox into the
+# runtime: no database, Restate, dashboard or Kubernetes API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-egress
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: agent }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: server }
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: bifrost }
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: package-proxy }
+      ports:
+        - { protocol: TCP, port: 8080 }
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: rustfs }
+      ports:
+        - { protocol: TCP, port: 9000 }

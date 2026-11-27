@@ -6,7 +6,11 @@ tests:
   - it: denies ingress by default, opens it to five sources and seven services, and lets Prometheus scrape
     asserts:
       - hasDocuments:
-          count: 14
+          count: 15
+      - equal:
+          path: metadata.name
+          value: agent-egress
+        documentIndex: 14
       - equal:
           path: metadata.name
           value: from-monitoring
@@ -173,3 +177,20 @@ tests:
       - equal: { path: 'spec.egress[2].ports', value: [{ protocol: TCP, port: 8317 }] }
       - equal: { path: 'spec.egress[3].ports', value: [{ protocol: TCP, port: 443 }] }
       - equal: { path: 'spec.egress[3].to[0].ipBlock.except', value: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
+  # Egress: DNS, the server's API, Bifrost and package-proxy on 8080, and
+  # RustFS's S3 port; not Postgres, Restate, pgweb, Grafana or RustFS's console.
+  - it: lets the agent reach DNS, the server, Bifrost, package-proxy and RustFS only
+    documentSelector: { path: metadata.name, value: agent-egress }
+    asserts:
+      - equal: { path: spec.policyTypes, value: [Egress] }
+      - lengthEqual: { path: spec.egress, count: 3 }
+      - equal: { path: 'spec.egress[0].to[0].podSelector.matchLabels["k8s-app"]', value: kube-dns }
+      - equal:
+          path: spec.egress[1].to
+          value:
+            - podSelector: { matchLabels: { app.kubernetes.io/name: server } }
+            - podSelector: { matchLabels: { app.kubernetes.io/name: bifrost } }
+            - podSelector: { matchLabels: { app.kubernetes.io/name: package-proxy } }
+      - equal: { path: 'spec.egress[1].ports', value: [{ protocol: TCP, port: 8080 }] }
+      - equal: { path: 'spec.egress[2].to[0].podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
+      - equal: { path: 'spec.egress[2].ports', value: [{ protocol: TCP, port: 9000 }] }
