@@ -16,9 +16,9 @@
   (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (concat $root $snapshots)) }}
 {{- /* The agent runtime's workspaces: the bucket, its user, and the rule
        that removes a workspace WORKSPACE_EXPIRE_DAYS after its last turn,
-       both from env/agent-runtime.env. */ -}}
-{{- if .Values.agentRuntime.enabled }}
-{{- $agent := include "sn.envFile" (dict "root" . "file" "env/agent-runtime.env") | fromJson }}
+       both from env/agent.env. */ -}}
+{{- if .Values.agent.enabled }}
+{{- $agent := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
 {{- $workspaces := list
   (dict "name" "OBJECT_STORE_BUCKET" "value" $agent.WORKSPACE_BUCKET)
   (dict "name" "OBJECT_STORE_EXPIRE_DAYS" "value" $agent.WORKSPACE_EXPIRE_DAYS)

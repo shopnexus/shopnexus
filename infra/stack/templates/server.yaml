@@ -46,7 +46,6 @@ spec:
           ports:
             - { name: http, containerPort: 8080 }
             - { name: restate, containerPort: 9080 }
-            - { name: mcp, containerPort: 9090 }
           # Probes start once the process usually listens, so a rollout
           # leaves no failed-probe events.
           readinessProbe:
@@ -74,16 +73,3 @@ spec:
   selector: { app.kubernetes.io/name: server, shopnexus.id.vn/version: {{ include "sn.serverVersion" . }} }
   ports:
     - { name: http, port: 8080, targetPort: http }
----
-# The MCP server (AGENT_MCP_ADDR) on every server pod; NetworkPolicy
-# agent-to-server-mcp lets only the agent in.
-apiVersion: v1
-kind: Service
-metadata:
-  name: server-mcp
-  labels: {{- include "sn.labels" . | nindent 4 }}
-  annotations: {{- include "sn.wave" "3" | nindent 4 }}
-spec:
-  selector: { app.kubernetes.io/name: server, shopnexus.id.vn/version: {{ include "sn.serverVersion" . }} }
-  ports:
-    - { name: mcp, port: 9090, targetPort: mcp }

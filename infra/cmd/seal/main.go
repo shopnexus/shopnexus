@@ -70,8 +70,7 @@ func seal(stack string, o opts, out io.Writer) error {
 
 	// envgen copies example.env on first use and fills in the server's keys:
 	// JWT_KEY_ID, JWT_PRIVATE_KEY, CONSOLE_KEY, OTP_KEY, CARRIER_TOKEN_KEY,
-	// AGENT_SERVICE_TOKEN, AGENT_MCP_TOKEN and RESTATE_IDENTITY_KEY, with the
-	// pem. It refuses a RESTATE_IDENTITY_KEY whose pem is gone: a new pair would
+	// AGENT_KEY and RESTATE_IDENTITY_KEY, with the pem. It refuses a RESTATE_IDENTITY_KEY whose pem is gone: a new pair would
 	// sign Restate's requests with a key the running server does not know.
 	// It runs as this user, so the files stay this user's.
 	envgen := exec.Command("docker", "run", "--rm",
@@ -101,6 +100,11 @@ func seal(stack string, o opts, out io.Writer) error {
 		env.set("OBJECT_STORE_ACCESS_KEY", "")
 		env.set("OBJECT_STORE_SECRET_KEY", "")
 	}
+	// AGENT_KEY used to be AGENT_RUNTIME_KEY; the running agent keeps it.
+	if old := env.get("AGENT_RUNTIME_KEY"); old != "" {
+		env.set("AGENT_KEY", old)
+		env.set("AGENT_RUNTIME_KEY", "")
+	}
 	for _, k := range []struct {
 		name, prefix string
 		bytes        int
@@ -113,7 +117,7 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"SNAPSHOTS_SECRET_KEY", "", 24},
 		{"AGENT_WORKSPACES_ACCESS_KEY", "", 12}, // the agent runtime's user, bucket agent-workspaces only
 		{"AGENT_WORKSPACES_SECRET_KEY", "", 24},
-		{"AGENT_RUNTIME_KEY", "", 32},      // what the server sends the agent runtime
+		{"AGENT_KEY", "", 32},              // what the server sends the agent
 		{"BIFROST_ADMIN_PASSWORD", "", 24}, // Bifrost's admin API and UI; the server signs in with it
 		{"BIFROST_ENCRYPTION_KEY", "", 32}, // fixed once set: Bifrost's stored keys are encrypted with it
 		{"BIFROST_DB_PASSWORD", "", 24},
@@ -128,12 +132,6 @@ func seal(stack string, o opts, out io.Writer) error {
 		return err
 	}
 
-	// An older server image has no agent tokens in envgen.
-	for _, k := range []string{"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN"} {
-		if env.get(k) == "" {
-			return fmt.Errorf("%s: envgen in %s wrote no %s; pull a newer server image", envFile, o.image, k)
-		}
-	}
 	for _, k := range []string{"OPENROUTER_API_KEY", "LLM_UPSTREAM_API_KEY"} {
 		if env.get(k) == "" {
 			return fmt.Errorf("%s: set %s", envFile, k)
@@ -155,21 +153,18 @@ func seal(stack string, o opts, out io.Writer) error {
 		{name: "server-secrets", namespace: ns, data: env.pick(
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
-			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN",
-			"GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET",
-			"AGENT_RUNTIME_KEY")},
-		// The console agent has the server's two tokens; its gateway key comes with each run.
-		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
-		// The agent runtime: the key the server calls it with, and its
-		// RustFS user. Its gateway key comes with each turn.
-		{name: "agent-runtime-secrets", namespace: ns, data: env.pick("AGENT_RUNTIME_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},
+			"RESEND_API_KEY", "GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET",
+			"AGENT_KEY")},
+		// The agent: the key the server calls it with, and its RustFS user.
+		// Its gateway key comes with each turn.
+		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("SNAPSHOTS_ACCESS_KEY"),
 			"AWS_SECRET_ACCESS_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
 		}},
 		// RustFS's root keys, for rustfs and the objectstore-init jobs, which
-		// also make Restate's user and the agent runtime's.
+		// also make Restate's user and the agent's.
 		{name: "rustfs-secrets", namespace: ns, data: map[string]string{
 			"RUSTFS_ACCESS_KEY":           env.get("OBJECT_STORE_ROOT_ACCESS_KEY"),
 			"RUSTFS_SECRET_KEY":           env.get("OBJECT_STORE_ROOT_SECRET_KEY"),

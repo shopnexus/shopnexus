@@ -1,10 +1,10 @@
 {{- /* package-proxy (git-pkgs/proxy) is the agent sandbox's npm, PyPI and
        Go registry. It holds back versions younger than 7 days and keeps
-       what it fetched. Only agent-runtime reaches it (to-package-proxy),
+       what it fetched. Only agent reaches it (to-package-proxy),
        and it reaches the public registries. Its settings are
        package-proxy/config.yaml, which docker-compose.yml reads too. Off
-       until agentRuntime.enabled. */ -}}
-{{- if .Values.agentRuntime.enabled }}
+       until agent.enabled. */ -}}
+{{- if .Values.agent.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

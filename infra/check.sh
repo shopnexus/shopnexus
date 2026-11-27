@@ -24,8 +24,8 @@ for s in dev prod; do
       -schema-location default \
       -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
 done
-# The agent runtime is off in both stacks so far; validate it on too.
-helm template shopnexus stack -f stack/values-dev.yaml --set secretsDir=tests/secrets --set agentRuntime.enabled=true --namespace shopnexus-dev \
+# The agent is off in prod; validate it on there too.
+helm template shopnexus stack -f stack/values-prod.yaml --set secretsDir=tests/secrets --set agent.enabled=true --namespace shopnexus-prod \
   | kubeconform -strict -ignore-missing-schemas -summary -schema-location default -
 helm unittest stack || fails=$((fails + 1))
 # With source_of_truth config.json a governance section in the file wipes
@@ -40,7 +40,7 @@ eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="stack-prod") |
 eq "$(q "$apps" 'select(.kind=="Application") | (.spec.source.repoURL, .spec.sources[].repoURL)' | grep github.com | sort -u | tr '\n' ' ')" "https://github.com/shopnexus/shopnexus.git " "the umbrella's URL"
 eq "$(q "$apps" 'select(.kind=="Application" and .metadata.name=="root") | .spec.ignoreDifferences[0].jsonPointers[0]')" /spec/source/helm/parameters "root keeps Image Updater's parameters"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[0].commonUpdateSettings.updateStrategy')" digest "dev by digest"
-eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[].alias' | sort | tr '\n' ' ')" "agent agent-runtime console docs server website " "stack-dev images"
+eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .spec.applicationRefs[] | select(.namePattern=="stack-dev") | .images[].alias' | sort | tr '\n' ' ')" "agent console docs server website " "stack-dev images"
 # Prod runs one release of the umbrella (.github/workflows/release.yml):
 # Image Updater leaves it alone, stack-prod runs the tag vX.Y.Z, every prod
 # image is pinned by digest with the commit it was built from (X.Y.Z only
@@ -77,7 +77,7 @@ grep -qF -- '--entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0
 grep -qF -- '--accesslog=true' <<<"$proxy" || { echo "FAIL: behind-proxy edge lacks the access log" >&2; fails=$((fails + 1)); }
 grep -qF -- 'redirections' <<<"$proxy" &&{ echo "FAIL: behind-proxy edge must not redirect" >&2; fails=$((fails + 1)); }
 for e in direct behind-proxy; do eq "$(yq '.image' "cluster/k3d-$e.yaml")" rancher/k3s:v1.37.1-k3s1 "k3s version the edge check assumes"; done
-# An OOM kills one process, not the agent runtime's whole pod.
+# An OOM kills one process, not the agent's whole pod.
 for e in direct behind-proxy; do eq "$(yq '.files[] | select(.description=="kubelet OOM") | .source' "cluster/k3d-$e.yaml" | yq .singleProcessOOMKill)" true "k3d-$e kubelet singleProcessOOMKill"; done
 # The dashboards' IngressRoute reaches Restate and Argo CD in other namespaces.
 for e in "$direct" "$proxy"; do grep -qF -- '--providers.kubernetescrd.allowCrossNamespace=true' <<<"$e" || { echo "FAIL: an edge lacks allowCrossNamespace" >&2; fails=$((fails + 1)); }; done
@@ -96,10 +96,10 @@ done
 eq "$(yq '.x-imgproxy-cache.image' ../docker-compose.yml)" "$(yq '.images.nginx.repository + ":" + .images.nginx.tag' stack/values.yaml)" "compose imgproxy-cache image"
 eq "$(yq '.x-package-proxy.image' ../docker-compose.yml)" "$(yq '.images.packageProxy.repository + ":" + .images.packageProxy.tag' stack/values.yaml)" "compose package-proxy image"
 # objectstore-init-agent-* make the bucket and its expiry the runtime reads
-# from env/agent-runtime.env, as the chart's job does from the file.
+# from env/agent.env, as the chart's job does from the file.
 for s in dev prod; do
-  eq "$(yq ".services.objectstore-init-agent-$s.environment.OBJECT_STORE_BUCKET" ../docker-compose.yml 2>/dev/null)" "$(sed -n 's/^WORKSPACE_BUCKET=//p' stack/env/agent-runtime.env)" "compose $s workspace bucket"
-  eq "$(yq ".services.objectstore-init-agent-$s.environment.OBJECT_STORE_EXPIRE_DAYS" ../docker-compose.yml 2>/dev/null)" "$(sed -n 's/^WORKSPACE_EXPIRE_DAYS=//p' stack/env/agent-runtime.env)" "compose $s workspace expiry"
+  eq "$(yq ".services.objectstore-init-agent-$s.environment.OBJECT_STORE_BUCKET" ../docker-compose.yml 2>/dev/null)" "$(sed -n 's/^WORKSPACE_BUCKET=//p' stack/env/agent.env)" "compose $s workspace bucket"
+  eq "$(yq ".services.objectstore-init-agent-$s.environment.OBJECT_STORE_EXPIRE_DAYS" ../docker-compose.yml 2>/dev/null)" "$(sed -n 's/^WORKSPACE_EXPIRE_DAYS=//p' stack/env/agent.env)" "compose $s workspace expiry"
 done
 for c in ghtk ghn; do
   eq "$(yq ".x-server-env.CARRIER_${c^^}" ../docker-compose.yml)" "$(yq ".server.carriers.$c.mode" stack/values-dev.yaml)" "compose CARRIER_${c^^}"
@@ -109,7 +109,7 @@ done
 # there is written nowhere else.
 # The chart fails its render on a key in both; compose would let its own
 # block win, so this catches it.
-for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env stack/env/agent-runtime.env:x-agent-runtime stack/env/bifrost.env:x-bifrost stack/env/lgtm.env:x-lgtm stack/env/imgproxy.env:x-imgproxy-env; do
+for f in stack/env/server.env:x-server-env stack/env/agent.env:x-agent-env stack/env/bifrost.env:x-bifrost stack/env/lgtm.env:x-lgtm stack/env/imgproxy.env:x-imgproxy-env; do
   for k in $(grep -oE '^[A-Z0-9_]+' "${f%%:*}"); do
     # yq warns about compose's merge anchors on stderr; the keys read are literal.
     for block in $(yq 'keys | .[] | select(test("^'"${f#*:}"'"))' ../docker-compose.yml 2>/dev/null); do

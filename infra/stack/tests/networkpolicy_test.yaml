@@ -3,22 +3,22 @@ templates: [networkpolicy.yaml]
 release: { namespace: shopnexus-prod }
 values: [../values-prod.yaml, values-test.yaml]
 tests:
-  - it: denies ingress by default, opens it to five sources and eight services, and lets Prometheus scrape
+  - it: denies ingress by default, opens it to five sources and seven services, and lets Prometheus scrape
     asserts:
       - hasDocuments:
-          count: 15
+          count: 14
       - equal:
           path: metadata.name
           value: from-monitoring
-        documentIndex: 12
+        documentIndex: 11
       - equal:
           path: metadata.name
           value: to-bifrost
-        documentIndex: 13
+        documentIndex: 12
       - equal:
           path: metadata.name
           value: bifrost-egress
-        documentIndex: 14
+        documentIndex: 13
       - equal:
           path: metadata.name
           value: default-deny-ingress
@@ -53,20 +53,16 @@ tests:
         documentIndex: 7
       - equal:
           path: metadata.name
-          value: to-agent-runtime
+          value: to-package-proxy
         documentIndex: 8
       - equal:
           path: metadata.name
-          value: to-package-proxy
+          value: to-lgtm
         documentIndex: 9
       - equal:
           path: metadata.name
-          value: to-lgtm
-        documentIndex: 10
-      - equal:
-          path: metadata.name
           value: to-imgproxy
-        documentIndex: 11
+        documentIndex: 10
   - it: admits the stack's Restate namespace to rustfs
     documentSelector: { path: metadata.name, value: from-restate }
     asserts:
@@ -76,11 +72,11 @@ tests:
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
   # The server and the agent are left to to-server and to-agent, which open
   # each port to its callers only.
-  - it: leaves the server, the agents, package-proxy, pgweb, imgproxy, lgtm and Bifrost out of from-stack, and the server out of from-traefik
+  - it: leaves the server, the agent, package-proxy, pgweb, imgproxy, lgtm and Bifrost out of from-stack, and the server out of from-traefik
     asserts:
       - equal:
           path: spec.podSelector.matchExpressions[0]
-          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, agent-runtime, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
+          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
         documentSelector: { path: metadata.name, value: from-stack }
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: server }
         documentSelector: { path: metadata.name, value: from-traefik }
@@ -88,7 +84,7 @@ tests:
     documentSelector: { path: metadata.name, value: to-server }
     asserts:
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: server }
-      - lengthEqual: { path: spec.ingress, count: 3 }
+      - lengthEqual: { path: spec.ingress, count: 2 }
       - equal: { path: 'spec.ingress[0].ports', value: [{ protocol: TCP, port: 8080 }] }
       - equal: { path: 'spec.ingress[0].from[1].podSelector.matchLabels["app.kubernetes.io/name"]', value: traefik }
       - equal: { path: 'spec.ingress[1].ports', value: [{ protocol: TCP, port: 9080 }] }
@@ -104,31 +100,19 @@ tests:
           path: spec.ingress
           value: [{ from: [{ podSelector: {} }], ports: [{ protocol: TCP, port: 4318 }] }]
         documentSelector: { path: metadata.name, value: to-lgtm }
-  - it: opens the server's MCP port to the agent only
-    documentSelector: { path: metadata.name, value: to-server }
-    asserts:
-      - equal: { path: 'spec.ingress[2].ports', value: [{ protocol: TCP, port: 9090 }] }
-      - equal:
-          path: spec.ingress[2].from
-          value: [{ podSelector: { matchLabels: { app.kubernetes.io/name: agent } } }]
-  - it: opens the agent's port to the server only
-    documentSelector: { path: metadata.name, value: to-agent }
-    asserts:
-      - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: agent }
-      - equal:
-          path: spec.ingress
-          value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: server } } }], ports: [{ protocol: TCP, port: 3000 }] }]
   # The runtime's sandboxes have no network; the runtime forwards their
   # package downloads, so package-proxy sees the runtime's pod.
-  - it: opens the agent runtime to the server only, and package-proxy to the runtime only
+  - it: opens the agent to the server only, and package-proxy to the agent only
     asserts:
+      - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: agent }
+        documentSelector: { path: metadata.name, value: to-agent }
       - equal:
           path: spec.ingress
           value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: server } } }], ports: [{ protocol: TCP, port: 8080 }] }]
-        documentSelector: { path: metadata.name, value: to-agent-runtime }
+        documentSelector: { path: metadata.name, value: to-agent }
       - equal:
           path: spec.ingress
-          value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: agent-runtime } } }], ports: [{ protocol: TCP, port: 8080 }] }]
+          value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: agent } } }], ports: [{ protocol: TCP, port: 8080 }] }]
         documentSelector: { path: metadata.name, value: to-package-proxy }
   - it: admits pods of this namespace only
     documentSelector: { path: metadata.name, value: from-stack }
@@ -165,9 +149,9 @@ tests:
           path: spec.ingress
           value: [{ from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: imgproxy-cache } } }], ports: [{ protocol: TCP, port: 8080 }] }]
         documentSelector: { path: metadata.name, value: to-imgproxy }
-  # Bifrost takes calls from the server and the agents and scrapes from
+  # Bifrost takes calls from the server and the agent and scrapes from
   # Prometheus, on 8080 only.
-  - it: opens Bifrost to the server, the agents and Prometheus
+  - it: opens Bifrost to the server, the agent and Prometheus
     documentSelector: { path: metadata.name, value: to-bifrost }
     asserts:
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: bifrost }
@@ -175,9 +159,8 @@ tests:
       - equal: { path: 'spec.ingress[0].ports', value: [{ protocol: TCP, port: 8080 }] }
       - equal: { path: 'spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/name"]', value: server }
       - equal: { path: 'spec.ingress[0].from[1].podSelector.matchLabels["app.kubernetes.io/name"]', value: agent }
-      - equal: { path: 'spec.ingress[0].from[2].podSelector.matchLabels["app.kubernetes.io/name"]', value: agent-runtime }
-      - equal: { path: 'spec.ingress[0].from[3].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]', value: monitoring }
-      - equal: { path: 'spec.ingress[0].from[3].podSelector.matchLabels["app.kubernetes.io/name"]', value: prometheus }
+      - equal: { path: 'spec.ingress[0].from[2].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]', value: monitoring }
+      - equal: { path: 'spec.ingress[0].from[2].podSelector.matchLabels["app.kubernetes.io/name"]', value: prometheus }
   # Egress: DNS, Postgres, the upstream's port from env/bifrost.env, and 443
   # off the private ranges for openrouter.ai and getbifrost.ai.
   - it: lets Bifrost reach DNS, Postgres, the upstream and public HTTPS only

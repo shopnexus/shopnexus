@@ -77,12 +77,12 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-runtime-secrets", "agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "private.pem",
 		"BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY",
-		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_RUNTIME_KEY", "AGENT_WORKSPACES_ACCESS_KEY"} {
+		"AGENT_KEY", "AGENT_WORKSPACES_ACCESS_KEY"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
 		}
@@ -96,14 +96,15 @@ func TestSealKeepsItsKeys(t *testing.T) {
 }
 
 // An older dev.env has RustFS's root key in OBJECT_STORE_ACCESS_KEY: rustfs
-// keeps it, and the server and Restate get keys of their own.
+// keeps it, and the server and Restate get keys of their own. Its
+// AGENT_RUNTIME_KEY becomes AGENT_KEY.
 func TestSealMovesAnOlderRootKey(t *testing.T) {
 	o, dir := setup(t)
 	f, err := os.OpenFile(filepath.Join(dir, "dev.env"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.WriteString("OBJECT_STORE_ACCESS_KEY=oldroot\nOBJECT_STORE_SECRET_KEY=oldrootsecret\n"); err != nil {
+	if _, err := f.WriteString("OBJECT_STORE_ACCESS_KEY=oldroot\nOBJECT_STORE_SECRET_KEY=oldrootsecret\nAGENT_RUNTIME_KEY=oldagentkey\n"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {
@@ -133,11 +134,11 @@ func TestSealMovesAnOlderRootKey(t *testing.T) {
 	if data["rustfs-secrets"]["SNAPSHOTS_ACCESS_KEY"] != data["restate-secrets"]["AWS_ACCESS_KEY_ID"] {
 		t.Error("the snapshot jobs and Restate have different keys")
 	}
-	if k := data["agent-runtime-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]; k == "" || k != data["rustfs-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"] {
-		t.Error("the workspaces job and the agent runtime have different keys")
+	if k := data["agent-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]; k == "" || k != data["rustfs-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"] {
+		t.Error("the workspaces job and the agent have different keys")
 	}
-	if k := data["agent-runtime-secrets"]["AGENT_RUNTIME_KEY"]; k == "" || k != data["server-secrets"]["AGENT_RUNTIME_KEY"] {
-		t.Error("the server and the agent runtime have different keys")
+	if k := data["agent-secrets"]["AGENT_KEY"]; k != b64("oldagentkey") || k != data["server-secrets"]["AGENT_KEY"] {
+		t.Error("the server and the agent do not share the older AGENT_RUNTIME_KEY")
 	}
 }
 

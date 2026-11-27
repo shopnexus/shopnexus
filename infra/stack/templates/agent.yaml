@@ -1,19 +1,36 @@
-{{- /* The console agent (repo shopnexus/agent), a runtime with no state of
-       its own. The server calls it at agent:3000 and it calls the server's
-       MCP at server-mcp:9090; the NetworkPolicies server-to-agent and
-       agent-to-server-mcp allow only those two paths, and it has no
-       Ingress. */ -}}
+{{- /* The agent runtime (repo shopnexus/agent, image
+       ghcr.io/shopnexus/agent): the server calls POST /v1/turns at
+       agent:8080, and each turn runs
+       in a bubblewrap sandbox inside the pod. It reaches Bifrost, RustFS
+       (bucket agent-workspaces) and package-proxy; the sandbox reaches only
+       what the runtime forwards, and the shopnexus CLI's calls to the
+       server's API with the turn's token. Its settings are env/agent.env,
+       which docker-compose.yml reads too; the server's and RustFS's
+       addresses and the keys differ from compose and are set here. A key in both fails the render.
+
+       bubblewrap needs what a pod doesn't get by default: the seccomp
+       profile seccomp/agent.json (the runtime default plus the
+       namespace calls), which the DaemonSet seccomp-profiles puts on every
+       node, and an unmasked /proc, which Kubernetes allows only in a pod
+       with its own user namespace (hostUsers: false). Off until
+       agent.enabled. */ -}}
 {{- define "sn.agentEnv" -}}
-{{- /* env/agent.env, then the settings that differ from compose. */}}
-{{- range $k, $v := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
+{{- $shared := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
+{{- $stack := dict "S3_ENDPOINT" "rustfs:9000" "SERVER_URL" "http://server-api:8080" }}
+{{- range $k, $_ := $stack }}
+{{- if hasKey $shared $k }}{{ fail (printf "%s is in env/agent.env and in agent.yaml" $k) }}{{ end }}
+{{- end }}
+{{- range $k, $v := merge $stack $shared }}
 - { name: {{ $k }}, value: {{ $v | quote }} }
 {{- end }}
-- name: AGENT_SERVICE_TOKEN
-  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_SERVICE_TOKEN } }
-- name: AGENT_MCP_TOKEN
-  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_MCP_TOKEN } }
-- { name: MCP_SERVER_URL, value: http://server-mcp:9090/mcp }
+- name: AGENT_KEY
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_KEY } }
+- name: S3_ACCESS_KEY
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_WORKSPACES_ACCESS_KEY } }
+- name: S3_SECRET_KEY
+  valueFrom: { secretKeyRef: { name: agent-secrets, key: AGENT_WORKSPACES_SECRET_KEY } }
 {{- end }}
+{{- if .Values.agent.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +38,10 @@ metadata:
   labels: {{- include "sn.labels" . | nindent 4 }}
   annotations: {{- include "sn.wave" "2" | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicas.agent }}
+  # One pod: a conversation's lock is in the process, so two pods, even
+  # during a rollout, could run two turns of one conversation at once.
+  replicas: 1
+  strategy: { type: Recreate }
   selector:
     matchLabels: { app.kubernetes.io/name: agent }
   template:
@@ -29,30 +49,54 @@ spec:
       labels: {{- include "sn.podLabels" (dict "root" . "name" "agent") | nindent 8 }}
       annotations:
         checksum/secrets: {{ include "sn.secretsSum" . }}
+        checksum/seccomp: {{ .Files.Get "seccomp/agent.json" | sha256sum | trunc 16 }}
     spec:
       affinity:
         {{- include "sn.preferRole" "app" | nindent 8 }}
+      hostUsers: false
+      # A turn may run TURN_MAX_DEADLINE; a stop waits this long for the
+      # running ones, then their sandboxes die and their workspaces stay as
+      # last saved.
+      terminationGracePeriodSeconds: 300
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: Localhost
+          localhostProfile: {{ .Release.Namespace }}/agent.json
       containers:
         - name: agent
           image: {{ include "sn.image" .Values.images.agent }}
           env: {{- include "sn.agentEnv" . | nindent 12 }}
           ports:
-            - { name: http, containerPort: 3000 }
+            - { name: http, containerPort: 8080 }
+          securityContext:
+            procMount: Unmasked
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
           readinessProbe:
             httpGet: { path: /healthz, port: http }
-            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 10
             periodSeconds: 20
+          volumeMounts:
+            - { name: workspaces, mountPath: /var/lib/agent/workspaces }
+            - { name: tmp, mountPath: /tmp }
           resources:
-            requests: { cpu: 100m, memory: {{ required "agent.memoryRequest is required" .Values.agent.memoryRequest }} }
+            requests: { cpu: 250m, memory: {{ required "agent.memoryRequest is required" .Values.agent.memoryRequest }} }
             limits: { memory: {{ required "agent.memoryLimit is required" .Values.agent.memoryLimit }} }
+      volumes:
+        # Workspaces in use; RustFS holds them between turns, so a new pod
+        # starts empty and downloads what it needs.
+        - name: workspaces
+          emptyDir: { sizeLimit: {{ .Values.agent.cacheSize }} }
+        - name: tmp
+          emptyDir: { sizeLimit: 1Gi }
 ---
 apiVersion: v1
 kind: Service
@@ -62,4 +106,56 @@ metadata:
 spec:
   selector: { app.kubernetes.io/name: agent }
   ports:
-    - { name: http, port: 3000, targetPort: http }
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seccomp-profiles
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+data:
+  agent.json: {{ .Files.Get "seccomp/agent.json" | quote }}
+---
+# Writes the stack's seccomp profiles to every node, under
+# /var/lib/kubelet/seccomp/<namespace>/, where a pod's Localhost profile
+# names them. Wave 1, before the runtime needs it.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: seccomp-profiles
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "1" | nindent 4 }}
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: seccomp-profiles }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "seccomp-profiles") | nindent 8 }}
+      annotations:
+        checksum/seccomp: {{ .Files.Get "seccomp/agent.json" | sha256sum | trunc 16 }}
+    spec:
+      containers:
+        - name: install
+          image: {{ include "sn.image" .Values.images.nginx }}
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /host/{{ .Release.Namespace }}
+              cp /profiles/agent.json /host/{{ .Release.Namespace }}/agent.json.tmp
+              mv /host/{{ .Release.Namespace }}/agent.json.tmp /host/{{ .Release.Namespace }}/agent.json
+              exec sleep 2147483647
+          securityContext: { runAsUser: 0 }
+          volumeMounts:
+            - { name: profiles, mountPath: /profiles, readOnly: true }
+            - { name: host, mountPath: /host }
+          resources:
+            requests: { cpu: 1m, memory: 8Mi }
+            limits: { memory: 32Mi }
+      volumes:
+        - name: profiles
+          configMap: { name: seccomp-profiles }
+        - name: host
+          hostPath: { path: /var/lib/kubelet/seccomp, type: DirectoryOrCreate }
+{{- end }}

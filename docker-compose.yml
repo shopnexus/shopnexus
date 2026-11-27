@@ -24,15 +24,13 @@
 #   s3         http://s3.shopnexus.localhost:56481        http://s3.shopnexus.localhost:56480
 #   bifrost    (no host: only the server and the agent call it)
 #
-# The console agent (agent-dev, agent-prod) has no host or port: only the
-# server calls it, and it calls the server's MCP port 9090.
-#
-# The agent runtime (agent-runtime-dev, agent-runtime-prod; submodule agent)
-# has no host or port either. It runs each turn's bash in a bubblewrap
+# The agent (agent-dev, agent-prod; submodule agent) has no host or port:
+# only the server calls it, and its shopnexus CLI calls the server's API
+# with each turn's token. It runs each turn's bash in a bubblewrap
 # sandbox, keeps each conversation's workspace in the stack's RustFS
 # (bucket agent-workspaces, made by objectstore-init-agent-*), and installs
 # the sandbox's npm, PyPI and Go packages through package-proxy-*. Its
-# shared settings are infra/stack/env/agent-runtime.env and
+# shared settings are infra/stack/env/agent.env and
 # infra/stack/package-proxy/config.yaml, which the chart reads too.
 #
 # The website's photos are at <website>/_img/, as in the cluster: Caddy
@@ -46,7 +44,7 @@
 # console's sign-in names the member.
 #
 # dev mounts the source into its containers and reloads on save (air for
-# the server, the dev servers for the web apps, node --watch for the agent).
+# the server, the dev servers for the web apps).
 # After a lock file changes, restart the service to install the packages.
 #
 # test runs the server's Go tests against Postgres, Restate and RustFS on
@@ -55,7 +53,7 @@
 # The tests container shares Restate's network namespace, so Restate reaches
 # the endpoints the tests serve on 127.0.0.1.
 #
-# Every model call of the server and the console agent goes to the stack's
+# Every model call of the server and the agent goes to the stack's
 # Bifrost, as in the cluster: the same config (infra/stack/bifrost/) and
 # settings (infra/stack/env/bifrost.env). It reads the upstream keys,
 # LLM_UPSTREAM_API_KEY and OPENROUTER_API_KEY, from
@@ -88,9 +86,6 @@ x-health: &health
 x-health-bun: &health-bun
   <<: *health
   test: ["CMD", "bun", "-e", "await fetch('http://127.0.0.1:' + (process.env.HEALTH_PORT ?? 4321))"]
-x-health-agent: &health-agent
-  <<: *health
-  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => r.ok || process.exit(1), () => process.exit(1))"]
 x-health-server: &health-server
   <<: *health
   test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
@@ -269,6 +264,9 @@ x-server-env: &server-env
   # The server's RustFS user, which objectstore-init makes with the root keys.
   OBJECT_STORE_ACCESS_KEY: shopnexus-server
   OBJECT_STORE_SECRET_KEY: shopnexus-server-secret
+  # The key the server calls the agent with; the agent's env has it too.
+  # It wins over the .env's, which envgen fills with one of its own.
+  AGENT_KEY: &agent-key local-agent-key-0123456789abcdefghij
   # Both kinds of vector on, as the cluster's server.embed turns them on:
   # text through Bifrost, photos through module ai's SigLIP 2. The other AI
   # settings are in server.env and the admin password in the keys volume's .env.
@@ -309,7 +307,7 @@ x-server-env-dev: &server-env-dev
   OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
-  AGENT_BASE_URL: http://agent-dev:3000
+  AGENT_URL: http://agent-dev:8080
 
 x-server-env-prod: &server-env-prod
   <<: *server-env
@@ -324,51 +322,39 @@ x-server-env-prod: &server-env-prod
   OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
-  AGENT_BASE_URL: http://agent-prod:3000
+  AGENT_URL: http://agent-prod:8080
 
-# The console agent (submodule agent-legacy): a runtime with no state of its own.
-# The server keeps the runs and sends each its gateway key; the agent takes
-# AGENT_SERVICE_TOKEN and AGENT_MCP_TOKEN from the keys volume's .env.
-x-agent-image: &agent-image
+# The agent: one turn per POST /v1/turns. bwrap needs user namespaces and
+# a fresh /proc, so the container gets the seccomp profile that allows them
+# and an unmasked /proc, as the chart's pod does. A stopping agent lets its
+# turns finish.
+x-agent: &agent
   image: shopnexus-agent:local
-  build: ./agent-legacy
-  # The settings every stack shares with the cluster's chart.
-  env_file: [./infra/stack/env/agent.env]
-
-x-agent-env-dev: &agent-env-dev
-  MCP_SERVER_URL: http://server-dev:9090/mcp
-
-x-agent-env-prod: &agent-env-prod
-  MCP_SERVER_URL: http://server-prod:9090/mcp
-
-# The agent runtime: one turn per POST /v1/turns. bwrap needs user
-# namespaces and a fresh /proc, so the container gets the seccomp profile
-# that allows them and an unmasked /proc, as the chart's pod does. A
-# stopping runtime lets its turns finish.
-x-agent-runtime: &agent-runtime
-  image: shopnexus-agent-runtime:local
   build: ./agent
-  env_file: [./infra/stack/env/agent-runtime.env]
+  env_file: [./infra/stack/env/agent.env]
   security_opt:
-    - seccomp=./infra/stack/seccomp/agent-runtime.json
+    - seccomp=./infra/stack/seccomp/agent.json
     - systempaths=unconfined
   stop_grace_period: 5m
   healthcheck: *health-server
   restart: unless-stopped
 
-# Its RustFS user, which objectstore-init-agent-* makes with the root keys,
-# and the key the server calls it with.
-x-agent-runtime-env-dev: &agent-runtime-env-dev
+# The server's API its CLI calls, its RustFS user, which
+# objectstore-init-agent-* makes with the root keys, and the key the server
+# calls it with (x-server-env's AGENT_KEY).
+x-agent-env-dev: &agent-env-dev
+  SERVER_URL: http://server-dev:8080
   S3_ENDPOINT: rustfs-dev:9000
   S3_ACCESS_KEY: agent-workspaces
   S3_SECRET_KEY: agent-workspaces-secret
-  AGENT_KEY: agent-runtime-key
+  AGENT_KEY: *agent-key
 
-x-agent-runtime-env-prod: &agent-runtime-env-prod
+x-agent-env-prod: &agent-env-prod
+  SERVER_URL: http://server-prod:8080
   S3_ENDPOINT: rustfs-prod:9000
   S3_ACCESS_KEY: agent-workspaces
   S3_SECRET_KEY: agent-workspaces-secret
-  AGENT_KEY: agent-runtime-key
+  AGENT_KEY: *agent-key
 
 # The sandbox's npm, PyPI and Go registry (git-pkgs/proxy), with the
 # chart's config. Inside a stack it answers by that name, as its Service
@@ -386,12 +372,6 @@ x-create-db: &create-db
   image: paradedb/paradedb:0.26.4-pg18
   entrypoint: ["sh", "-ec"]
   restart: "no"
-
-# Exports the two tokens from the keys volume, then starts the agent; a
-# .env without them stops the start.
-x-agent-run: &agent-run
-  entrypoint: ["sh", "-ec", "tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env); export $$tokens; exec node dist/main.js"]
-  restart: unless-stopped
 
 # A web app's dev server on its mounted source. It installs the packages
 # when bun.lock changed since the last install.
@@ -590,38 +570,8 @@ services:
       bifrost-keys-dev: { condition: service_completed_successfully }
       bifrost-db-dev: { condition: service_completed_successfully }
 
-  # The agent's source under node --watch and ts-node. Root reads the keys
-  # volume's .env (mode 600).
-  agent-dev:
-    <<: *dev
-    image: node:24.21.0-trixie-slim
-    working_dir: /app
-    env_file: [./infra/stack/env/agent.env]
-    environment:
-      <<: *agent-env-dev
-      TS_NODE_TRANSPILE_ONLY: "true"
-    entrypoint:
-      - sh
-      - -ec
-      - |
-        if ! cmp -s package-lock.json node_modules/.package-lock.copy; then
-          npm ci --no-audit --no-fund
-          cp package-lock.json node_modules/.package-lock.copy
-        fi
-        tokens=$$(grep -E '^AGENT_(SERVICE|MCP)_TOKEN=' /keys/.env)
-        export $$tokens
-        exec node --watch -r ts-node/register src/main.ts
-    volumes:
-      - ./agent-legacy:/app
-      - agent-node-modules-dev:/app/node_modules
-      - keys-dev:/keys:ro
-    depends_on:
-      bifrost-dev: { condition: service_healthy }
-    healthcheck: *health-agent
-    restart: unless-stopped
-
   # The agent runtime's bucket, its user and the rule that removes a
-  # workspace 7 days after its last turn (WORKSPACE_* in agent-runtime.env).
+  # workspace 7 days after its last turn (WORKSPACE_* in agent.env).
   objectstore-init-agent-dev:
     <<: [*dev, *server-image]
     entrypoint: ["/objectstore-init"]
@@ -644,9 +594,9 @@ services:
     networks: { dev: { aliases: [package-proxy] } }
     volumes: [package-proxy-dev:/data]
 
-  agent-runtime-dev:
-    <<: [*dev, *agent-runtime]
-    environment: *agent-runtime-env-dev
+  agent-dev:
+    <<: [*dev, *agent]
+    environment: *agent-env-dev
     volumes: [agent-workspaces-dev:/var/lib/agent/workspaces]
     depends_on:
       objectstore-init-agent-dev: { condition: service_completed_successfully }
@@ -806,18 +756,8 @@ services:
       bifrost-keys-prod: { condition: service_completed_successfully }
       bifrost-db-prod: { condition: service_completed_successfully }
 
-  # The keys service's user, which owns the .env (mode 600).
-  agent-prod:
-    <<: [*prod, *agent-image, *agent-run]
-    user: "65532:65532"
-    environment: *agent-env-prod
-    volumes: [keys-prod:/keys:ro]
-    depends_on:
-      bifrost-prod: { condition: service_healthy }
-    healthcheck: *health-agent
-
   # The agent runtime's bucket, its user and the rule that removes a
-  # workspace 7 days after its last turn (WORKSPACE_* in agent-runtime.env).
+  # workspace 7 days after its last turn (WORKSPACE_* in agent.env).
   objectstore-init-agent-prod:
     <<: [*prod, *server-image]
     entrypoint: ["/objectstore-init"]
@@ -840,9 +780,9 @@ services:
     networks: { prod: { aliases: [package-proxy] } }
     volumes: [package-proxy-prod:/data]
 
-  agent-runtime-prod:
-    <<: [*prod, *agent-runtime]
-    environment: *agent-runtime-env-prod
+  agent-prod:
+    <<: [*prod, *agent]
+    environment: *agent-env-prod
     volumes: [agent-workspaces-prod:/var/lib/agent/workspaces]
     depends_on:
       objectstore-init-agent-prod: { condition: service_completed_successfully }
@@ -1082,7 +1022,6 @@ volumes:
   website-node-modules-dev:
   website-astro-dev:
   console-node-modules-dev:
-  agent-node-modules-dev:
   agent-workspaces-dev:
   package-proxy-dev:
   lgtm-dev:

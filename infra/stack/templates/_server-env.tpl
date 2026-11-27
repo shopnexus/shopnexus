@@ -52,8 +52,9 @@ WEBSITE_ORIGINS: {{ printf "%s%s" (join "," $web) (ternary "" ",http://localhost
 OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
-{{- /* The console agent, in-cluster only; its two tokens are in server-secrets. */}}
-AGENT_BASE_URL: http://agent:3000
+{{- /* The agent runtime, in-cluster only; AGENT_KEY is in server-secrets.
+       With agent.enabled off the server answers a question with 503. */}}
+AGENT_URL: http://agent:8080
 {{- /* Each carrier's switch. A carrier live takes its URL from the values
        and its partner token and webhook secret from server-secrets; fake
        and off leave all its settings empty. */}}

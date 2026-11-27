@@ -94,10 +94,9 @@ tests:
       - exists: { path: data.CHOTOT_GATEWAY_URL }
       - exists: { path: data.CHOTOT_CDN_URL }
       - exists: { path: data.TRUST_CALL_TIMEOUT }
-      - exists: { path: data.AGENT_BASE_URL }
+      - exists: { path: data.AGENT_URL }
       - exists: { path: data.GATEWAY_URL }
       - exists: { path: data.GATEWAY_ADMIN_USERNAME }
-      - exists: { path: data.AGENT_MCP_ADDR }
       - exists: { path: data.CARRIER_GHTK }
       - exists: { path: data.TRUST_SCAM_CHECKS }
       - exists: { path: data.CARRIER_GHN }
@@ -123,7 +122,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 81c4d5d647aba3e0
+          value: b1fb7db3aabbac8c
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -131,7 +130,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 81c4d5d647aba3e0
+          value: b1fb7db3aabbac8c
   # The reconciler calls Bifrost's admin API with the password Bifrost
   # itself reads.
   - it: reaches Bifrost's admin API with its admin password

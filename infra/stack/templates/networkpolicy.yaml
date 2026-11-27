@@ -13,9 +13,9 @@ spec:
   policyTypes: [Ingress]
 ---
 # Pods of this stack reach each other: server to postgres and rustfs, the
-# jobs, postgres replication, imgproxy to rustfs. The server and the agents
-# take only the ports to-server, to-agent and to-agent-runtime open,
-# package-proxy only the agent runtime, imgproxy only its cache
+# jobs, postgres replication, imgproxy to rustfs. The server and the agent
+# take only the ports to-server and to-agent open,
+# package-proxy only the agent, imgproxy only its cache
 # and lgtm only OTLP. pgweb and Grafana trust the console's gate, so only
 # Traefik reaches them. Bifrost takes only to-bifrost's callers.
 apiVersion: networking.k8s.io/v1
@@ -26,7 +26,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, agent-runtime, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
   ingress:
     - from:
         - podSelector: {}
@@ -74,9 +74,9 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
 ---
-# The server's three ports: the API (8080) from the stack and Traefik, the
-# Restate endpoint (9080) from the stack and its Restate, and the MCP server
-# (9090, AGENT_MCP_ADDR) from the agent only.
+# The server's two ports: the API (8080) from the stack and Traefik, the
+# agent's calls with a turn token included, and the Restate endpoint (9080)
+# from the stack and its Restate.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -100,11 +100,6 @@ spec:
             matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
       ports:
         - { protocol: TCP, port: 9080 }
-    - from:
-        - podSelector:
-            matchLabels: { app.kubernetes.io/name: agent }
-      ports:
-        - { protocol: TCP, port: 9090 }
 ---
 # server-ai's Restate endpoint (9080) from the stack and its Restate; it
 # serves no API beyond its probes.
@@ -124,7 +119,7 @@ spec:
       ports:
         - { protocol: TCP, port: 9080 }
 ---
-# The agent takes requests from the server only.
+# The agent takes turns from the server only.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -138,25 +133,9 @@ spec:
         - podSelector:
             matchLabels: { app.kubernetes.io/name: server }
       ports:
-        - { protocol: TCP, port: 3000 }
----
-# The agent runtime takes turns from the server only.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: to-agent-runtime
-  labels: {{- include "sn.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels: { app.kubernetes.io/name: agent-runtime }
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: { app.kubernetes.io/name: server }
-      ports:
         - { protocol: TCP, port: 8080 }
 ---
-# package-proxy serves the agent runtime's sandboxes only.
+# package-proxy serves the agent's sandboxes only.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -168,7 +147,7 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels: { app.kubernetes.io/name: agent-runtime }
+            matchLabels: { app.kubernetes.io/name: agent }
       ports:
         - { protocol: TCP, port: 8080 }
 ---
@@ -224,7 +203,7 @@ spec:
             matchLabels: { app.kubernetes.io/name: prometheus }
       ports: [{ port: 9187 }]
 ---
-# Bifrost (8080) from the server, the agents and the cluster's Prometheus
+# Bifrost (8080) from the server, the agent and the cluster's Prometheus
 # (/metrics); Traefik reaches it for its dashboard (from-traefik).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -240,8 +219,6 @@ spec:
             matchLabels: { app.kubernetes.io/name: server }
         - podSelector:
             matchLabels: { app.kubernetes.io/name: agent }
-        - podSelector:
-            matchLabels: { app.kubernetes.io/name: agent-runtime }
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
           podSelector:

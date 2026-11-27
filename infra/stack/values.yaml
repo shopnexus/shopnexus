@@ -13,7 +13,6 @@ images:
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
   console: { repository: ghcr.io/shopnexus/clients/console, tag: main }
   agent: { repository: ghcr.io/shopnexus/agent, tag: main }
-  agentRuntime: { repository: ghcr.io/shopnexus/agent-runtime, tag: main }
   packageProxy: { repository: ghcr.io/git-pkgs/proxy, tag: v0.11.0 }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
@@ -33,7 +32,6 @@ replicas:
   website: 1
   docs: 1
   console: 1
-  agent: 1
 
 postgres:
   instances: 1
@@ -72,19 +70,13 @@ lgtm:
   # grafana-secrets (secrets/<stack>/grafana-secrets.yaml, sealed by hand).
   telegram: false
 
-# The console agent (repo shopnexus/agent): no Ingress, only the server
-# reaches it, and it reaches only the server's MCP port. Its settings are in
-# env/agent.env, which docker-compose.yml reads too.
-agent:
-  memoryRequest: 256Mi
-  memoryLimit: 512Mi
-
-# The agent runtime (repo shopnexus/agent, templates/agent-runtime.yaml) and
-# its package-proxy. Off until the stack's secrets hold its keys (go -C infra
-# run ./cmd/seal <stack>) and the cluster runs its sandbox: a pod with
-# hostUsers: false, an unmasked /proc and the seccomp profile.
+# The agent runtime (repo shopnexus/agent, templates/agent.yaml) and its
+# package-proxy. No Ingress: only the server reaches it. Off until the
+# stack's secrets hold its keys (go -C infra run ./cmd/seal <stack>) and the
+# cluster runs its sandbox: a pod with hostUsers: false, an unmasked /proc
+# and the seccomp profile.
 # memoryLimit covers the runtime and every sandbox of its MAX_TURNS turns.
-agentRuntime:
+agent:
   enabled: false
   memoryRequest: 512Mi
   memoryLimit: 6Gi
