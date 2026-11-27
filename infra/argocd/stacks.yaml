@@ -20,7 +20,7 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
-    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
+    retry: { limit: -1, refresh: true, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -46,7 +46,7 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
-    retry: { limit: -1, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
+    retry: { limit: -1, refresh: true, backoff: { duration: 30s, factor: 2, maxDuration: 5m } }
 ---
 # dev follows :main by digest. Prod runs what a release of the umbrella
 # names (.github/workflows/release.yml), so Image Updater leaves it alone.

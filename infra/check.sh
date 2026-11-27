@@ -56,10 +56,12 @@ done
 eq "$(yq '.images | keys | .[]' stack/values-prod.yaml | sort | tr '\n' ' ')" "agent console docs server website " "values-prod names the five images"
 # First sync of an empty cluster: the ImageUpdater CRD arrives with a child
 # Application, every Application retries, and Argo CD judges Application health
-# so root's waves wait for the platform.
+# so root's waves wait for the platform. A retry takes the newest commit: one
+# pinned to the commit that failed would retry it forever, and no fix pushed
+# after it would land.
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-options"]')" SkipDryRunOnMissingResource=true "ImageUpdater survives the dry-run"
 eq "$(q "$apps" 'select(.kind=="ImageUpdater") | .metadata.annotations["argocd.argoproj.io/sync-wave"]')" 1 "ImageUpdater waits for the platform only"
-eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1) | .metadata.name' | sort | tr '\n' ' ')" "blackbox-exporter cnpg image-updater prometheus restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries"
+eq "$(q "$apps" 'select(.kind=="Application" and .spec.syncPolicy.retry.limit == -1 and .spec.syncPolicy.retry.refresh == true) | .metadata.name' | sort | tr '\n' ' ')" "blackbox-exporter cnpg image-updater prometheus restate-operator root sealed-secrets stack-dev stack-prod " "every Application retries on the newest commit"
 ok $(grep -q 'obj.status.health' <<<"$(yq '.spec.valuesContent' cluster/argocd.yaml | yq '.configs.cm["resource.customizations.health.argoproj.io_Application"]')"; echo $?) "Argo CD judges Application health"
 
 # ── edge ──
