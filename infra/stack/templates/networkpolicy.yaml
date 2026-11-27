@@ -13,8 +13,9 @@ spec:
   policyTypes: [Ingress]
 ---
 # Pods of this stack reach each other: server to postgres and rustfs, the
-# jobs, postgres replication, imgproxy to rustfs. The server and the agent
-# take only the ports to-server and to-agent open, imgproxy only its cache
+# jobs, postgres replication, imgproxy to rustfs. The server and the agents
+# take only the ports to-server, to-agent and to-agent-runtime open,
+# package-proxy only the agent runtime, imgproxy only its cache
 # and lgtm only OTLP. pgweb and Grafana trust the console's gate, so only
 # Traefik reaches them. Bifrost takes only to-bifrost's callers.
 apiVersion: networking.k8s.io/v1
@@ -25,7 +26,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, pgweb, imgproxy, lgtm, bifrost] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, agent-runtime, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
   ingress:
     - from:
         - podSelector: {}
@@ -139,6 +140,38 @@ spec:
       ports:
         - { protocol: TCP, port: 3000 }
 ---
+# The agent runtime takes turns from the server only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-agent-runtime
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: agent-runtime }
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: server }
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+# package-proxy serves the agent runtime's sandboxes only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-package-proxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: package-proxy }
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: agent-runtime }
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
 # Grafana (3000) signs in whoever X-Console-Email names, so only Traefik
 # reaches it (from-traefik). The stack sends telemetry to OTLP (4318).
 apiVersion: networking.k8s.io/v1
@@ -191,7 +224,7 @@ spec:
             matchLabels: { app.kubernetes.io/name: prometheus }
       ports: [{ port: 9187 }]
 ---
-# Bifrost (8080) from the server, the agent and the cluster's Prometheus
+# Bifrost (8080) from the server, the agents and the cluster's Prometheus
 # (/metrics); Traefik reaches it for its dashboard (from-traefik).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -207,6 +240,8 @@ spec:
             matchLabels: { app.kubernetes.io/name: server }
         - podSelector:
             matchLabels: { app.kubernetes.io/name: agent }
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: agent-runtime }
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
           podSelector:

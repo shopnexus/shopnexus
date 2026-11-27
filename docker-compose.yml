@@ -27,6 +27,14 @@
 # The console agent (agent-dev, agent-prod) has no host or port: only the
 # server calls it, and it calls the server's MCP port 9090.
 #
+# The agent runtime (agent-runtime-dev, agent-runtime-prod; submodule agent)
+# has no host or port either. It runs each turn's bash in a bubblewrap
+# sandbox, keeps each conversation's workspace in the stack's RustFS
+# (bucket agent-workspaces, made by objectstore-init-agent-*), and installs
+# the sandbox's npm, PyPI and Go packages through package-proxy-*. Its
+# shared settings are infra/stack/env/agent-runtime.env and
+# infra/stack/package-proxy/config.yaml, which the chart reads too.
+#
 # The website's photos are at <website>/_img/, as in the cluster: Caddy
 # sends that path to imgproxy-cache-* (nginx), which keeps each answer of
 # imgproxy-*, which resizes from the stack's RustFS. Their shared settings
@@ -65,7 +73,8 @@
 # the stack's data and keys.
 #
 # Image versions of Postgres, Restate, RustFS, Bifrost, imgproxy and its
-# nginx follow infra/stack/values.yaml; infra/check.sh fails when they differ.
+# nginx, and package-proxy follow infra/stack/values.yaml; infra/check.sh
+# fails when they differ.
 name: shopnexus
 
 # ── building blocks ──
@@ -317,12 +326,12 @@ x-server-env-prod: &server-env-prod
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
   AGENT_BASE_URL: http://agent-prod:3000
 
-# The console agent (submodule agent): a runtime with no state of its own.
+# The console agent (submodule agent-legacy): a runtime with no state of its own.
 # The server keeps the runs and sends each its gateway key; the agent takes
 # AGENT_SERVICE_TOKEN and AGENT_MCP_TOKEN from the keys volume's .env.
 x-agent-image: &agent-image
   image: shopnexus-agent:local
-  build: ./agent
+  build: ./agent-legacy
   # The settings every stack shares with the cluster's chart.
   env_file: [./infra/stack/env/agent.env]
 
@@ -331,6 +340,46 @@ x-agent-env-dev: &agent-env-dev
 
 x-agent-env-prod: &agent-env-prod
   MCP_SERVER_URL: http://server-prod:9090/mcp
+
+# The agent runtime: one turn per POST /v1/turns. bwrap needs user
+# namespaces and a fresh /proc, so the container gets the seccomp profile
+# that allows them and an unmasked /proc, as the chart's pod does. A
+# stopping runtime lets its turns finish.
+x-agent-runtime: &agent-runtime
+  image: shopnexus-agent-runtime:local
+  build: ./agent
+  env_file: [./infra/stack/env/agent-runtime.env]
+  security_opt:
+    - seccomp=./infra/stack/seccomp/agent-runtime.json
+    - systempaths=unconfined
+  stop_grace_period: 5m
+  healthcheck: *health-server
+  restart: unless-stopped
+
+# Its RustFS user, which objectstore-init-agent-* makes with the root keys,
+# and the key the server calls it with.
+x-agent-runtime-env-dev: &agent-runtime-env-dev
+  S3_ENDPOINT: rustfs-dev:9000
+  S3_ACCESS_KEY: agent-workspaces
+  S3_SECRET_KEY: agent-workspaces-secret
+  AGENT_KEY: agent-runtime-key
+
+x-agent-runtime-env-prod: &agent-runtime-env-prod
+  S3_ENDPOINT: rustfs-prod:9000
+  S3_ACCESS_KEY: agent-workspaces
+  S3_SECRET_KEY: agent-workspaces-secret
+  AGENT_KEY: agent-runtime-key
+
+# The sandbox's npm, PyPI and Go registry (git-pkgs/proxy), with the
+# chart's config. Inside a stack it answers by that name, as its Service
+# does in the cluster.
+x-package-proxy: &package-proxy
+  image: ghcr.io/git-pkgs/proxy:v0.11.0
+  command: [-config, /etc/proxy/config.yaml]
+  configs:
+    - { source: package-proxy, target: /etc/proxy/config.yaml }
+  healthcheck: { <<: *health, test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/health"] }
+  restart: unless-stopped
 
 # Creates a database in the stack's Postgres when it is missing.
 x-create-db: &create-db
@@ -563,13 +612,46 @@ services:
         export $$tokens
         exec node --watch -r ts-node/register src/main.ts
     volumes:
-      - ./agent:/app
+      - ./agent-legacy:/app
       - agent-node-modules-dev:/app/node_modules
       - keys-dev:/keys:ro
     depends_on:
       bifrost-dev: { condition: service_healthy }
     healthcheck: *health-agent
     restart: unless-stopped
+
+  # The agent runtime's bucket, its user and the rule that removes a
+  # workspace 7 days after its last turn (WORKSPACE_* in agent-runtime.env).
+  objectstore-init-agent-dev:
+    <<: [*dev, *server-image]
+    entrypoint: ["/objectstore-init"]
+    working_dir: /home/nonroot
+    environment:
+      <<: *server-env-dev
+      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
+      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_BUCKET: agent-workspaces
+      OBJECT_STORE_ACCESS_KEY: agent-workspaces
+      OBJECT_STORE_SECRET_KEY: agent-workspaces-secret
+      OBJECT_STORE_EXPIRE_DAYS: "7"
+    volumes: [keys-dev:/home/nonroot:ro]
+    depends_on:
+      bifrost-keys-dev: { condition: service_completed_successfully }
+      rustfs-dev: { condition: service_healthy }
+
+  package-proxy-dev:
+    <<: [*dev, *package-proxy]
+    networks: { dev: { aliases: [package-proxy] } }
+    volumes: [package-proxy-dev:/data]
+
+  agent-runtime-dev:
+    <<: [*dev, *agent-runtime]
+    environment: *agent-runtime-env-dev
+    volumes: [agent-workspaces-dev:/var/lib/agent/workspaces]
+    depends_on:
+      objectstore-init-agent-dev: { condition: service_completed_successfully }
+      package-proxy-dev: { condition: service_healthy }
+      bifrost-dev: { condition: service_healthy }
 
   imgproxy-dev:
     <<: [*dev, *imgproxy]
@@ -734,6 +816,39 @@ services:
       bifrost-prod: { condition: service_healthy }
     healthcheck: *health-agent
 
+  # The agent runtime's bucket, its user and the rule that removes a
+  # workspace 7 days after its last turn (WORKSPACE_* in agent-runtime.env).
+  objectstore-init-agent-prod:
+    <<: [*prod, *server-image]
+    entrypoint: ["/objectstore-init"]
+    working_dir: /home/nonroot
+    environment:
+      <<: *server-env-prod
+      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
+      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_BUCKET: agent-workspaces
+      OBJECT_STORE_ACCESS_KEY: agent-workspaces
+      OBJECT_STORE_SECRET_KEY: agent-workspaces-secret
+      OBJECT_STORE_EXPIRE_DAYS: "7"
+    volumes: [keys-prod:/home/nonroot:ro]
+    depends_on:
+      bifrost-keys-prod: { condition: service_completed_successfully }
+      rustfs-prod: { condition: service_healthy }
+
+  package-proxy-prod:
+    <<: [*prod, *package-proxy]
+    networks: { prod: { aliases: [package-proxy] } }
+    volumes: [package-proxy-prod:/data]
+
+  agent-runtime-prod:
+    <<: [*prod, *agent-runtime]
+    environment: *agent-runtime-env-prod
+    volumes: [agent-workspaces-prod:/var/lib/agent/workspaces]
+    depends_on:
+      objectstore-init-agent-prod: { condition: service_completed_successfully }
+      package-proxy-prod: { condition: service_healthy }
+      bifrost-prod: { condition: service_healthy }
+
   imgproxy-prod:
     <<: [*prod, *imgproxy]
     networks: { prod: { aliases: [imgproxy] } }
@@ -837,6 +952,8 @@ networks:
   test:
 
 configs:
+  package-proxy:
+    file: ./infra/stack/package-proxy/config.yaml
   imgproxy-nginx:
     file: ./infra/stack/imgproxy/nginx.conf
   grafana-provider:
@@ -966,6 +1083,8 @@ volumes:
   website-astro-dev:
   console-node-modules-dev:
   agent-node-modules-dev:
+  agent-workspaces-dev:
+  package-proxy-dev:
   lgtm-dev:
   postgres-prod:
   rustfs-prod:
@@ -973,5 +1092,7 @@ volumes:
   keys-prod:
   models-prod:
   lgtm-prod:
+  agent-workspaces-prod:
+  package-proxy-prod:
   keys-test:
   go-build-test:

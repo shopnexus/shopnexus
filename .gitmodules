@@ -4,9 +4,12 @@
 [submodule "server"]
 	path = server
 	url = https://github.com/shopnexus/server.git
-[submodule "agent"]
-	path = agent
-	url = https://github.com/shopnexus/agent.git
+[submodule "agent-legacy"]
+	path = agent-legacy
+	url = https://github.com/shopnexus/agent-legacy.git
 [submodule "clients"]
 	path = clients
 	url = https://github.com/shopnexus/clients.git
+[submodule "agent"]
+	path = agent
+	url = https://github.com/shopnexus/agent.git

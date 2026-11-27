@@ -1,0 +1,17 @@
+# git-pkgs/proxy: the agent sandbox's npm, PyPI and Go registry, read by the
+# chart (templates/package-proxy.yaml) and by docker-compose.yml.
+#
+# base_url is where the sandbox reaches it, 127.0.0.1:4873, through the
+# agent runtime's forward (agent/runtime PackageProxy), not its Service:
+# the proxy writes it into every download URL it hands out.
+listen: ":8080"
+base_url: "http://127.0.0.1:4873"
+# The image's working directory is /data: its SQLite index goes to
+# /data/cache, the files to /data/artifacts.
+storage:
+  url: "file:///data/artifacts"
+  max_size: "8GB"
+# No version younger than 7 days: most freshly hijacked or squatted
+# releases are found and pulled within that time.
+cooldown:
+  default: "7d"

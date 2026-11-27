@@ -1,0 +1,73 @@
+{{- /* package-proxy (git-pkgs/proxy) is the agent sandbox's npm, PyPI and
+       Go registry. It holds back versions younger than 7 days and keeps
+       what it fetched. Only agent-runtime reaches it (to-package-proxy),
+       and it reaches the public registries. Its settings are
+       package-proxy/config.yaml, which docker-compose.yml reads too. Off
+       until agentRuntime.enabled. */ -}}
+{{- if .Values.agentRuntime.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: package-proxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  config.yaml: {{ .Files.Get "package-proxy/config.yaml" | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: package-proxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: package-proxy }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "package-proxy") | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Files.Get "package-proxy/config.yaml" | sha256sum | trunc 16 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: package-proxy
+          image: {{ include "sn.image" .Values.images.packageProxy }}
+          args: [-config, /etc/proxy/config.yaml]
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - { name: config, mountPath: /etc/proxy, readOnly: true }
+            - { name: data, mountPath: /data }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: config
+          configMap: { name: package-proxy }
+        # A cache: a new pod fetches again from the registries.
+        - name: data
+          emptyDir: { sizeLimit: {{ .Values.packageProxy.cacheSize }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: package-proxy
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: package-proxy }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+{{- end }}

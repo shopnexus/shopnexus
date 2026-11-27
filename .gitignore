@@ -5,6 +5,7 @@
 !/.github/
 !/AGENTS.md
 !/agent
+!/agent-legacy
 !/.gitignore
 !/.gitleaks.toml
 !/.gitmodules

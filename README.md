@@ -13,7 +13,7 @@ ShopNexus is a C2C marketplace for used goods in Vietnam. Buyers inspect an item
 | Docs | Product and developer documentation, requirements, and reports |
 | Brand | Shared visual identity and assets |
 
-The Android app, website, console and brand live together in `clients` (`shopnexus/clients`); the server, docs and agent each have their own repository. All four are included here as submodules.
+The Android app, website, console and brand live together in `clients` (`shopnexus/clients`); the server, docs, console agent (`agent-legacy`) and agent runtime (`agent`) each have their own repository. All five are included here as submodules.
 
 ## Local development
 

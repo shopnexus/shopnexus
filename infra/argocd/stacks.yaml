@@ -69,3 +69,4 @@ spec:
         - { alias: docs, imageName: "ghcr.io/shopnexus/docs:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.docs.repository, tag: images.docs.tag } } }
         - { alias: console, imageName: "ghcr.io/shopnexus/clients/console:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.console.repository, tag: images.console.tag } } }
         - { alias: agent, imageName: "ghcr.io/shopnexus/agent:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.agent.repository, tag: images.agent.tag } } }
+        - { alias: agent-runtime, imageName: "ghcr.io/shopnexus/agent-runtime:main", commonUpdateSettings: { updateStrategy: digest }, manifestTargets: { helm: { name: images.agentRuntime.repository, tag: images.agentRuntime.tag } } }

@@ -5,7 +5,7 @@
 // It keeps the stack's keys in the git-ignored stack/secrets/<stack>.env and
 // <stack>.restate.pem. On first use it copies example.env; every run makes
 // the keys still missing, so a second run seals the same values. Then it
-// writes six Secrets, sealed by kubeseal for the cluster kubectl points at,
+// writes seven Secrets, sealed by kubeseal for the cluster kubectl points at,
 // to stack/secrets/<stack>/. -dry-run prints the plain Secrets instead and
 // needs no cluster.
 package main
@@ -111,6 +111,9 @@ func seal(stack string, o opts, out io.Writer) error {
 		{"OBJECT_STORE_SECRET_KEY", "", 24},
 		{"SNAPSHOTS_ACCESS_KEY", "", 12}, // Restate's user, bucket restate-snapshots only
 		{"SNAPSHOTS_SECRET_KEY", "", 24},
+		{"AGENT_WORKSPACES_ACCESS_KEY", "", 12}, // the agent runtime's user, bucket agent-workspaces only
+		{"AGENT_WORKSPACES_SECRET_KEY", "", 24},
+		{"AGENT_RUNTIME_KEY", "", 32},      // what the server sends the agent runtime
 		{"BIFROST_ADMIN_PASSWORD", "", 24}, // Bifrost's admin API and UI; the server signs in with it
 		{"BIFROST_ENCRYPTION_KEY", "", 32}, // fixed once set: Bifrost's stored keys are encrypted with it
 		{"BIFROST_DB_PASSWORD", "", 24},
@@ -153,21 +156,27 @@ func seal(stack string, o opts, out io.Writer) error {
 			"JWT_KEY_ID", "JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY",
 			"OBJECT_STORE_ACCESS_KEY", "OBJECT_STORE_SECRET_KEY", "FCM_CREDENTIALS", "OTP_KEY", "CARRIER_TOKEN_KEY",
 			"RESEND_API_KEY", "AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN",
-			"GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET")},
+			"GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET",
+			"AGENT_RUNTIME_KEY")},
 		// The console agent has the server's two tokens; its gateway key comes with each run.
 		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN")},
+		// The agent runtime: the key the server calls it with, and its
+		// RustFS user. Its gateway key comes with each turn.
+		{name: "agent-runtime-secrets", namespace: ns, data: env.pick("AGENT_RUNTIME_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
 			"private.pem":           string(pem),
 			"AWS_ACCESS_KEY_ID":     env.get("SNAPSHOTS_ACCESS_KEY"),
 			"AWS_SECRET_ACCESS_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
 		}},
 		// RustFS's root keys, for rustfs and the objectstore-init jobs, which
-		// also make Restate's user.
+		// also make Restate's user and the agent runtime's.
 		{name: "rustfs-secrets", namespace: ns, data: map[string]string{
-			"RUSTFS_ACCESS_KEY":    env.get("OBJECT_STORE_ROOT_ACCESS_KEY"),
-			"RUSTFS_SECRET_KEY":    env.get("OBJECT_STORE_ROOT_SECRET_KEY"),
-			"SNAPSHOTS_ACCESS_KEY": env.get("SNAPSHOTS_ACCESS_KEY"),
-			"SNAPSHOTS_SECRET_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
+			"RUSTFS_ACCESS_KEY":           env.get("OBJECT_STORE_ROOT_ACCESS_KEY"),
+			"RUSTFS_SECRET_KEY":           env.get("OBJECT_STORE_ROOT_SECRET_KEY"),
+			"SNAPSHOTS_ACCESS_KEY":        env.get("SNAPSHOTS_ACCESS_KEY"),
+			"SNAPSHOTS_SECRET_KEY":        env.get("SNAPSHOTS_SECRET_KEY"),
+			"AGENT_WORKSPACES_ACCESS_KEY": env.get("AGENT_WORKSPACES_ACCESS_KEY"),
+			"AGENT_WORKSPACES_SECRET_KEY": env.get("AGENT_WORKSPACES_SECRET_KEY"),
 		}},
 		{name: "bifrost-secrets", namespace: ns, data: env.pick("BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY")},
 		// CNPG reads a managed role's password from a basic-auth Secret.

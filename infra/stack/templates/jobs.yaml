@@ -1,7 +1,8 @@
 {{- /* Sync hooks in wave 1: after postgres and rustfs (wave 0) are healthy,
-       before the server (wave 2). Each sync runs them again; all three are
+       before the server (wave 2). Each sync runs them again; all of them are
        idempotent. The objectstore-init jobs work with RustFS's root keys and
-       give each bucket's user (the server's, Restate's) that bucket only. */ -}}
+       give each bucket's user (the server's, Restate's, the agent
+       runtime's) that bucket only. */ -}}
 {{- $root := list
   (dict "name" "OBJECT_STORE_ROOT_ACCESS_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_ACCESS_KEY")
   (dict "name" "OBJECT_STORE_ROOT_SECRET_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_SECRET_KEY") }}
@@ -13,6 +14,18 @@
   (dict "name" "migrate" "command" "/migrate" "env" (list))
   (dict "name" "objectstore-init" "command" "/objectstore-init" "env" $root)
   (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (concat $root $snapshots)) }}
+{{- /* The agent runtime's workspaces: the bucket, its user, and the rule
+       that removes a workspace WORKSPACE_EXPIRE_DAYS after its last turn,
+       both from env/agent-runtime.env. */ -}}
+{{- if .Values.agentRuntime.enabled }}
+{{- $agent := include "sn.envFile" (dict "root" . "file" "env/agent-runtime.env") | fromJson }}
+{{- $workspaces := list
+  (dict "name" "OBJECT_STORE_BUCKET" "value" $agent.WORKSPACE_BUCKET)
+  (dict "name" "OBJECT_STORE_EXPIRE_DAYS" "value" $agent.WORKSPACE_EXPIRE_DAYS)
+  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "rustfs-secrets" "key" "AGENT_WORKSPACES_ACCESS_KEY")
+  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "rustfs-secrets" "key" "AGENT_WORKSPACES_SECRET_KEY") }}
+{{- $jobs = append $jobs (dict "name" "objectstore-init-agent-workspaces" "command" "/objectstore-init" "env" (concat $root $workspaces)) }}
+{{- end }}
 {{- range $jobs }}
 ---
 apiVersion: batch/v1

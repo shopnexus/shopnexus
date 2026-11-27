@@ -13,6 +13,8 @@ images:
   docs: { repository: ghcr.io/shopnexus/docs, tag: main }
   console: { repository: ghcr.io/shopnexus/clients/console, tag: main }
   agent: { repository: ghcr.io/shopnexus/agent, tag: main }
+  agentRuntime: { repository: ghcr.io/shopnexus/agent-runtime, tag: main }
+  packageProxy: { repository: ghcr.io/git-pkgs/proxy, tag: v0.11.0 }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
   rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
@@ -76,6 +78,19 @@ lgtm:
 agent:
   memoryRequest: 256Mi
   memoryLimit: 512Mi
+
+# The agent runtime (repo shopnexus/agent, templates/agent-runtime.yaml) and
+# its package-proxy. Off until the stack's secrets hold its keys (go -C infra
+# run ./cmd/seal <stack>) and the cluster runs its sandbox: a pod with
+# hostUsers: false, an unmasked /proc and the seccomp profile.
+# memoryLimit covers the runtime and every sandbox of its MAX_TURNS turns.
+agentRuntime:
+  enabled: false
+  memoryRequest: 512Mi
+  memoryLimit: 6Gi
+  cacheSize: 20Gi
+packageProxy:
+  cacheSize: 10Gi
 
 # server-ai (templates/server-ai.yaml): the server with SERVER_ROLE=ai and
 # the model files on the PVC models. Each stack sets the memory: SigLIP 2

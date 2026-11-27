@@ -24,6 +24,17 @@ ports:
   - port: 127.0.0.1:18080:80
     nodeFilters: [loadbalancer]
 files:
+  # A container out of memory loses its largest process, not all of them
+  # (the kubelet's default puts each container in one OOM group). The agent
+  # runtime's sandboxes share its pod, so one sandbox that fills the pod's
+  # memory ends its own command, not every turn in the pod.
+  - description: kubelet OOM
+    destination: /var/lib/rancher/k3s/agent/etc/kubelet.conf.d/50-single-process-oom.conf
+    nodeFilters: [server:*, agent:*]
+    source: |
+      apiVersion: kubelet.config.k8s.io/v1beta1
+      kind: KubeletConfiguration
+      singleProcessOOMKill: true
   - description: Traefik
     destination: k3s-manifests/traefik-config.yaml
     nodeFilters: [server:0]

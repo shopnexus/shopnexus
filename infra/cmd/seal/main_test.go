@@ -77,12 +77,12 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-runtime-secrets", "agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "private.pem",
 		"BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY",
-		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN"} {
+		"AGENT_SERVICE_TOKEN", "AGENT_MCP_TOKEN", "AGENT_RUNTIME_KEY", "AGENT_WORKSPACES_ACCESS_KEY"} {
 		if !strings.Contains(first, `"`+k+`"`) {
 			t.Errorf("no %s in\n%s", k, first)
 		}
@@ -132,6 +132,12 @@ func TestSealMovesAnOlderRootKey(t *testing.T) {
 	}
 	if data["rustfs-secrets"]["SNAPSHOTS_ACCESS_KEY"] != data["restate-secrets"]["AWS_ACCESS_KEY_ID"] {
 		t.Error("the snapshot jobs and Restate have different keys")
+	}
+	if k := data["agent-runtime-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]; k == "" || k != data["rustfs-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"] {
+		t.Error("the workspaces job and the agent runtime have different keys")
+	}
+	if k := data["agent-runtime-secrets"]["AGENT_RUNTIME_KEY"]; k == "" || k != data["server-secrets"]["AGENT_RUNTIME_KEY"] {
+		t.Error("the server and the agent runtime have different keys")
 	}
 }
 

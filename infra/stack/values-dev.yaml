@@ -20,6 +20,9 @@ server:
   pnvTestNumbers: "true"
   emailSender: log
 serverAi: { memoryRequest: 2Gi, memoryLimit: 3Gi }
+# The agent runtime and package-proxy (templates/agent-runtime.yaml), with
+# their keys in secrets/dev/agent-runtime-secrets.yaml.
+agentRuntime: { enabled: true }
 
 # Alerts go to the Telegram group of secrets/dev/grafana-secrets.yaml.
 lgtm:
