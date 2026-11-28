@@ -16,7 +16,8 @@ images:
   packageProxy: { repository: ghcr.io/git-pkgs/proxy, tag: v0.11.0 }
   postgres: { repository: paradedb/paradedb, tag: 0.26.4-pg18 }
   restate: { repository: restatedev/restate, tag: 1.8.1 }
-  rustfs: { repository: rustfs/rustfs, tag: 1.0.4 }
+  garage: { repository: dxflrs/garage, tag: v2.6.0 }
+  garageWebui: { repository: khairul169/garage-webui, tag: 1.1.0 }
   lgtm: { repository: grafana/otel-lgtm, tag: 0.37.0 }
   pgweb: { repository: sosedoff/pgweb, tag: 0.17.0 }
   bifrost: { repository: maximhq/bifrost, tag: v2.6.0 }
@@ -47,7 +48,7 @@ restate:
   replicas: 1
   storageBytes: 2147483648 # 2 GiB
 
-rustfs:
+garage:
   storage: 10Gi
 
 # Whether search engines may index domain. Alias domains never are.

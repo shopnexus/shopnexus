@@ -1,13 +1,9 @@
-{{- /* imgproxy resizes the website's photos from rustfs at <domain>/_img/
+{{- /* imgproxy resizes the website's photos at <domain>/_img/
        (ingress.yaml), behind imgproxy-cache, an nginx that keeps each
-       answer. Their settings are env/imgproxy.env and imgproxy/nginx.conf,
-       which docker-compose.yml reads too; the source differs from compose
-       and is set here. A key in both fails the render. */ -}}
+       answer and also serves the media host from Garage. Their settings
+       are env/imgproxy.env and imgproxy/nginx.conf, which
+       docker-compose.yml reads too. */ -}}
 {{- $shared := include "sn.envFile" (dict "root" . "file" "env/imgproxy.env") | fromJson }}
-{{- $stack := dict "IMGPROXY_BASE_URL" "http://rustfs:9000/" "IMGPROXY_ALLOWED_SOURCES" "http://rustfs:9000/shopnexus/" }}
-{{- range $k, $_ := $stack }}
-{{- if hasKey $shared $k }}{{ fail (printf "%s is in env/imgproxy.env and in imgproxy.yaml" $k) }}{{ end }}
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +24,7 @@ spec:
         - name: imgproxy
           image: {{ include "sn.image" .Values.images.imgproxy }}
           env:
-            {{- range $k, $v := merge $stack $shared }}
+            {{- range $k, $v := $shared }}
             - { name: {{ $k }}, value: {{ $v | quote }} }
             {{- end }}
           ports:

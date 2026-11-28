@@ -1,5 +1,5 @@
 suite: restate and the server
-templates: [restate.yaml, server.yaml, rustfs.yaml]
+templates: [restate.yaml, server.yaml, garage.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   - it: runs three prod Restate nodes that replicate the log twice
@@ -54,14 +54,24 @@ tests:
       - equal:
           path: spec.security.networkPeers.admin[0].podSelector.matchExpressions[0].values
           value: [server, server-ai]
-  - it: lets Restate reach RustFS
-    template: rustfs.yaml
-    documentIndex: 0
+  - it: lets Restate reach Garage
+    template: garage.yaml
+    documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
+      - isKind:
+          of: StatefulSet
       - equal:
           path: spec.template.metadata.labels["allow.restate.dev/restate-prod"]
           value: "true"
+  - it: keeps Restate's snapshots on the stack's Garage
+    template: restate.yaml
+    documentIndex: 1
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - matchRegex:
+          path: spec.config
+          pattern: aws-endpoint-url = "http://garage\.shopnexus-prod:3900"
   - it: runs three prod server pods that restate-operator registers over HTTP/1.1
     template: server.yaml
     documentIndex: 1

@@ -1,5 +1,5 @@
 # The whole system on one machine, in three stacks. Each profile is a stack of
-# its own, with its own network, Postgres, Restate, RustFS and volumes, so the
+# its own, with its own network, Postgres, Restate, Garage and volumes, so the
 # stacks never share data and can run at the same time. Production is the k3d
 # cluster in ./infra; this file is for running things locally.
 #
@@ -27,7 +27,7 @@
 # The agent (agent-dev, agent-prod; submodule agent) has no host or port:
 # only the server calls it, and its shopnexus CLI calls the server's API
 # with each turn's token. It runs each turn's bash in a bubblewrap
-# sandbox, keeps each conversation's workspace in the stack's RustFS
+# sandbox, keeps each conversation's workspace in the stack's Garage
 # (bucket agent-workspaces, made by objectstore-init-agent-*), and installs
 # the sandbox's npm, PyPI and Go packages through package-proxy-*. Its
 # shared settings are infra/stack/env/agent.env and
@@ -35,9 +35,13 @@
 #
 # The website's photos are at <website>/_img/, as in the cluster: Caddy
 # sends that path to imgproxy-cache-* (nginx), which keeps each answer of
-# imgproxy-*, which resizes from the stack's RustFS. Their shared settings
-# are infra/stack/env/imgproxy.env and infra/stack/imgproxy/nginx.conf,
-# which the chart reads too.
+# imgproxy-*. The media host goes to the same nginx, which serves media/
+# from the stack's Garage, and imgproxy reads its photos there. Their
+# shared settings are infra/stack/env/imgproxy.env and
+# infra/stack/imgproxy/nginx.conf, which the chart reads too. Inside a
+# stack Garage answers as garage and the nginx as imgproxy-cache, the names
+# of their Services in the cluster; Garage's settings are
+# infra/stack/garage/garage.toml.
 #
 # Grafana gets the server's traces, metrics and logs. Here Caddy signs every
 # visitor in as admin@shopnexus.localhost, an Admin; in the cluster the
@@ -47,7 +51,7 @@
 # the server, the dev servers for the web apps).
 # After a lock file changes, restart the service to install the packages.
 #
-# test runs the server's Go tests against Postgres, Restate and RustFS on
+# test runs the server's Go tests against Postgres, Restate and Garage on
 # tmpfs. run starts them and exits with the tests' status; they keep running
 # for the next run, and `docker compose --profile test down` empties them.
 # The tests container shares Restate's network namespace, so Restate reaches
@@ -70,7 +74,7 @@
 # into its keys volume. `docker compose --profile <stack> down -v` deletes
 # the stack's data and keys.
 #
-# Image versions of Postgres, Restate, RustFS, Bifrost, imgproxy and its
+# Image versions of Postgres, Restate, Garage and its web UI, Bifrost, imgproxy and its
 # nginx, and package-proxy follow infra/stack/values.yaml; infra/check.sh
 # fails when they differ.
 name: shopnexus
@@ -115,19 +119,33 @@ x-pgweb: &pgweb
   healthcheck: { <<: *health, test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8081/"] }
   restart: unless-stopped
 
-x-rustfs: &rustfs
-  image: rustfs/rustfs:1.0.4
-  environment: &rustfs-env
-    RUSTFS_ACCESS_KEY: shopnexus
-    RUSTFS_SECRET_KEY: shopnexus-secret
-    RUSTFS_VOLUMES: /data
-    RUSTFS_ADDRESS: 0.0.0.0:9000
-    RUSTFS_CONSOLE_ENABLE: "false"
+# Garage, one node, with the chart's garage.toml. The image has no shell, so
+# its own CLI checks it. objectstore-init-* make the buckets and keys with
+# the admin token.
+x-garage: &garage
+  image: dxflrs/garage:v2.6.0
+  command: ["/garage", "server", "--single-node"]
+  environment:
+    GARAGE_RPC_SECRET: "0000000000000000000000000000000000000000000000000000000000000001"
+    GARAGE_ADMIN_TOKEN: &garage-admin-token local-garage-admin
+  configs:
+    - { source: garage, target: /etc/garage.toml }
   healthcheck:
-    test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+    test: ["CMD", "/garage", "status"]
     interval: 2s
     timeout: 3s
     retries: 30
+  restart: unless-stopped
+
+# Garage's web UI, the dashboard s3, as in the cluster.
+x-garage-webui: &garage-webui
+  image: khairul169/garage-webui:1.1.0
+  environment:
+    API_BASE_URL: http://garage:3903
+    S3_ENDPOINT_URL: http://garage:3900
+    API_ADMIN_KEY: *garage-admin-token
+  configs:
+    - { source: garage, target: /etc/garage.toml }
   restart: unless-stopped
 
 # Signs every request to the server's endpoint with the key the stack's keys
@@ -158,8 +176,8 @@ x-lgtm: &lgtm
     - { source: grafana-provider, target: /otel-lgtm/grafana/conf/provisioning/dashboards/shopnexus.yaml }
   restart: unless-stopped
 
-# imgproxy reads the stack's RustFS, which each stack names in
-# x-imgproxy-env-*. Inside a stack it answers as imgproxy, the name of its
+# imgproxy reads the photos from imgproxy-cache, which serves them from the
+# stack's Garage. Inside a stack it answers as imgproxy, the name of its
 # Service in the cluster, which nginx.conf calls.
 x-imgproxy: &imgproxy
   image: ghcr.io/imgproxy/imgproxy:v4.0.24
@@ -167,26 +185,12 @@ x-imgproxy: &imgproxy
   healthcheck: { <<: *health, test: ["CMD", "imgproxy", "health"] }
   restart: unless-stopped
 
-x-imgproxy-env-dev: &imgproxy-env-dev
-  IMGPROXY_BASE_URL: http://rustfs-dev:9000/
-  IMGPROXY_ALLOWED_SOURCES: http://rustfs-dev:9000/shopnexus/
-
-x-imgproxy-env-prod: &imgproxy-env-prod
-  IMGPROXY_BASE_URL: http://rustfs-prod:9000/
-  IMGPROXY_ALLOWED_SOURCES: http://rustfs-prod:9000/shopnexus/
-
 x-imgproxy-cache: &imgproxy-cache
   image: nginx:1.30.7-alpine
   configs:
     - { source: imgproxy-nginx, target: /etc/nginx/conf.d/default.conf }
   healthcheck: { <<: *health, test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/healthz"] }
   restart: unless-stopped
-
-# RustFS's web console on port 9001, for browsing the buckets.
-x-rustfs-console-env: &rustfs-console-env
-  <<: *rustfs-env
-  RUSTFS_CONSOLE_ENABLE: "true"
-  RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
 
 x-server-image: &server-image
   image: shopnexus-server:local
@@ -261,9 +265,9 @@ x-server-env: &server-env
   TRUSTED_PROXIES: ""
   # The ops dashboards are open locally, so the server serves none of them.
   DASHBOARD_HOSTS: ""
-  # The server's RustFS user, which objectstore-init makes with the root keys.
-  OBJECT_STORE_ACCESS_KEY: shopnexus-server
-  OBJECT_STORE_SECRET_KEY: shopnexus-server-secret
+  # The server's Garage key, which objectstore-init makes with the admin token.
+  OBJECT_STORE_ACCESS_KEY: GK5e7e70000000000000000001
+  OBJECT_STORE_SECRET_KEY: 5e7e700000000000000000000000000000000000000000000000000000000001
   # The key the server calls the agent with; the agent's env has it too.
   # It wins over the .env's, which envgen fills with one of its own.
   AGENT_KEY: &agent-key local-agent-key-0123456789abcdefghij
@@ -313,7 +317,6 @@ x-server-env-dev: &server-env-dev
   # The docs site's API playground, here and on a laptop's `bun run dev`.
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56481,http://localhost:4321
   WEBSITE_ORIGINS: http://shopnexus.localhost:56481,http://localhost:4321
-  OBJECT_STORE_ENDPOINT: http://rustfs-dev:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56481
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56481/shopnexus
   AGENT_URL: http://agent-dev:8080
@@ -331,7 +334,6 @@ x-server-env-prod: &server-env-prod
   CONSOLE_ORIGIN: http://console.shopnexus.localhost:56480
   DOCS_ORIGINS: http://docs.shopnexus.localhost:56480
   WEBSITE_ORIGINS: http://shopnexus.localhost:56480
-  OBJECT_STORE_ENDPOINT: http://rustfs-prod:9000
   OBJECT_STORE_PUBLIC_ENDPOINT: http://media.shopnexus.localhost:56480
   MEDIA_PUBLIC_URL: http://media.shopnexus.localhost:56480/shopnexus
   AGENT_URL: http://agent-prod:8080
@@ -352,21 +354,19 @@ x-agent: &agent
   healthcheck: *health-server
   restart: unless-stopped
 
-# The server's API its CLI calls, its RustFS user, which
-# objectstore-init-agent-* makes with the root keys, and the key the server
+# The server's API its CLI calls, its Garage key, which
+# objectstore-init-agent-* makes with the admin token, and the key the server
 # calls it with (x-server-env's AGENT_KEY).
 x-agent-env-dev: &agent-env-dev
   SERVER_URL: http://server-dev:8080
-  S3_ENDPOINT: rustfs-dev:9000
-  S3_ACCESS_KEY: agent-workspaces
-  S3_SECRET_KEY: agent-workspaces-secret
+  S3_ACCESS_KEY: GKa6e7000000000000000000a1
+  S3_SECRET_KEY: a6e7000000000000000000000000000000000000000000000000000000000001
   AGENT_KEY: *agent-key
 
 x-agent-env-prod: &agent-env-prod
   SERVER_URL: http://server-prod:8080
-  S3_ENDPOINT: rustfs-prod:9000
-  S3_ACCESS_KEY: agent-workspaces
-  S3_SECRET_KEY: agent-workspaces-secret
+  S3_ACCESS_KEY: GKa6e7000000000000000000a1
+  S3_SECRET_KEY: a6e7000000000000000000000000000000000000000000000000000000000001
   AGENT_KEY: *agent-key
 
 # The sandbox's npm, PyPI and Go registry (git-pkgs/proxy), with the
@@ -423,10 +423,15 @@ services:
     <<: [*dev, *postgres]
     volumes: [postgres-dev:/var/lib/postgresql]
 
-  rustfs-dev:
-    <<: [*dev, *rustfs]
-    environment: *rustfs-console-env
-    volumes: [rustfs-dev:/data]
+  garage-dev:
+    <<: [*dev, *garage]
+    networks: { dev: { aliases: [garage] } }
+    volumes: [garage-dev:/var/lib/garage]
+
+  garage-webui-dev:
+    <<: [*dev, *garage-webui]
+    depends_on:
+      garage-dev: { condition: service_healthy }
 
   lgtm-dev:
     <<: [*dev, *lgtm]
@@ -468,12 +473,13 @@ services:
     working_dir: /home/nonroot
     environment:
       <<: *server-env-dev
-      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
-      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_ADMIN_ENDPOINT: http://garage:3903
+      OBJECT_STORE_ADMIN_TOKEN: *garage-admin-token
+      OBJECT_STORE_WEBSITE: "true"
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
       bifrost-keys-dev: { condition: service_completed_successfully }
-      rustfs-dev: { condition: service_healthy }
+      garage-dev: { condition: service_healthy }
 
   # air rebuilds the server on a .go or .sql change and runs the migrations
   # before each start. The .env is the keys volume's, over the checkout's.
@@ -591,16 +597,17 @@ services:
     working_dir: /home/nonroot
     environment:
       <<: *server-env-dev
-      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
-      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_ADMIN_ENDPOINT: http://garage:3903
+      OBJECT_STORE_ADMIN_TOKEN: *garage-admin-token
+      OBJECT_STORE_WEBSITE: "false"
       OBJECT_STORE_BUCKET: agent-workspaces
-      OBJECT_STORE_ACCESS_KEY: agent-workspaces
-      OBJECT_STORE_SECRET_KEY: agent-workspaces-secret
+      OBJECT_STORE_ACCESS_KEY: GKa6e7000000000000000000a1
+      OBJECT_STORE_SECRET_KEY: a6e7000000000000000000000000000000000000000000000000000000000001
       OBJECT_STORE_EXPIRE_DAYS: "7"
     volumes: [keys-dev:/home/nonroot:ro]
     depends_on:
       bifrost-keys-dev: { condition: service_completed_successfully }
-      rustfs-dev: { condition: service_healthy }
+      garage-dev: { condition: service_healthy }
 
   package-proxy-dev:
     <<: [*dev, *package-proxy]
@@ -619,14 +626,13 @@ services:
   imgproxy-dev:
     <<: [*dev, *imgproxy]
     networks: { dev: { aliases: [imgproxy] } }
-    environment: *imgproxy-env-dev
-    depends_on:
-      rustfs-dev: { condition: service_healthy }
 
   imgproxy-cache-dev:
     <<: [*dev, *imgproxy-cache]
+    networks: { dev: { aliases: [imgproxy-cache] } }
     depends_on:
       imgproxy-dev: { condition: service_healthy }
+      garage-dev: { condition: service_healthy }
 
   proxy-dev:
     <<: *dev
@@ -643,10 +649,15 @@ services:
     <<: [*prod, *postgres]
     volumes: [postgres-prod:/var/lib/postgresql]
 
-  rustfs-prod:
-    <<: [*prod, *rustfs]
-    environment: *rustfs-console-env
-    volumes: [rustfs-prod:/data]
+  garage-prod:
+    <<: [*prod, *garage]
+    networks: { prod: { aliases: [garage] } }
+    volumes: [garage-prod:/var/lib/garage]
+
+  garage-webui-prod:
+    <<: [*prod, *garage-webui]
+    depends_on:
+      garage-prod: { condition: service_healthy }
 
   lgtm-prod:
     <<: [*prod, *lgtm]
@@ -688,12 +699,13 @@ services:
     working_dir: /home/nonroot
     environment:
       <<: *server-env-prod
-      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
-      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_ADMIN_ENDPOINT: http://garage:3903
+      OBJECT_STORE_ADMIN_TOKEN: *garage-admin-token
+      OBJECT_STORE_WEBSITE: "true"
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
       bifrost-keys-prod: { condition: service_completed_successfully }
-      rustfs-prod: { condition: service_healthy }
+      garage-prod: { condition: service_healthy }
 
   server-prod:
     <<: [*prod, *server-image]
@@ -777,16 +789,17 @@ services:
     working_dir: /home/nonroot
     environment:
       <<: *server-env-prod
-      OBJECT_STORE_ROOT_ACCESS_KEY: shopnexus
-      OBJECT_STORE_ROOT_SECRET_KEY: shopnexus-secret
+      OBJECT_STORE_ADMIN_ENDPOINT: http://garage:3903
+      OBJECT_STORE_ADMIN_TOKEN: *garage-admin-token
+      OBJECT_STORE_WEBSITE: "false"
       OBJECT_STORE_BUCKET: agent-workspaces
-      OBJECT_STORE_ACCESS_KEY: agent-workspaces
-      OBJECT_STORE_SECRET_KEY: agent-workspaces-secret
+      OBJECT_STORE_ACCESS_KEY: GKa6e7000000000000000000a1
+      OBJECT_STORE_SECRET_KEY: a6e7000000000000000000000000000000000000000000000000000000000001
       OBJECT_STORE_EXPIRE_DAYS: "7"
     volumes: [keys-prod:/home/nonroot:ro]
     depends_on:
       bifrost-keys-prod: { condition: service_completed_successfully }
-      rustfs-prod: { condition: service_healthy }
+      garage-prod: { condition: service_healthy }
 
   package-proxy-prod:
     <<: [*prod, *package-proxy]
@@ -805,14 +818,13 @@ services:
   imgproxy-prod:
     <<: [*prod, *imgproxy]
     networks: { prod: { aliases: [imgproxy] } }
-    environment: *imgproxy-env-prod
-    depends_on:
-      rustfs-prod: { condition: service_healthy }
 
   imgproxy-cache-prod:
     <<: [*prod, *imgproxy-cache]
+    networks: { prod: { aliases: [imgproxy-cache] } }
     depends_on:
       imgproxy-prod: { condition: service_healthy }
+      garage-prod: { condition: service_healthy }
 
   proxy-prod:
     <<: *prod
@@ -820,7 +832,7 @@ services:
     ports: ["127.0.0.1:56480:80"]
     configs:
       - { source: caddyfile-prod, target: /etc/caddy/Caddyfile }
-    depends_on: [server-prod, website-prod, console-prod, docs-prod, rustfs-prod, imgproxy-cache-prod]
+    depends_on: [server-prod, website-prod, console-prod, docs-prod, imgproxy-cache-prod, garage-webui-prod]
     healthcheck: *health-wget
     restart: unless-stopped
 
@@ -845,10 +857,10 @@ services:
     tmpfs: [/var/lib/postgresql:size=4g]
     mem_limit: 4608m
 
-  rustfs-test:
-    <<: [*test, *rustfs]
-    tmpfs: ["/data:size=512m,uid=10001,gid=10001"]
-    mem_limit: 768m
+  garage-test:
+    <<: [*test, *garage]
+    tmpfs: ["/var/lib/garage:size=512m"]
+    mem_limit: 256m
 
   keys-test:
     <<: [*test, *keys]
@@ -888,15 +900,15 @@ services:
       TEST_RESTATE_INGRESS_URL: http://127.0.0.1:8080
       TEST_RESTATE_ADMIN_URL: http://127.0.0.1:9070
       TEST_RESTATE_IDENTITY_FILE: /keys/identity.pem
-      TEST_OBJECT_STORE_ENDPOINT: http://rustfs-test:9000
-      TEST_OBJECT_STORE_PUBLIC_ENDPOINT: http://rustfs-test:9000
-      TEST_OBJECT_STORE_ACCESS_KEY: shopnexus
-      TEST_OBJECT_STORE_SECRET_KEY: shopnexus-secret
-      TEST_MEDIA_PUBLIC_URL: http://rustfs-test:9000/server-test
+      TEST_OBJECT_STORE_ENDPOINT: http://garage-test:3900
+      TEST_OBJECT_STORE_PUBLIC_ENDPOINT: http://garage-test:3900
+      TEST_OBJECT_STORE_ADMIN_ENDPOINT: http://garage-test:3903
+      TEST_OBJECT_STORE_ADMIN_TOKEN: local-garage-admin
+      TEST_MEDIA_PUBLIC_URL: http://garage-test:3900/server-test
     volumes: [./server:/src:ro, keys-test:/keys:ro, go-build-test:/root/.cache/go-build]
     depends_on:
       postgres-test: { condition: service_healthy }
-      rustfs-test: { condition: service_healthy }
+      garage-test: { condition: service_healthy }
       restate-test: { condition: service_healthy }
 
 networks:
@@ -909,6 +921,8 @@ configs:
     file: ./infra/stack/package-proxy/config.yaml
   imgproxy-nginx:
     file: ./infra/stack/imgproxy/nginx.conf
+  garage:
+    file: ./infra/stack/garage/garage.toml
   grafana-provider:
     file: ./infra/stack/grafana/provider.yaml
   air-dev:
@@ -942,10 +956,10 @@ configs:
       http://api.shopnexus.localhost {
         reverse_proxy server-dev:8080
       }
-      # Only the media bucket, as on the cluster's media host.
+      # Only the media bucket, through its nginx, as on the cluster's media host.
       http://media.shopnexus.localhost {
         handle /shopnexus/* {
-          reverse_proxy rustfs-dev:9000
+          reverse_proxy imgproxy-cache-dev:80
         }
         handle {
           respond 404
@@ -970,8 +984,7 @@ configs:
         reverse_proxy pgweb-dev:8081
       }
       http://s3.shopnexus.localhost {
-        redir / /rustfs/console/
-        reverse_proxy rustfs-dev:9001
+        reverse_proxy garage-webui-dev:3909
       }
   caddyfile-prod:
     content: |
@@ -990,10 +1003,10 @@ configs:
       http://api.shopnexus.localhost {
         reverse_proxy server-prod:8080
       }
-      # Only the media bucket, as on the cluster's media host.
+      # Only the media bucket, through its nginx, as on the cluster's media host.
       http://media.shopnexus.localhost {
         handle /shopnexus/* {
-          reverse_proxy rustfs-prod:9000
+          reverse_proxy imgproxy-cache-prod:80
         }
         handle {
           respond 404
@@ -1018,13 +1031,12 @@ configs:
         reverse_proxy pgweb-prod:8081
       }
       http://s3.shopnexus.localhost {
-        redir / /rustfs/console/
-        reverse_proxy rustfs-prod:9001
+        reverse_proxy garage-webui-prod:3909
       }
 
 volumes:
   postgres-dev:
-  rustfs-dev:
+  garage-dev:
   restate-dev:
   keys-dev:
   models-dev:
@@ -1039,7 +1051,7 @@ volumes:
   package-proxy-dev:
   lgtm-dev:
   postgres-prod:
-  rustfs-prod:
+  garage-prod:
   restate-prod:
   keys-prod:
   models-prod:

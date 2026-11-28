@@ -37,11 +37,11 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].securityContext
           value: { procMount: Unmasked, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
-  - it: reads env/agent.env, its RustFS address and its keys from agent-secrets
+  - it: reads env/agent.env, its Garage address and its keys from agent-secrets
     template: agent.yaml
     documentIndex: 0
     asserts:
-      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: S3_ENDPOINT, value: "rustfs:9000" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: S3_ENDPOINT, value: "garage:3900" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MODEL_BASE_URL, value: http://bifrost:8080/v1 } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: PACKAGE_PROXY, value: "package-proxy:8080" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: WORKSPACE_BUCKET, value: agent-workspaces } }
@@ -65,19 +65,24 @@ tests:
         documentSelector: { path: kind, value: DaemonSet }
       - matchRegex: { path: 'spec.template.spec.containers[0].command[2]', pattern: 'mv \S+ /host/shopnexus-dev/agent\.json\n' }
         documentSelector: { path: kind, value: DaemonSet }
-  - it: makes the workspaces bucket, its user and its expiry with the root keys
+  - it: makes the workspaces bucket, its key and its expiry through Garage's admin API, off the web endpoint
     template: jobs.yaml
     documentSelector: { path: metadata.name, value: objectstore-init-agent-workspaces }
     asserts:
       - equal: { path: 'spec.template.spec.containers[0].command[0]', value: /objectstore-init }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: OBJECT_STORE_BUCKET, value: agent-workspaces } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: OBJECT_STORE_EXPIRE_DAYS, value: "7" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: OBJECT_STORE_WEBSITE, value: "false" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: OBJECT_STORE_ADMIN_ENDPOINT, value: "http://garage:3903" } }
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: OBJECT_STORE_ACCESS_KEY, valueFrom: { secretKeyRef: { name: rustfs-secrets, key: AGENT_WORKSPACES_ACCESS_KEY } } }
+          content: { name: OBJECT_STORE_ADMIN_TOKEN, valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } } }
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: OBJECT_STORE_ROOT_ACCESS_KEY, valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } } }
+          content: { name: OBJECT_STORE_ACCESS_KEY, valueFrom: { secretKeyRef: { name: garage-secrets, key: AGENT_WORKSPACES_ACCESS_KEY } } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_SECRET_KEY, valueFrom: { secretKeyRef: { name: garage-secrets, key: AGENT_WORKSPACES_SECRET_KEY } } }
   - it: runs package-proxy with the shared config, as its image's user
     template: package-proxy.yaml
     asserts:

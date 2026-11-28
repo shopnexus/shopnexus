@@ -1,0 +1,130 @@
+{{- /* Garage, the stack's object store, with garage/garage.toml, which
+       docker-compose.yml reads too. The objectstore-init jobs (jobs.yaml)
+       make its buckets and keys through the admin API; the media host's
+       nginx (imgproxy/nginx.conf) serves media/ from its web endpoint. */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  labels: {{- include "sn.labels" . | nindent 4 }}
+data:
+  garage.toml: |
+    {{- .Files.Get "garage/garage.toml" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: garage
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "0" | nindent 4 }}
+spec:
+  serviceName: garage
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: garage }
+  template:
+    metadata:
+      labels:
+        {{- include "sn.podLabels" (dict "root" . "name" "garage") | nindent 8 }}
+        {{- include "sn.restateAllow" . | nindent 8 }}
+      annotations:
+        # A reseal of the secrets or a new garage.toml restarts garage.
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+        checksum/config: {{ .Files.Get "garage/garage.toml" | sha256sum | trunc 16 }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "stateful" | nindent 8 }}
+      containers:
+        - name: garage
+          image: {{ include "sn.image" .Values.images.garage }}
+          command: ["/garage", "server", "--single-node"]
+          env:
+            - name: GARAGE_RPC_SECRET
+              valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_RPC_SECRET } }
+            - name: GARAGE_ADMIN_TOKEN
+              valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
+          ports:
+            - { name: s3, containerPort: 3900 }
+            - { name: web, containerPort: 3902 }
+            - { name: admin, containerPort: 3903 }
+          readinessProbe:
+            httpGet: { path: /health, port: admin }
+            initialDelaySeconds: 3
+          volumeMounts:
+            - { name: config, mountPath: /etc/garage.toml, subPath: garage.toml }
+            - { name: data, mountPath: /var/lib/garage }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: config
+          configMap: { name: garage-config }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: {{ .Values.garage.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: garage }
+  ports:
+    - { name: s3, port: 3900, targetPort: s3 }
+    - { name: web, port: 3902, targetPort: web }
+    - { name: admin, port: 3903, targetPort: admin }
+---
+# Garage's web UI, the dashboard s3 (dashboards.yaml), behind the console's
+# sign-in. It reads garage.toml and works with the admin token.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: garage-webui
+  labels: {{- include "sn.labels" . | nindent 4 }}
+  annotations: {{- include "sn.wave" "2" | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: garage-webui }
+  template:
+    metadata:
+      labels: {{- include "sn.podLabels" (dict "root" . "name" "garage-webui") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include "sn.secretsSum" . }}
+    spec:
+      affinity:
+        {{- include "sn.preferRole" "app" | nindent 8 }}
+      containers:
+        - name: garage-webui
+          image: {{ include "sn.image" .Values.images.garageWebui }}
+          env:
+            - { name: API_BASE_URL, value: "http://garage:3903" }
+            - { name: S3_ENDPOINT_URL, value: "http://garage:3900" }
+            - name: API_ADMIN_KEY
+              valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
+          ports:
+            - { name: http, containerPort: 3909 }
+          readinessProbe:
+            tcpSocket: { port: http }
+          volumeMounts:
+            - { name: config, mountPath: /etc/garage.toml, subPath: garage.toml }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: config
+          configMap: { name: garage-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage-webui
+  labels: {{- include "sn.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: garage-webui }
+  ports:
+    - { name: http, port: 3909, targetPort: http }

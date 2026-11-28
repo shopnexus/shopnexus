@@ -1,12 +1,12 @@
 {{- /* The agent runtime (repo shopnexus/agent, image
        ghcr.io/shopnexus/agent): the server calls POST /v1/turns at
        agent:8080, and each turn runs
-       in a bubblewrap sandbox inside the pod. It reaches Bifrost, RustFS
+       in a bubblewrap sandbox inside the pod. It reaches Bifrost, Garage
        (bucket agent-workspaces) and package-proxy; the sandbox reaches only
        what the runtime forwards, and the shopnexus CLI's calls to the
        server's API with the turn's token. Its settings are env/agent.env,
-       which docker-compose.yml reads too; the server's and RustFS's
-       addresses and the keys differ from compose and are set here. A key in both fails the render.
+       which docker-compose.yml reads too; the server's address and the
+       keys differ from compose and are set here. A key in both fails the render.
 
        bubblewrap needs what a pod doesn't get by default: the seccomp
        profile seccomp/agent.json (the runtime default plus the
@@ -16,7 +16,7 @@
        agent.enabled. */ -}}
 {{- define "sn.agentEnv" -}}
 {{- $shared := include "sn.envFile" (dict "root" . "file" "env/agent.env") | fromJson }}
-{{- $stack := dict "S3_ENDPOINT" "rustfs:9000" "SERVER_URL" "http://server-api:8080" }}
+{{- $stack := dict "SERVER_URL" "http://server-api:8080" }}
 {{- range $k, $_ := $stack }}
 {{- if hasKey $shared $k }}{{ fail (printf "%s is in env/agent.env and in agent.yaml" $k) }}{{ end }}
 {{- end }}
@@ -91,7 +91,7 @@ spec:
             requests: { cpu: 250m, memory: {{ required "agent.memoryRequest is required" .Values.agent.memoryRequest }} }
             limits: { memory: {{ required "agent.memoryLimit is required" .Values.agent.memoryLimit }} }
       volumes:
-        # Workspaces in use; RustFS holds them between turns, so a new pod
+        # Workspaces in use; Garage holds them between turns, so a new pod
         # starts empty and downloads what it needs.
         - name: workspaces
           emptyDir: { sizeLimit: {{ .Values.agent.cacheSize }} }

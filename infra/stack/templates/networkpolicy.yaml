@@ -12,12 +12,13 @@ spec:
   podSelector: {}
   policyTypes: [Ingress]
 ---
-# Pods of this stack reach each other: server to postgres and rustfs, the
-# jobs, postgres replication, imgproxy to rustfs. The server and the agent
+# Pods of this stack reach each other: server to postgres, the jobs,
+# postgres replication, imgproxy to its cache. The server and the agent
 # take only the ports to-server and to-agent open,
-# package-proxy only the agent, imgproxy only its cache
-# and lgtm only OTLP. pgweb and Grafana trust the console's gate, so only
-# Traefik reaches them. Bifrost takes only to-bifrost's callers.
+# package-proxy only the agent, imgproxy only its cache, Garage only
+# to-garage's callers and lgtm only OTLP. pgweb, Garage's web UI and
+# Grafana trust the console's gate, so only Traefik reaches them. Bifrost
+# takes only to-bifrost's callers.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -26,7 +27,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
+      - { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost, garage, garage-webui] }
   ingress:
     - from:
         - podSelector: {}
@@ -39,7 +40,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, rustfs, lgtm, bifrost, pgweb, imgproxy-cache] }
+      - { key: app.kubernetes.io/name, operator: In, values: [website, docs, console, lgtm, bifrost, pgweb, garage-webui, imgproxy-cache] }
   ingress:
     - from:
         - namespaceSelector:
@@ -60,19 +61,36 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: cnpg-system }
 ---
-# Restate writes snapshots to rustfs; to-server lets it invoke the server.
+# Garage's S3 API (3900), which wants a key, from the stack and its Restate
+# (snapshots). The web endpoint (3902) reads any object of an open bucket
+# without one, so only the media host's nginx reaches it. The admin API
+# (3903) only from the objectstore-init jobs and the web UI.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: from-restate
+  name: to-garage
   labels: {{- include "sn.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: { app.kubernetes.io/name: rustfs }
+    matchLabels: { app.kubernetes.io/name: garage }
   ingress:
     - from:
+        - podSelector: {}
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: {{ $restate }} }
+      ports:
+        - { protocol: TCP, port: 3900 }
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: imgproxy-cache }
+      ports:
+        - { protocol: TCP, port: 3902 }
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app.kubernetes.io/name, operator: In, values: [objectstore-init, objectstore-init-snapshots, objectstore-init-agent-workspaces, garage-webui] }
+      ports:
+        - { protocol: TCP, port: 3903 }
 ---
 # The server's two ports: the API (8080) from the stack and Traefik, the
 # agent's calls with a turn token included, and the Restate endpoint (9080)
@@ -272,7 +290,7 @@ spec:
         - { protocol: TCP, port: 443 }
 ---
 # The agent runtime reaches DNS, the server's API, Bifrost, package-proxy
-# and its bucket on RustFS, nothing else. Its sandbox has no network of
+# and its bucket on Garage, nothing else. Its sandbox has no network of
 # its own; this holds should a turn get out of the sandbox into the
 # runtime: no database, Restate, dashboard or Kubernetes API.
 apiVersion: networking.k8s.io/v1
@@ -304,6 +322,6 @@ spec:
         - { protocol: TCP, port: 8080 }
     - to:
         - podSelector:
-            matchLabels: { app.kubernetes.io/name: rustfs }
+            matchLabels: { app.kubernetes.io/name: garage }
       ports:
-        - { protocol: TCP, port: 9000 }
+        - { protocol: TCP, port: 3900 }

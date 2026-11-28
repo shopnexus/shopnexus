@@ -1,5 +1,5 @@
-suite: postgres, rustfs and the sync jobs
-templates: [postgres.yaml, rustfs.yaml, jobs.yaml]
+suite: postgres, garage and the sync jobs
+templates: [postgres.yaml, garage.yaml, jobs.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   - it: runs two prod Postgres instances on ParadeDB in wave 0
@@ -62,9 +62,9 @@ tests:
       - equal:
           path: spec.images[0].image
           value: paradedb/paradedb:0.26.4-pg18
-  - it: runs one RustFS
-    template: rustfs.yaml
-    documentIndex: 0
+  - it: runs one single-node Garage in wave 0 with its S3, web and admin ports
+    template: garage.yaml
+    documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - isKind:
@@ -72,6 +72,52 @@ tests:
       - equal:
           path: spec.replicas
           value: 1
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "0"
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: dxflrs/garage:v2.6.0
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [/garage, server, --single-node]
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value:
+            - { name: s3, containerPort: 3900 }
+            - { name: web, containerPort: 3902 }
+            - { name: admin, containerPort: 3903 }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet
+          value: { path: /health, port: admin }
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 10Gi
+  - it: reads garage/garage.toml and restarts Garage when it changes
+    template: garage.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - isKind:
+          of: ConfigMap
+        documentIndex: 0
+      - exists:
+          path: data["garage.toml"]
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: config, mountPath: /etc/garage.toml, subPath: garage.toml }
+        documentIndex: 1
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/config"]
+          pattern: ^[0-9a-f]{16}$
+        documentIndex: 1
+      - equal:
+          path: spec.ports
+          value:
+            - { name: s3, port: 3900, targetPort: s3 }
+            - { name: web, port: 3902, targetPort: web }
+            - { name: admin, port: 3903, targetPort: admin }
+        documentIndex: 2
   - it: runs migrate, objectstore-init and objectstore-init-snapshots
     template: jobs.yaml
     values: [../values-prod.yaml, values-test.yaml]
@@ -115,41 +161,80 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: OBJECT_STORE_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: SNAPSHOTS_ACCESS_KEY } }
-  # The jobs make each bucket's user with RustFS's root keys; the server's
-  # pods never see them.
-  - it: gives the objectstore-init jobs, and only them, the root keys
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: SNAPSHOTS_ACCESS_KEY } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_SECRET_KEY
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: SNAPSHOTS_SECRET_KEY } }
+  # The jobs make each bucket and its key through Garage's admin API; the
+  # server's pods never see the admin token.
+  - it: gives the objectstore-init jobs, and only them, the admin API and its token
     template: jobs.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content:
-            name: OBJECT_STORE_ROOT_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+          content: { name: OBJECT_STORE_ADMIN_ENDPOINT, value: "http://garage:3903" }
         documentIndex: 1
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: OBJECT_STORE_ROOT_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+            name: OBJECT_STORE_ADMIN_TOKEN
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_ADMIN_ENDPOINT, value: "http://garage:3903" }
+        documentIndex: 2
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OBJECT_STORE_ADMIN_TOKEN
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
         documentIndex: 2
       - notContains:
           path: spec.template.spec.containers[0].env
           content:
-            name: OBJECT_STORE_ROOT_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+            name: OBJECT_STORE_ADMIN_TOKEN
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
         documentIndex: 0
-  - it: runs RustFS with the root keys
-    template: rustfs.yaml
-    documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_ADMIN_ENDPOINT, value: "http://garage:3903" }
+        documentIndex: 0
+  # Only the media bucket is open on Garage's web endpoint.
+  - it: opens the media bucket on the web endpoint and keeps the snapshots off it
+    template: jobs.yaml
+    values: [../values-prod.yaml, values-test.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_WEBSITE, value: "true" }
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_WEBSITE, value: "false" }
+        documentIndex: 2
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: OBJECT_STORE_WEBSITE, value: "true" }
+        documentIndex: 2
+  - it: runs Garage with the RPC secret and the admin token
+    template: garage.yaml
+    documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: RUSTFS_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: rustfs-secrets, key: RUSTFS_ACCESS_KEY } }
+            name: GARAGE_RPC_SECRET
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_RPC_SECRET } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GARAGE_ADMIN_TOKEN
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
   # Bifrost keeps its config and logs in a database of its own in the
   # stack's Postgres.
   - it: gives Bifrost its own database and a sealed role password

@@ -3,7 +3,7 @@ templates: [networkpolicy.yaml]
 release: { namespace: shopnexus-prod }
 values: [../values-prod.yaml, values-test.yaml]
 tests:
-  - it: denies ingress by default, opens it to five sources and seven services, and lets Prometheus scrape
+  - it: denies ingress by default, opens it to four sources and eight services, and lets Prometheus scrape
     asserts:
       - hasDocuments:
           count: 15
@@ -41,7 +41,7 @@ tests:
         documentIndex: 3
       - equal:
           path: metadata.name
-          value: from-restate
+          value: to-garage
         documentIndex: 4
       - equal:
           path: metadata.name
@@ -67,23 +67,53 @@ tests:
           path: metadata.name
           value: to-imgproxy
         documentIndex: 10
-  - it: admits the stack's Restate namespace to rustfs
-    documentSelector: { path: metadata.name, value: from-restate }
+  # Garage's S3 API wants a key, so the stack and its Restate reach it; the
+  # web endpoint serves open buckets keyless, so only the media host's
+  # nginx; the admin API only the objectstore-init jobs and the web UI.
+  - it: opens Garage's S3 API to the stack and Restate, its web endpoint to the cache and its admin API to the init jobs and the web UI
+    documentSelector: { path: metadata.name, value: to-garage }
     asserts:
+      - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: garage }
+      - lengthEqual: { path: spec.ingress, count: 3 }
       - equal:
-          path: spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
-          value: restate-prod
-      - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
+          path: spec.ingress[0]
+          value:
+            from:
+              - podSelector: {}
+              - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: restate-prod } }
+            ports: [{ protocol: TCP, port: 3900 }]
+      - equal:
+          path: spec.ingress[1]
+          value:
+            from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: imgproxy-cache } } }]
+            ports: [{ protocol: TCP, port: 3902 }]
+      - equal:
+          path: spec.ingress[2]
+          value:
+            from:
+              - podSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: [objectstore-init, objectstore-init-snapshots, objectstore-init-agent-workspaces, garage-webui]
+            ports: [{ protocol: TCP, port: 3903 }]
   # The server and the agent are left to to-server and to-agent, which open
-  # each port to its callers only.
-  - it: leaves the server, the agent, package-proxy, pgweb, imgproxy, lgtm and Bifrost out of from-stack, and the server out of from-traefik
+  # each port to its callers only; Garage to to-garage.
+  - it: leaves the server, the agent, package-proxy, pgweb, imgproxy, lgtm, Bifrost, Garage and its web UI out of from-stack, and the server out of from-traefik
     asserts:
       - equal:
           path: spec.podSelector.matchExpressions[0]
-          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost] }
+          value: { key: app.kubernetes.io/name, operator: NotIn, values: [server, server-ai, agent, package-proxy, pgweb, imgproxy, lgtm, bifrost, garage, garage-webui] }
         documentSelector: { path: metadata.name, value: from-stack }
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: server }
         documentSelector: { path: metadata.name, value: from-traefik }
+  # Garage's web UI trusts the console's gate, so only Traefik reaches it;
+  # Garage itself is not on the internet.
+  - it: lets Traefik reach Garage's web UI and not Garage
+    documentSelector: { path: metadata.name, value: from-traefik }
+    asserts:
+      - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: garage-webui }
+      - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: garage }
   - it: opens the server's API to the stack and Traefik, its Restate endpoint to Restate
     documentSelector: { path: metadata.name, value: to-server }
     asserts:
@@ -142,14 +172,15 @@ tests:
           value: restate-prod
       - equal: { path: 'spec.ingress[0].ports[0].port', value: 9080 }
   # Traefik reaches the photo cache, the cache reaches imgproxy, and
-  # imgproxy reaches rustfs through from-stack.
+  # imgproxy reads photos back through the cache (from-stack), which reaches
+  # Garage's web endpoint (to-garage).
   - it: puts imgproxy behind its cache
     asserts:
       - contains: { path: 'spec.podSelector.matchExpressions[0].values', content: imgproxy-cache }
         documentSelector: { path: metadata.name, value: from-traefik }
       - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: imgproxy }
         documentSelector: { path: metadata.name, value: from-traefik }
-      - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: rustfs }
+      - notContains: { path: 'spec.podSelector.matchExpressions[0].values', content: imgproxy-cache }
         documentSelector: { path: metadata.name, value: from-stack }
       - equal: { path: 'spec.podSelector.matchLabels["app.kubernetes.io/name"]', value: imgproxy }
         documentSelector: { path: metadata.name, value: to-imgproxy }
@@ -182,8 +213,9 @@ tests:
       - equal: { path: 'spec.egress[3].ports', value: [{ protocol: TCP, port: 443 }] }
       - equal: { path: 'spec.egress[3].to[0].ipBlock.except', value: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
   # Egress: DNS, the server's API, Bifrost and package-proxy on 8080, and
-  # RustFS's S3 port; not Postgres, Restate, pgweb, Grafana or RustFS's console.
-  - it: lets the agent reach DNS, the server, Bifrost, package-proxy and RustFS only
+  # Garage's S3 port; not Postgres, Restate, pgweb, Grafana or Garage's web
+  # endpoint, admin API or web UI.
+  - it: lets the agent reach DNS, the server, Bifrost, package-proxy and Garage's S3 API only
     documentSelector: { path: metadata.name, value: agent-egress }
     asserts:
       - equal: { path: spec.policyTypes, value: [Egress] }
@@ -196,5 +228,5 @@ tests:
             - podSelector: { matchLabels: { app.kubernetes.io/name: bifrost } }
             - podSelector: { matchLabels: { app.kubernetes.io/name: package-proxy } }
       - equal: { path: 'spec.egress[1].ports', value: [{ protocol: TCP, port: 8080 }] }
-      - equal: { path: 'spec.egress[2].to[0].podSelector.matchLabels["app.kubernetes.io/name"]', value: rustfs }
-      - equal: { path: 'spec.egress[2].ports', value: [{ protocol: TCP, port: 9000 }] }
+      - equal: { path: 'spec.egress[2].to[0].podSelector.matchLabels["app.kubernetes.io/name"]', value: garage }
+      - equal: { path: 'spec.egress[2].ports', value: [{ protocol: TCP, port: 3900 }] }

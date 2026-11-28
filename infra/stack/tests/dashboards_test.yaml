@@ -1,5 +1,5 @@
 suite: operations dashboards
-templates: [dashboards.yaml, server.yaml, rustfs.yaml, restate.yaml, networkpolicy.yaml]
+templates: [dashboards.yaml, server.yaml, garage.yaml, restate.yaml, networkpolicy.yaml]
 release: { namespace: shopnexus-prod }
 tests:
   - it: routes each prod dashboard host through the gate, and its /_dashboard to the server
@@ -35,7 +35,7 @@ tests:
           value: { name: bifrost, namespace: shopnexus-prod, port: 8080 }
       - equal:
           path: spec.routes[7].services[0]
-          value: { name: rustfs, namespace: shopnexus-prod, port: 9001 }
+          value: { name: garage-webui, namespace: shopnexus-prod, port: 3909 }
       - equal:
           path: spec.routes[9].services[0]
           value: { name: pgweb, namespace: shopnexus-prod, port: 8081 }
@@ -125,18 +125,35 @@ tests:
       - equal:
           path: data.DASHBOARD_HOSTS
           value: grafana=grafana.shopnexus.id.vn,restate=restate.shopnexus.id.vn,bifrost=bifrost.shopnexus.id.vn,s3=s3.shopnexus.id.vn,db=db.shopnexus.id.vn
-  - it: serves RustFS's console on port 9001
-    template: rustfs.yaml
+  - it: serves Garage's web UI on port 3909 with the admin token
+    template: garage.yaml
     values: [../values-prod.yaml, values-test.yaml]
     asserts:
+      - isKind:
+          of: Deployment
+        documentIndex: 3
+      - equal:
+          path: metadata.name
+          value: garage-webui
+        documentIndex: 3
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: RUSTFS_CONSOLE_ENABLE, value: "true" }
-        documentIndex: 0
+          content: { name: API_BASE_URL, value: "http://garage:3903" }
+        documentIndex: 3
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: API_ADMIN_KEY
+            valueFrom: { secretKeyRef: { name: garage-secrets, key: GARAGE_ADMIN_TOKEN } }
+        documentIndex: 3
+      - equal:
+          path: metadata.name
+          value: garage-webui
+        documentIndex: 4
       - contains:
           path: spec.ports
-          content: { name: console, port: 9001, targetPort: console }
-        documentIndex: 1
+          content: { name: http, port: 3909, targetPort: http }
+        documentIndex: 4
   - it: admits Traefik to Restate's admin port
     template: restate.yaml
     documentIndex: 1

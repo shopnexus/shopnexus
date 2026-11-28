@@ -1,0 +1,22 @@
+# Garage, the stack's object store: one node, no replication. The chart
+# (templates/garage.yaml) and docker-compose.yml both read this file. The RPC
+# secret and the admin token come from the environment (GARAGE_RPC_SECRET,
+# GARAGE_ADMIN_TOKEN). Ports: 3900 S3, 3902 web (media/ for the media host's
+# nginx), 3903 admin (the objectstore-init jobs and the web UI).
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+replication_factor = 1
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "us-east-1"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.garage"
+
+[admin]
+api_bind_addr = "[::]:3903"

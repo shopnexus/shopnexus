@@ -26,23 +26,28 @@ tests:
       - matchRegex: { path: 'spec.template.spec.containers[0].env[?(@.name=="IMGPROXY_PRESETS")].value', pattern: '(^|,)sq480=rs:fill:480:480:0/g:sm(,|$)' }
       - matchRegex: { path: 'spec.template.spec.containers[0].env[?(@.name=="IMGPROXY_PRESETS")].value', pattern: '(^|,)w1080=rs:fit:1080:0:0(,|$)' }
       - equal: { path: 'spec.template.spec.containers[0].readinessProbe.httpGet.path', value: /_img/health }
-  - it: reads the stack's rustfs, and nothing else, in prod
+  # imgproxy reads the media bucket back through its cache, which hands it
+  # to Garage's web endpoint; both come from env/imgproxy.env.
+  - it: reads the media bucket through its cache, and nothing else, in prod
     documentIndex: 0
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: IMGPROXY_BASE_URL, value: "http://rustfs:9000/" }
+          content: { name: IMGPROXY_BASE_URL, value: "http://imgproxy-cache/" }
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: IMGPROXY_ALLOWED_SOURCES, value: "http://rustfs:9000/shopnexus/" }
-  - it: reads the stack's rustfs in dev
+          content: { name: IMGPROXY_ALLOWED_SOURCES, value: "http://imgproxy-cache/shopnexus/media/" }
+  - it: reads the media bucket through its cache in dev too
     documentIndex: 0
     values: [../values-dev.yaml, values-test.yaml]
     release: { namespace: shopnexus-dev }
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content: { name: IMGPROXY_BASE_URL, value: "http://rustfs:9000/" }
+          content: { name: IMGPROXY_BASE_URL, value: "http://imgproxy-cache/" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: IMGPROXY_ALLOWED_SOURCES, value: "http://imgproxy-cache/shopnexus/media/" }
   - it: ships imgproxy/nginx.conf, the file compose mounts, keyed by path and format
     documentIndex: 2
     asserts:
@@ -50,6 +55,15 @@ tests:
       - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_pass http://imgproxy:8080;' }
       - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_cache_key "\$uri\|\$img_accept";' }
       - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_set_header Accept \$img_accept;' }
+  # The media host's door to Garage: media/ from the web endpoint, keyless;
+  # the rest of the bucket from the S3 API, presigned.
+  - it: hands the media bucket to Garage's web endpoint and the rest of the bucket to its S3 API
+    documentIndex: 2
+    asserts:
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'location /shopnexus/media/ \{[^}]*\}[^}]*proxy_pass http://garage:3902/media/;' }
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'proxy_set_header Host shopnexus;' }
+      - matchRegex: { path: 'data["default.conf"]', pattern: 'location /shopnexus/ \{\s*proxy_pass http://garage:3900;' }
+      - notMatchRegex: { path: 'data["default.conf"]', pattern: 'garage:3903' }
   - it: runs the cache with the config and an emptyDir, and rolls on a config change
     documentIndex: 3
     asserts:

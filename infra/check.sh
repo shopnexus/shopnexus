@@ -90,11 +90,18 @@ eq "$(yq '.configs.rbac["policy.default"]' <<<"$argo")" role:admin "Argo CD's an
 
 # ── local compose ──
 # Every stack of the root docker-compose.yml runs the stack's data services
-# from the x-postgres, x-restate, x-rustfs, x-bifrost and x-imgproxy blocks,
+# from the x-postgres, x-restate, x-garage, x-bifrost and x-imgproxy blocks,
 # and imgproxy's cache from x-imgproxy-cache.
-for s in postgres restate rustfs bifrost imgproxy; do
+for s in postgres restate garage bifrost imgproxy; do
   eq "$(yq ".x-$s.image" ../docker-compose.yml)" "$(yq ".images.$s.repository + \":\" + .images.$s.tag" stack/values.yaml)" "compose $s image"
 done
+eq "$(yq '.x-garage-webui.image' ../docker-compose.yml)" "$(yq '.images.garageWebui.repository + ":" + .images.garageWebui.tag' stack/values.yaml)" "compose garage-webui image"
+# The media host's nginx names the media bucket the server writes to.
+bucket=$(sed -n 's/^OBJECT_STORE_BUCKET=//p' stack/env/server.env)
+for l in "location /$bucket/media/ {" "proxy_set_header Host $bucket;" "location /$bucket/ {"; do
+  grep -qF -- "$l" stack/imgproxy/nginx.conf || { echo "FAIL: imgproxy/nginx.conf lacks '$l' (OBJECT_STORE_BUCKET=$bucket)" >&2; fails=$((fails + 1)); }
+done
+grep -qF -- "IMGPROXY_ALLOWED_SOURCES=http://imgproxy-cache/$bucket/media/" stack/env/imgproxy.env || { echo "FAIL: imgproxy reads another bucket than $bucket" >&2; fails=$((fails + 1)); }
 eq "$(yq '.x-imgproxy-cache.image' ../docker-compose.yml)" "$(yq '.images.nginx.repository + ":" + .images.nginx.tag' stack/values.yaml)" "compose imgproxy-cache image"
 eq "$(yq '.x-package-proxy.image' ../docker-compose.yml)" "$(yq '.images.packageProxy.repository + ":" + .images.packageProxy.tag' stack/values.yaml)" "compose package-proxy image"
 # objectstore-init-agent-* make the bucket and its expiry the runtime reads

@@ -4,7 +4,7 @@
        console origin. The redirect Ingress's backend is never reached. */ -}}
 {{- if .Values.aliasDomains }}
 {{- $d := required "domain is required" .Values.domain }}
-{{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- $routes := list (list "" "website" 3000) (list "api" "server-api" 8080) (list "media" "imgproxy-cache" 80) (list "docs" "docs" 80) }}
 {{- $redirect := list "console" }}
 {{- $bucket := include "sn.bucket" . }}
 {{- range include "sn.dashboards" . | fromJsonArray }}{{ $redirect = append $redirect .app }}{{ end }}

@@ -37,9 +37,9 @@ finish their invocations.
 
 {{/* Ingress rules for (dict "routes" (list (list sub service port) ...)
      "domain" d "bucket" b). The website's host also sends /_img to
-     imgproxy's cache. The media host sends its /robots.txt to the cache
-     (imgproxy/nginx.conf) and only /<bucket>/ to RustFS, so its admin API
-     and other buckets stay off the internet. */}}
+     imgproxy's cache. The media host sends its /robots.txt and /<bucket>/
+     to the cache too (imgproxy/nginx.conf), which hands the bucket to
+     Garage, so its admin API and other buckets stay off the internet. */}}
 {{- define "sn.ingressRules" -}}
 {{- $d := .domain }}
 {{- range .routes }}
@@ -128,7 +128,7 @@ allow.restate.dev/{{ include "sn.restate" . }}: "true"
   (dict "app" "grafana" "service" "lgtm" "port" 3000)
   (dict "app" "restate" "service" "restate" "namespace" (include "sn.restate" .) "port" 9070)
   (dict "app" "bifrost" "service" "bifrost" "port" 8080)
-  (dict "app" "s3" "service" "rustfs" "port" 9001)
+  (dict "app" "s3" "service" "garage-webui" "port" 3909)
   (dict "app" "db" "service" "pgweb" "port" 8081) }}
 {{- if .Values.argocdDashboard }}
 {{- $l = append $l (dict "app" "argocd" "service" "argocd-server" "namespace" "argocd" "port" 80) }}

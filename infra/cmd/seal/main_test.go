@@ -77,7 +77,7 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	if first != second {
 		t.Error("a second run changed the secrets")
 	}
-	if want := []string{"agent-secrets", "bifrost-db", "bifrost-secrets", "restate-secrets", "rustfs-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
+	if want := []string{"agent-secrets", "bifrost-db", "bifrost-secrets", "garage-secrets", "restate-secrets", "server-secrets"}; !slices.Equal(names(t, first), want) {
 		t.Errorf("Secrets = %v, want %v", names(t, first), want)
 	}
 	for _, k := range []string{"JWT_PRIVATE_KEY", "CONSOLE_KEY", "RESTATE_IDENTITY_KEY", "private.pem",
@@ -95,16 +95,15 @@ func TestSealKeepsItsKeys(t *testing.T) {
 	}
 }
 
-// An older dev.env has RustFS's root key in OBJECT_STORE_ACCESS_KEY: rustfs
-// keeps it, and the server and Restate get keys of their own. Its
-// AGENT_RUNTIME_KEY becomes AGENT_KEY.
-func TestSealMovesAnOlderRootKey(t *testing.T) {
+// An older dev.env has RustFS's keys, which are no Garage key IDs: the
+// server and Restate get new ones. Its AGENT_RUNTIME_KEY becomes AGENT_KEY.
+func TestSealRemakesRustFSKeys(t *testing.T) {
 	o, dir := setup(t)
 	f, err := os.OpenFile(filepath.Join(dir, "dev.env"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.WriteString("OBJECT_STORE_ACCESS_KEY=oldroot\nOBJECT_STORE_SECRET_KEY=oldrootsecret\nAGENT_RUNTIME_KEY=oldagentkey\n"); err != nil {
+	if _, err := f.WriteString("OBJECT_STORE_ACCESS_KEY=oldkey\nOBJECT_STORE_SECRET_KEY=oldsecret\nAGENT_RUNTIME_KEY=oldagentkey\n"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {
@@ -123,19 +122,23 @@ func TestSealMovesAnOlderRootKey(t *testing.T) {
 		data[s.Metadata.Name] = s.Data
 	}
 	b64 := func(v string) string { return base64.StdEncoding.EncodeToString([]byte(v)) }
-	if got := data["rustfs-secrets"]["RUSTFS_ACCESS_KEY"]; got != b64("oldroot") {
-		t.Errorf("rustfs's root key = %s, want the old OBJECT_STORE_ACCESS_KEY", got)
-	}
-	for _, got := range []string{data["server-secrets"]["OBJECT_STORE_ACCESS_KEY"], data["restate-secrets"]["AWS_ACCESS_KEY_ID"]} {
-		if got == "" || got == b64("oldroot") {
-			t.Errorf("a user's key = %q, want a new one", got)
+	unb64 := func(v string) string { b, _ := base64.StdEncoding.DecodeString(v); return string(b) }
+	for _, got := range []string{data["server-secrets"]["OBJECT_STORE_ACCESS_KEY"], data["restate-secrets"]["AWS_ACCESS_KEY_ID"], data["agent-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]} {
+		if k := unb64(got); len(k) != 26 || !strings.HasPrefix(k, "GK") {
+			t.Errorf("a key = %q, want GK and 24 hex digits", k)
 		}
 	}
-	if data["rustfs-secrets"]["SNAPSHOTS_ACCESS_KEY"] != data["restate-secrets"]["AWS_ACCESS_KEY_ID"] {
+	if s := unb64(data["server-secrets"]["OBJECT_STORE_SECRET_KEY"]); s == "oldsecret" || len(s) != 64 {
+		t.Errorf("the server's secret = %q, want a new one of 64 hex digits", s)
+	}
+	if data["garage-secrets"]["SNAPSHOTS_ACCESS_KEY"] != data["restate-secrets"]["AWS_ACCESS_KEY_ID"] {
 		t.Error("the snapshot jobs and Restate have different keys")
 	}
-	if k := data["agent-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]; k == "" || k != data["rustfs-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"] {
+	if k := data["agent-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"]; k == "" || k != data["garage-secrets"]["AGENT_WORKSPACES_ACCESS_KEY"] {
 		t.Error("the workspaces job and the agent have different keys")
+	}
+	if data["garage-secrets"]["GARAGE_RPC_SECRET"] == "" || data["garage-secrets"]["GARAGE_ADMIN_TOKEN"] == "" {
+		t.Error("garage-secrets lacks the RPC secret or the admin token")
 	}
 	if k := data["agent-secrets"]["AGENT_KEY"]; k != b64("oldagentkey") || k != data["server-secrets"]["AGENT_KEY"] {
 		t.Error("the server and the agent do not share the older AGENT_RUNTIME_KEY")

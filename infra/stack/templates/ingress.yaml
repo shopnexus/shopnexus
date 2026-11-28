@@ -2,7 +2,7 @@
        in direct mode, the outer proxy in behind-proxy mode. The API and the
        console are never searched for: their Ingress adds noindex. */ -}}
 {{- $d := required "domain is required" .Values.domain }}
-{{- $routes := list (list "" "website" 3000) (list "media" "rustfs" 9000) (list "docs" "docs" 80) }}
+{{- $routes := list (list "" "website" 3000) (list "media" "imgproxy-cache" 80) (list "docs" "docs" 80) }}
 {{- $private := list (list "api" "server-api" 8080) }}
 {{- if .Values.console.enabled }}
 {{- $private = append $private (list "console" "console" (int .Values.console.port)) }}

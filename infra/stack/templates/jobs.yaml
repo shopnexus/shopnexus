@@ -1,19 +1,21 @@
-{{- /* Sync hooks in wave 1: after postgres and rustfs (wave 0) are healthy,
+{{- /* Sync hooks in wave 1: after postgres and garage (wave 0) are healthy,
        before the server (wave 2). Each sync runs them again; all of them are
-       idempotent. The objectstore-init jobs work with RustFS's root keys and
-       give each bucket's user (the server's, Restate's, the agent
-       runtime's) that bucket only. */ -}}
-{{- $root := list
-  (dict "name" "OBJECT_STORE_ROOT_ACCESS_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_ACCESS_KEY")
-  (dict "name" "OBJECT_STORE_ROOT_SECRET_KEY" "secret" "rustfs-secrets" "key" "RUSTFS_SECRET_KEY") }}
+       idempotent. The objectstore-init jobs work with Garage's admin token
+       and give each bucket's key (the server's, Restate's, the agent
+       runtime's) that bucket only. Only the media bucket is open on
+       Garage's web endpoint. */ -}}
+{{- $admin := list
+  (dict "name" "OBJECT_STORE_ADMIN_ENDPOINT" "value" "http://garage:3903")
+  (dict "name" "OBJECT_STORE_ADMIN_TOKEN" "secret" "garage-secrets" "key" "GARAGE_ADMIN_TOKEN") }}
 {{- $snapshots := list
   (dict "name" "OBJECT_STORE_BUCKET" "value" "restate-snapshots")
-  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "rustfs-secrets" "key" "SNAPSHOTS_ACCESS_KEY")
-  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "rustfs-secrets" "key" "SNAPSHOTS_SECRET_KEY") }}
+  (dict "name" "OBJECT_STORE_WEBSITE" "value" "false")
+  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "garage-secrets" "key" "SNAPSHOTS_ACCESS_KEY")
+  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "garage-secrets" "key" "SNAPSHOTS_SECRET_KEY") }}
 {{- $jobs := list
   (dict "name" "migrate" "command" "/migrate" "env" (list))
-  (dict "name" "objectstore-init" "command" "/objectstore-init" "env" $root)
-  (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (concat $root $snapshots)) }}
+  (dict "name" "objectstore-init" "command" "/objectstore-init" "env" (append $admin (dict "name" "OBJECT_STORE_WEBSITE" "value" "true")))
+  (dict "name" "objectstore-init-snapshots" "command" "/objectstore-init" "env" (concat $admin $snapshots)) }}
 {{- /* The agent runtime's workspaces: the bucket, its user, and the rule
        that removes a workspace WORKSPACE_EXPIRE_DAYS after its last turn,
        both from env/agent.env. */ -}}
@@ -22,9 +24,10 @@
 {{- $workspaces := list
   (dict "name" "OBJECT_STORE_BUCKET" "value" $agent.WORKSPACE_BUCKET)
   (dict "name" "OBJECT_STORE_EXPIRE_DAYS" "value" $agent.WORKSPACE_EXPIRE_DAYS)
-  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "rustfs-secrets" "key" "AGENT_WORKSPACES_ACCESS_KEY")
-  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "rustfs-secrets" "key" "AGENT_WORKSPACES_SECRET_KEY") }}
-{{- $jobs = append $jobs (dict "name" "objectstore-init-agent-workspaces" "command" "/objectstore-init" "env" (concat $root $workspaces)) }}
+  (dict "name" "OBJECT_STORE_WEBSITE" "value" "false")
+  (dict "name" "OBJECT_STORE_ACCESS_KEY" "secret" "garage-secrets" "key" "AGENT_WORKSPACES_ACCESS_KEY")
+  (dict "name" "OBJECT_STORE_SECRET_KEY" "secret" "garage-secrets" "key" "AGENT_WORKSPACES_SECRET_KEY") }}
+{{- $jobs = append $jobs (dict "name" "objectstore-init-agent-workspaces" "command" "/objectstore-init" "env" (concat $admin $workspaces)) }}
 {{- end }}
 {{- range $jobs }}
 ---

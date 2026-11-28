@@ -92,31 +92,31 @@ func seal(stack string, o opts, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// OBJECT_STORE_ACCESS_KEY used to be RustFS's root key. An older
-	// <stack>.env keeps it as the root key, and the server gets a key of its own.
-	if env.get("OBJECT_STORE_ROOT_ACCESS_KEY") == "" && env.get("OBJECT_STORE_ACCESS_KEY") != "" {
-		env.set("OBJECT_STORE_ROOT_ACCESS_KEY", env.get("OBJECT_STORE_ACCESS_KEY"))
-		env.set("OBJECT_STORE_ROOT_SECRET_KEY", env.get("OBJECT_STORE_SECRET_KEY"))
-		env.set("OBJECT_STORE_ACCESS_KEY", "")
-		env.set("OBJECT_STORE_SECRET_KEY", "")
-	}
 	// AGENT_KEY used to be AGENT_RUNTIME_KEY; the running agent keeps it.
 	if old := env.get("AGENT_RUNTIME_KEY"); old != "" {
 		env.set("AGENT_KEY", old)
 		env.set("AGENT_RUNTIME_KEY", "")
 	}
+	// Garage's key IDs are GK and 24 hex digits. A pair made for RustFS
+	// before is made again.
+	for _, k := range []string{"OBJECT_STORE", "SNAPSHOTS", "AGENT_WORKSPACES"} {
+		if !strings.HasPrefix(env.get(k+"_ACCESS_KEY"), "GK") {
+			env.set(k+"_ACCESS_KEY", "")
+			env.set(k+"_SECRET_KEY", "")
+		}
+	}
 	for _, k := range []struct {
 		name, prefix string
 		bytes        int
 	}{
-		{"OBJECT_STORE_ROOT_ACCESS_KEY", "", 12}, // RustFS's root
-		{"OBJECT_STORE_ROOT_SECRET_KEY", "", 24},
-		{"OBJECT_STORE_ACCESS_KEY", "", 12}, // the server's user, bucket shopnexus only
-		{"OBJECT_STORE_SECRET_KEY", "", 24},
-		{"SNAPSHOTS_ACCESS_KEY", "", 12}, // Restate's user, bucket restate-snapshots only
-		{"SNAPSHOTS_SECRET_KEY", "", 24},
-		{"AGENT_WORKSPACES_ACCESS_KEY", "", 12}, // the agent runtime's user, bucket agent-workspaces only
-		{"AGENT_WORKSPACES_SECRET_KEY", "", 24},
+		{"GARAGE_RPC_SECRET", "", 32},  // Garage's nodes share it
+		{"GARAGE_ADMIN_TOKEN", "", 32}, // Garage's admin API: the objectstore-init jobs and its web UI
+		{"OBJECT_STORE_ACCESS_KEY", "GK", 12}, // the server's key, bucket shopnexus only
+		{"OBJECT_STORE_SECRET_KEY", "", 32},
+		{"SNAPSHOTS_ACCESS_KEY", "GK", 12}, // Restate's key, bucket restate-snapshots only
+		{"SNAPSHOTS_SECRET_KEY", "", 32},
+		{"AGENT_WORKSPACES_ACCESS_KEY", "GK", 12}, // the agent runtime's key, bucket agent-workspaces only
+		{"AGENT_WORKSPACES_SECRET_KEY", "", 32},
 		{"AGENT_KEY", "", 32},              // what the server sends the agent
 		{"BIFROST_ADMIN_PASSWORD", "", 24}, // Bifrost's admin API and UI; the server signs in with it
 		{"BIFROST_ENCRYPTION_KEY", "", 32}, // fixed once set: Bifrost's stored keys are encrypted with it
@@ -156,7 +156,7 @@ func seal(stack string, o opts, out io.Writer) error {
 			"RESEND_API_KEY", "GHTK_PARTNER_TOKEN", "GHTK_WEBHOOK_SECRET", "GHN_PARTNER_TOKEN", "GHN_WEBHOOK_SECRET",
 			"AGENT_KEY",
 			"VNPAY_HASH_SECRET")},
-		// The agent: the key the server calls it with, and its RustFS user.
+		// The agent: the key the server calls it with, and its Garage key.
 		// Its gateway key comes with each turn.
 		{name: "agent-secrets", namespace: ns, data: env.pick("AGENT_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},
 		{name: "restate-secrets", namespace: "restate-" + stack, data: map[string]string{
@@ -164,16 +164,11 @@ func seal(stack string, o opts, out io.Writer) error {
 			"AWS_ACCESS_KEY_ID":     env.get("SNAPSHOTS_ACCESS_KEY"),
 			"AWS_SECRET_ACCESS_KEY": env.get("SNAPSHOTS_SECRET_KEY"),
 		}},
-		// RustFS's root keys, for rustfs and the objectstore-init jobs, which
-		// also make Restate's user and the agent's.
-		{name: "rustfs-secrets", namespace: ns, data: map[string]string{
-			"RUSTFS_ACCESS_KEY":           env.get("OBJECT_STORE_ROOT_ACCESS_KEY"),
-			"RUSTFS_SECRET_KEY":           env.get("OBJECT_STORE_ROOT_SECRET_KEY"),
-			"SNAPSHOTS_ACCESS_KEY":        env.get("SNAPSHOTS_ACCESS_KEY"),
-			"SNAPSHOTS_SECRET_KEY":        env.get("SNAPSHOTS_SECRET_KEY"),
-			"AGENT_WORKSPACES_ACCESS_KEY": env.get("AGENT_WORKSPACES_ACCESS_KEY"),
-			"AGENT_WORKSPACES_SECRET_KEY": env.get("AGENT_WORKSPACES_SECRET_KEY"),
-		}},
+		// Garage's RPC secret and admin token, for garage, its web UI and the
+		// objectstore-init jobs, which also make Restate's key and the agent's.
+		{name: "garage-secrets", namespace: ns, data: env.pick(
+			"GARAGE_RPC_SECRET", "GARAGE_ADMIN_TOKEN",
+			"SNAPSHOTS_ACCESS_KEY", "SNAPSHOTS_SECRET_KEY", "AGENT_WORKSPACES_ACCESS_KEY", "AGENT_WORKSPACES_SECRET_KEY")},
 		{name: "bifrost-secrets", namespace: ns, data: env.pick("BIFROST_ADMIN_PASSWORD", "BIFROST_ENCRYPTION_KEY", "LLM_UPSTREAM_API_KEY", "OPENROUTER_API_KEY")},
 		// CNPG reads a managed role's password from a basic-auth Secret.
 		{name: "bifrost-db", namespace: ns, typ: "kubernetes.io/basic-auth", data: map[string]string{

@@ -51,7 +51,6 @@ DOCS_ORIGINS: {{ printf "%s,%s" (join "," $docs) (ternary "https://shopnexus.git
 {{- $web := list (printf "https://%s" (include "sn.host" (dict "root" . "sub" ""))) }}
 {{- range .Values.aliasDomains }}{{ $web = append $web (printf "https://%s" .) }}{{ end }}
 WEBSITE_ORIGINS: {{ printf "%s%s" (join "," $web) (ternary "" ",http://localhost:4321" (eq .Values.appEnv "prod")) | quote }}
-OBJECT_STORE_ENDPOINT: http://rustfs:9000
 OBJECT_STORE_PUBLIC_ENDPOINT: https://{{ include "sn.host" (dict "root" . "sub" "media") }}
 MEDIA_PUBLIC_URL: https://{{ include "sn.host" (dict "root" . "sub" "media") }}/shopnexus
 {{- /* The agent runtime, in-cluster only; AGENT_KEY is in server-secrets.

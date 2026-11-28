@@ -13,6 +13,10 @@ metadata:
 servers: 1
 agents: 3
 image: rancher/k3s:v1.37.1-k3s1
+# A static IP for each node container in a free subnet k3d picks. Docker
+# hands out IPs in start order, and a node whose IP changed across a reboot
+# fails to start (k3s keeps the old one as its node IP).
+subnet: auto
 options:
   k3s:
     nodeLabels:

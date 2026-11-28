@@ -73,7 +73,7 @@ tests:
       - exists: { path: data.JWT_ISSUER }
       - exists: { path: data.JWT_AUDIENCE }
       - exists: { path: data.CONSOLE_ORIGIN }
-      - exists: { path: data.OBJECT_STORE_ENDPOINT }
+      - equal: { path: data.OBJECT_STORE_ENDPOINT, value: http://garage:3900 }
       - exists: { path: data.OBJECT_STORE_PUBLIC_ENDPOINT }
       - exists: { path: data.OBJECT_STORE_REGION }
       - exists: { path: data.OBJECT_STORE_BUCKET }
@@ -132,7 +132,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 66747c3a84b30b5c
+          value: 889d6037254fcbc6
   - it: rolls the server when the configuration changes
     documentIndex: 1
     values: [../values-prod.yaml, values-test.yaml]
@@ -140,7 +140,7 @@ tests:
     asserts:
       - notEqual:
           path: spec.template.metadata.annotations["checksum/env"]
-          value: 66747c3a84b30b5c
+          value: 889d6037254fcbc6
   # The reconciler calls Bifrost's admin API with the password Bifrost
   # itself reads.
   - it: reaches Bifrost's admin API with its admin password
